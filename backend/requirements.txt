@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+sqlalchemy
+aiohttp
+requests
+schedule
+scikit-learn
+uvicorn[standard]
+psycopg2-binary
+python-dotenv
