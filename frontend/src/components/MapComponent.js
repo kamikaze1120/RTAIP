@@ -58,6 +58,11 @@ const MapComponent = ({ events, anomalies, focusEventId, onSelect }) => {
         feature.set('eventId', event.id);
         feature.set('meta', event);
         eventSource.addFeature(feature);
+
+        // Add all events to heat layer with a modest weight to visualize density
+        const heatFeature = new Feature({ geometry: new Point(fromLonLat([event.longitude, event.latitude])) });
+        heatFeature.set('weight', 0.25);
+        heatmapSource.addFeature(heatFeature);
       }
     });
 
