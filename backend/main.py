@@ -58,13 +58,36 @@ def get_db():
     finally:
         db.close()
 
+# Serialization helpers to ensure valid JSON responses
+def serialize_event(ev: DataEvent):
+    return {
+        "id": ev.id,
+        "source": ev.source,
+        "timestamp": ev.timestamp.isoformat() if ev.timestamp else None,
+        "latitude": ev.latitude,
+        "longitude": ev.longitude,
+        "data": ev.data,
+    }
+
+def serialize_anomaly(a: Anomaly):
+    return {
+        "id": a.id,
+        "event_id": a.event_id,
+        "type": a.type,
+        "severity": a.severity,
+        "description": a.description,
+        "timestamp": a.timestamp.isoformat() if a.timestamp else None,
+    }
+
 @app.get("/events")
 def get_events(db: Session = Depends(get_db)):
-    return db.query(DataEvent).all()
+    events = db.query(DataEvent).all()
+    return [serialize_event(ev) for ev in events]
 
 @app.get("/anomalies")
 def get_anomalies(db: Session = Depends(get_db)):
-    return db.query(Anomaly).all()
+    anomalies = db.query(Anomaly).all()
+    return [serialize_anomaly(a) for a in anomalies]
 
 @app.get("/health")
 def health():
@@ -112,44 +135,50 @@ def notify_email(req: EmailRequest):
 
 @app.get("/seed")
 def seed(db: Session = Depends(get_db)):
-    # Insert sample events across different sources/locations
-    samples = [
-        {"source": "adsb", "latitude": 34.05, "longitude": -118.25, "data": {"note": "aircraft over LA"}},
-        {"source": "ais", "latitude": 37.77, "longitude": -122.42, "data": {"note": "vessel near SF"}},
-        {"source": "usgs_seismic", "latitude": 35.68, "longitude": 139.69, "data": {"properties": {"mag": 3.2}}},
-        {"source": "noaa_weather", "latitude": 51.51, "longitude": -0.13, "data": {"temp": 12, "wind": 5}},
-        {"source": "adsb", "latitude": 25.76, "longitude": -80.19, "data": {"note": "aircraft over Miami"}},
-        {"source": "ais", "latitude": 1.29, "longitude": 103.85, "data": {"note": "vessel near Singapore"}},
-        {"source": "usgs_seismic", "latitude": -33.87, "longitude": 151.21, "data": {"properties": {"mag": 4.5}}},
-        {"source": "noaa_weather", "latitude": 48.85, "longitude": 2.35, "data": {"temp": 9, "wind": 12}},
-    ]
-    created_events = []
-    now = datetime.utcnow()
-    for i, s in enumerate(samples):
-        ev = DataEvent(
-            source=s["source"],
-            timestamp=now,
-            latitude=s["latitude"],
-            longitude=s["longitude"],
-            data=s["data"],
-        )
-        db.add(ev)
-        created_events.append(ev)
-    db.commit()
-    # Refresh to get IDs
-    for ev in created_events:
-        db.refresh(ev)
-    # Add a couple anomalies referencing existing events
-    anomalies_created = 0
-    if created_events:
-        a1 = Anomaly(event_id=created_events[2].id, type="seismic_high", severity=7, description="Seed: high magnitude", timestamp=created_events[2].timestamp)
-        db.add(a1)
-        anomalies_created += 1
-        a2 = Anomaly(event_id=created_events[7].id, type="geo_spatial", severity=5, description="Seed: spatial outlier", timestamp=created_events[7].timestamp)
-        db.add(a2)
-        anomalies_created += 1
+    try:
+        # Insert sample events across different sources/locations
+        samples = [
+            {"source": "adsb", "latitude": 34.05, "longitude": -118.25, "data": {"note": "aircraft over LA"}},
+            {"source": "ais", "latitude": 37.77, "longitude": -122.42, "data": {"note": "vessel near SF"}},
+            {"source": "usgs_seismic", "latitude": 35.68, "longitude": 139.69, "data": {"properties": {"mag": 3.2}}},
+            {"source": "noaa_weather", "latitude": 51.51, "longitude": -0.13, "data": {"temp": 12, "wind": 5}},
+            {"source": "adsb", "latitude": 25.76, "longitude": -80.19, "data": {"note": "aircraft over Miami"}},
+            {"source": "ais", "latitude": 1.29, "longitude": 103.85, "data": {"note": "vessel near Singapore"}},
+            {"source": "usgs_seismic", "latitude": -33.87, "longitude": 151.21, "data": {"properties": {"mag": 4.5}}},
+            {"source": "noaa_weather", "latitude": 48.85, "longitude": 2.35, "data": {"temp": 9, "wind": 12}},
+        ]
+        created_events = []
+        now = datetime.utcnow()
+        for s in samples:
+            ev = DataEvent(
+                source=s["source"],
+                timestamp=now,
+                latitude=s["latitude"],
+                longitude=s["longitude"],
+                data=s["data"],
+            )
+            db.add(ev)
+            created_events.append(ev)
         db.commit()
-    return {"inserted_events": len(created_events), "inserted_anomalies": anomalies_created}
+        for ev in created_events:
+            db.refresh(ev)
+        anomalies_created = 0
+        if created_events:
+            a1 = Anomaly(event_id=created_events[2].id, type="seismic_high", severity=7, description="Seed: high magnitude", timestamp=created_events[2].timestamp)
+            db.add(a1)
+            anomalies_created += 1
+            a2 = Anomaly(event_id=created_events[7].id, type="geo_spatial", severity=5, description="Seed: spatial outlier", timestamp=created_events[7].timestamp)
+            db.add(a2)
+            anomalies_created += 1
+            db.commit()
+        return {"inserted_events": len(created_events), "inserted_anomalies": anomalies_created}
+    except Exception as e:
+        # Rollback on error and return a clear message
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        return {"status": "error", "message": str(e)}
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
