@@ -162,7 +162,7 @@ async def websocket_endpoint(websocket: WebSocket):
 def read_root():
     return {"Hello": "World"}
 
-@app.post("/migrate")
+@app.api_route("/migrate", methods=["GET", "POST"])
 def migrate():
     ok, msg = ensure_schema()
     return {"ok": ok, "message": msg}
