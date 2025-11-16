@@ -2,6 +2,7 @@ from fastapi import FastAPI
 import threading
 from ingestion import schedule_ingestion
 from anomaly import schedule_detection
+from database import ensure_schema
 
 app = FastAPI()
 
@@ -160,6 +161,11 @@ async def websocket_endpoint(websocket: WebSocket):
 @app.get("/")
 def read_root():
     return {"Hello": "World"}
+
+@app.post("/migrate")
+def migrate():
+    ok, msg = ensure_schema()
+    return {"ok": ok, "message": msg}
 
 # Run schedulers in background
 threading.Thread(target=schedule_ingestion, daemon=True).start()

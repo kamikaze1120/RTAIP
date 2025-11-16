@@ -56,3 +56,27 @@ try:
 except Exception as e:
     # Fail-safe: don't crash app if DDL fails; tables may already exist
     print(f"[DB INIT] Warning: failed to ensure tables exist: {e}")
+
+# NEW: exportable helper to ensure schema on demand (e.g., via /migrate endpoint)
+
+def ensure_schema():
+    """
+    Ensure database schema exists.
+    Uses DIRECT_URL for Supabase DDL (5432) when available; otherwise uses runtime engine.
+    Returns (ok: bool, message: str).
+    """
+    try:
+        if DIRECT_URL and DIRECT_URL.startswith('postgresql'):
+            direct_engine = create_engine(
+                DIRECT_URL,
+                echo=True,
+                pool_pre_ping=True,
+                connect_args={"sslmode": "require"}
+            )
+            Base.metadata.create_all(direct_engine)
+            return True, "schema ensured via DIRECT_URL"
+        else:
+            Base.metadata.create_all(engine)
+            return True, "schema ensured via runtime engine"
+    except Exception as e:
+        return False, str(e)
