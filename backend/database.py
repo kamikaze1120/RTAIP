@@ -66,6 +66,7 @@ def ensure_schema():
     Returns (ok: bool, message: str).
     """
     try:
+        # If running on Supabase (Postgres), we strongly prefer DIRECT_URL for DDL.
         if DIRECT_URL and DIRECT_URL.startswith('postgresql'):
             direct_engine = create_engine(
                 DIRECT_URL,
@@ -75,8 +76,11 @@ def ensure_schema():
             )
             Base.metadata.create_all(direct_engine)
             return True, "schema ensured via DIRECT_URL"
-        else:
-            Base.metadata.create_all(engine)
-            return True, "schema ensured via runtime engine"
+        # If DIRECT_URL is missing and DATABASE_URL looks like a pgbouncer URL, return a clear message.
+        if DATABASE_URL.startswith('postgresql') and (':6543' in DATABASE_URL or 'pgbouncer=true' in DATABASE_URL):
+            return False, "DIRECT_URL not set. Please set DIRECT_URL to the Supabase 5432 connection string (not pgbouncer) and retry."
+        # Fallback: try runtime engine (e.g., SQLite or direct Postgres without pgbouncer)
+        Base.metadata.create_all(engine)
+        return True, "schema ensured via runtime engine"
     except Exception as e:
         return False, str(e)
