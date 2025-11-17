@@ -39,8 +39,7 @@ function App() {
   const [refreshInterval, setRefreshInterval] = useState(10 * 60 * 1000);
   const [selectedEventId, setSelectedEventId] = useState(null);
   const [accentDim, setAccentDim] = useState(false);
-+  // Source metadata cluster resolution (degrees)
-+  const [clusterResDeg, setClusterResDeg] = useState(0.5);
+  const [clusterResDeg, setClusterResDeg] = useState(0.5);
    // API base configurable via environment; defaults to 8000
    const API = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
@@ -183,31 +182,6 @@ function App() {
   const severityOrder = ['low','medium','high','critical','unknown'];
   const severityLabels = severityOrder.filter(k => severityCounts[k] !== undefined).map(s => s.toUpperCase());
   const severityValues = severityLabels.map(lbl => severityCounts[lbl.toLowerCase()] || 0);
-+
-+  // Last 60-minute mini chart (5-min buckets)
-+  const bucketCount = 12; // 12 x 5min
-+  const bucketLabels = Array.from({ length: bucketCount }, (_, i) => {
-+    const minutesAgo = (bucketCount - 1 - i) * 5;
-+    return `${minutesAgo}m`;
-+  });
-+  const bucketsEvents = Array(bucketCount).fill(0);
-+  const bucketsAnoms = Array(bucketCount).fill(0);
-+  last60Events.forEach(e => {
-+    const ageMin = (nowTs - tsOf(e.timestamp)) / 60000;
-+    const idx = Math.max(0, Math.min(bucketCount - 1, bucketCount - 1 - Math.floor(ageMin / 5)));
-+    bucketsEvents[idx] += 1;
-+  });
-+  const last60Anoms = anomalies.filter(a => {
-+    const ev = events.find(e => e.id === a.event_id);
-+    return ev && (nowTs - tsOf(ev.timestamp)) <= 60 * 60000;
-+  });
-+  last60Anoms.forEach(a => {
-+    const ev = events.find(e => e.id === a.event_id);
-+    if (!ev) return;
-+    const ageMin = (nowTs - tsOf(ev.timestamp)) / 60000;
-+    const idx = Math.max(0, Math.min(bucketCount - 1, bucketCount - 1 - Math.floor(ageMin / 5)));
-+    bucketsAnoms[idx] += 1;
-+  });
 
   // Threat Score components
   const nowTs = Date.now();
@@ -282,6 +256,30 @@ function App() {
     return lines;
   })();
 
+  const bucketCount = 12;
+  const bucketLabels = Array.from({ length: bucketCount }, (_, i) => {
+    const minutesAgo = (bucketCount - 1 - i) * 5;
+    return `${minutesAgo}m`;
+  });
+  const bucketsEvents = Array(bucketCount).fill(0);
+  const bucketsAnoms = Array(bucketCount).fill(0);
+  last60Events.forEach(e => {
+    const ageMin = (nowTs - tsOf(e.timestamp)) / 60000;
+    const idx = Math.max(0, Math.min(bucketCount - 1, bucketCount - 1 - Math.floor(ageMin / 5)));
+    bucketsEvents[idx] += 1;
+  });
+  const last60Anoms = anomalies.filter(a => {
+    const ev = events.find(e => e.id === a.event_id);
+    return ev && (nowTs - tsOf(ev.timestamp)) <= 60 * 60000;
+  });
+  last60Anoms.forEach(a => {
+    const ev = events.find(e => e.id === a.event_id);
+    if (!ev) return;
+    const ageMin = (nowTs - tsOf(ev.timestamp)) / 60000;
+    const idx = Math.max(0, Math.min(bucketCount - 1, bucketCount - 1 - Math.floor(ageMin / 5)));
+    bucketsAnoms[idx] += 1;
+  });
+
   // Source metadata (last 10, anomaly probability, severity, clusters)
   const anomaliesByEvent = anomalies.reduce((acc, a) => { acc[a.event_id] = a; return acc; }, {});
   const eventsBySource = events.reduce((acc, e) => { const k=(e.source||'unknown').toLowerCase(); (acc[k]=acc[k]||[]).push(e); return acc; }, {});
@@ -289,14 +287,23 @@ function App() {
     const last10 = list.slice(Math.max(0, list.length - 10));
     const srcAnoms = anomalies.filter(a => { const ev = events.find(e => e.id === a.event_id); return ev && (ev.source||'unknown').toLowerCase() === src; });
     const anomalyRate = list.length ? (srcAnoms.length / list.length) : 0;
-    // cluster by coarse grid (0.5°)
+    const quant = (n) => Math.round(n / clusterResDeg) * clusterResDeg;
     const clusters = last10.reduce((acc, e) => {
       if (e.latitude == null || e.longitude == null) return acc;
-      const key = `${Math.round(e.latitude*2)/2},${Math.round(e.longitude*2)/2}`;
+      const key = `${quant(e.latitude).toFixed(2)},${quant(e.longitude).toFixed(2)}`;
       acc[key] = (acc[key]||0)+1; return acc;
     }, {});
     const topClusters = Object.entries(clusters).sort((a,b)=>b[1]-a[1]).slice(0,3);
-    return { src, anomalyRate, last10, topClusters };
+    const lastHour = list.filter(e => nowTs - tsOf(e.timestamp) <= 60 * 60000);
+    const withGeo = lastHour.filter(e => e.latitude != null && e.longitude != null).length;
+    const missingGeoRate = lastHour.length ? 1 - (withGeo / lastHour.length) : 0;
+    const perBucket = Array(12).fill(0);
+    lastHour.forEach(e => { const m = (nowTs - tsOf(e.timestamp))/60000; const idx = Math.max(0, Math.min(11, 11 - Math.floor(m/5))); perBucket[idx] += 1; });
+    const meanB = perBucket.reduce((a,b)=>a+b,0)/perBucket.length;
+    const stdB = Math.sqrt(perBucket.reduce((s,c)=>s+Math.pow(c-meanB,2),0)/perBucket.length);
+    const volatilitySrc = meanB>0 ? Math.min(1, stdB/meanB) : 0;
+    const confidence = Math.max(0, Math.min(100, Math.round(100 * (1 - (0.5*anomalyRate + 0.3*missingGeoRate + 0.2*volatilitySrc)))));
+    return { src, anomalyRate, last10, topClusters, confidence };
   });
 
   return (
@@ -458,6 +465,18 @@ function App() {
                     </div>
                     <div className="tactical-panel">
                       <div className="panel-header">
+                        <div style={{ color: 'var(--accent)' }}>Last 60-Minute Events (5-min buckets)</div>
+                      </div>
+                      <div className="p-2">
+                        <Line data={{ labels: bucketLabels, datasets: [
+                          { label: 'Events', data: bucketsEvents, borderColor: '#00ffc6', backgroundColor: 'rgba(0,255,198,0.15)', tension: 0.3 },
+                          { label: 'Anomalies', data: bucketsAnoms, borderColor: '#dc3545', backgroundColor: 'rgba(220,53,69,0.2)', borderDash: [6,4], tension: 0.3 }
+                        ] }} options={{ plugins: { legend: { display: true, labels: { color: '#e6f8f4' } } }, scales: { x: { ticks: { color: '#e6f8f4' } }, y: { ticks: { color: '#e6f8f4' } } } }} />
+                        <div className="mt-2" style={{ fontSize: 12, opacity: 0.8 }}>Quick view of recent activity, grouped by 5-minute intervals.</div>
+                      </div>
+                    </div>
+                    <div className="tactical-panel">
+                      <div className="panel-header">
                         <div style={{ color: 'var(--accent)' }}>Predictive Outlook (Next 6h)</div>
                       </div>
                       <div className="p-2">
@@ -510,40 +529,39 @@ function App() {
                       </div>
                     </div>
 
-                    {/* Source Metadata */}
                     <div className="tactical-panel">
                       <div className="panel-header">
                         <div style={{ color: 'var(--accent)' }}>Source Metadata</div>
-+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
-+                            <span>Cluster Res:</span>
-+                            <select value={clusterResDeg} onChange={(e)=>setClusterResDeg(parseFloat(e.target.value))} className="button-tactical" style={{ padding: '4px 6px' }}>
-+                              <option value={0.25}>0.25°</option>
-+                              <option value={0.5}>0.5°</option>
-+                              <option value={1}>1.0°</option>
-+                            </select>
-+                          </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+                          <span>Cluster Res:</span>
+                          <select value={clusterResDeg} onChange={(e)=>setClusterResDeg(parseFloat(e.target.value))} className="button-tactical" style={{ padding: '4px 6px' }}>
+                            <option value={0.25}>0.25°</option>
+                            <option value={0.5}>0.5°</option>
+                            <option value={1}>1.0°</option>
+                          </select>
                         </div>
-                        <div className="p-2" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 8 }}>
-                          {sourcesMeta.map(meta => (
-                            <div key={meta.src} className="tactical-panel" style={{ background: 'rgba(0,0,0,0.2)' }}>
-                              <div className="panel-header" style={{ justifyContent: 'space-between' }}>
-                                <div style={{ color: 'var(--accent)' }}>{(meta.src||'UNKNOWN').toUpperCase()}</div>
-                                <div style={{ fontSize: 12, opacity: 0.8 }}>Anomaly Rate: {(meta.anomalyRate*100).toFixed(1)}%</div>
+                      </div>
+                      <div className="p-2" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 8 }}>
+                        {sourcesMeta.map(meta => (
+                          <div key={meta.src} className="tactical-panel" style={{ background: 'rgba(0,0,0,0.2)' }}>
+                            <div className="panel-header" style={{ justifyContent: 'space-between' }}>
+                              <div style={{ color: 'var(--accent)' }}>{(meta.src||'UNKNOWN').toUpperCase()}</div>
+                              <div style={{ display: 'flex', gap: 12, alignItems: 'center', fontSize: 12, opacity: 0.8 }}>
+                                <span>Anomaly Rate: {(meta.anomalyRate*100).toFixed(1)}%</span>
+                                <span>Confidence: {meta.confidence}%</span>
                               </div>
-                              <div className="p-2" style={{ fontSize: 12 }}>
-                                <div style={{ marginBottom: 6 }}>Top Clusters: {meta.topClusters.length>0 ? meta.topClusters.map(([k,c]) => (<span key={k} style={{ marginRight: 8, color: 'var(--accent-muted)' }}>{k} ({c})</span>)) : '—'}</div>
-                                <div style={{ maxHeight: 180, overflowY: 'auto', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 6 }}>
-                                  {meta.last10.map(ev => {
+                            </div>
+                            <div className="p-2" style={{ fontSize: 12 }}>
+                              <div style={{ marginBottom: 6 }}>Top Clusters: {meta.topClusters.length>0 ? meta.topClusters.map(([k,c]) => (<span key={k} style={{ marginRight: 8, color: 'var(--accent-muted)' }}>{k} ({c})</span>)) : '—'}</div>
+                              <div style={{ maxHeight: 180, overflowY: 'auto', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 6 }}>
+                                {meta.last10.map(ev => (
+                                  (() => {
                                     const anom = anomaliesByEvent[ev.id];
-                                    const prob = anom ? (() => {
-                                      // approximate from severity or score parsed in description
-                                      const desc = (anom.description||'');
-                                      const m = desc.match(/score=([\-0-9\.]+)/);
-                                      let p = 0.5;
-                                      if (typeof anom.severity === 'number') p = Math.min(1, Math.max(0, anom.severity/10));
-                                      else if (m) { const s = parseFloat(m[1]); if(!isNaN(s)) p = Math.min(1, Math.max(0, -s)); }
-                                      return p;
-                                    })() : meta.anomalyRate;
+                                    const desc = anom ? (anom.description || '') : '';
+                                    const m = desc.match(/score=([\-0-9\.]+)/);
+                                    let prob = anom ? 0.5 : meta.anomalyRate;
+                                    if (anom && typeof anom.severity === 'number') prob = Math.min(1, Math.max(0, anom.severity / 10));
+                                    else if (anom && m) { const s = parseFloat(m[1]); if (!isNaN(s)) prob = Math.min(1, Math.max(0, -s)); }
                                     const sev = anom ? (typeof anom.severity === 'number' ? anom.severity : 0) : 0;
                                     return (
                                       <div key={ev.id} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
@@ -557,12 +575,12 @@ function App() {
                                         </div>
                                       </div>
                                     );
-                                  })}
-                                </div>
+                                  })()
+                                ))}
                               </div>
                             </div>
-                          ))}
-                        </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   </div>
@@ -684,18 +702,3 @@ function App() {
 }
 
 export default App;
-
-
-+  // Last 60-Minute Mini Chart */
-+  <div className="tactical-panel">
-+    <div className="panel-header">
-+      <div style={{ color: 'var(--accent)' }}>Last 60-Minute Events (5-min buckets)</div>
-+    </div>
-+    <div className="p-2">
-+      <Line data={{ labels: bucketLabels, datasets: [
-+        { label: 'Events', data: bucketsEvents, borderColor: '#00ffc6', backgroundColor: 'rgba(0,255,198,0.15)', tension: 0.3 },
-+        { label: 'Anomalies', data: bucketsAnoms, borderColor: '#dc3545', backgroundColor: 'rgba(220,53,69,0.2)', borderDash: [6,4], tension: 0.3 }
-+      ] }} options={{ plugins: { legend: { display: true, labels: { color: '#e6f8f4' } } }, scales: { x: { ticks: { color: '#e6f8f4' } }, y: { ticks: { color: '#e6f8f4' } } } }} />
-+      <div className="mt-2" style={{ fontSize: 12, opacity: 0.8 }}>Quick view of recent activity, grouped by 5-minute intervals.</div>
-+    </div>
-+  </div>
