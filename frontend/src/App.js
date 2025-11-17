@@ -4,6 +4,7 @@ import MapComponent from './components/MapComponent';
 import EventFeed from './components/EventFeed';
 // Removed Filters import
 import AlertBar from './components/AlertBar';
+import ChatPanel from './components/ChatPanel';
 import './App.css';
 import ReplayTimeline from './components/ReplayTimeline';
 import SplashScreen from './components/SplashScreen';
@@ -594,16 +595,15 @@ function App() {
           path="/map"
           element={(
             <div className="flex flex-1" style={{ minHeight: 'calc(100vh - 60px)' }}>
-              <div className="w-full p-4">
+              <div className="w-2/3 p-4">
                 <div className="tactical-panel" style={{ height: '80vh' }}>
                   <div className="panel-header">
-                    <div style={{ color: 'var(--accent)' }}>Full Map View</div>
+                    <div style={{ color: 'var(--accent)' }}>Operational Map</div>
                   </div>
                   <div style={{ height: 'calc(100% - 42px)' }}>
                     <MapComponent events={visibleEvents} anomalies={visibleAnomalies} focusEventId={focusEventId} onSelect={handleSelectEvent} />
                   </div>
                 </div>
-
                 {selectedEventId && (() => {
                   const ev = events.find(e => e.id === selectedEventId);
                   const anom = anomalies.find(a => a.event_id === selectedEventId);
@@ -641,6 +641,9 @@ function App() {
                     </div>
                   );
                 })()}
+              </div>
+              <div className="w-1/3 p-4">
+                <ChatPanel apiBase={API} />
               </div>
             </div>
           )}

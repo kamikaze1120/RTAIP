@@ -20,7 +20,7 @@ from anomaly import schedule_detection
 from datetime import datetime
 # New imports for email notifications
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 import os
 import smtplib
 from email.mime.text import MIMEText
@@ -132,6 +132,84 @@ def notify_email(req: EmailRequest):
         return {"status": "sent", "to": to_addr}
     except Exception as e:
         return {"status": "error", "error": str(e)}
+
+# Analyst API
+class AnalystQuery(BaseModel):
+    query: str
+    sessionId: Optional[str] = None
+
+@app.post("/api/ai-analyst")
+def ai_analyst(req: AnalystQuery, db: Session = Depends(get_db)):
+    q = (req.query or "").lower()
+    def window_filter(ts):
+        # Simplified temporal parsing
+        from datetime import datetime, timedelta
+        now = datetime.utcnow()
+        if "last hour" in q:
+            return ts and (now - ts) <= timedelta(hours=1)
+        if "last 24" in q or "24 hours" in q or "day" in q or "today" in q:
+            return ts and (now - ts) <= timedelta(hours=24)
+        if "last 10 min" in q or "last 10 minutes" in q:
+            return ts and (now - ts) <= timedelta(minutes=10)
+        return True
+
+    srcs = []
+    if any(s in q for s in ["aircraft", "ads-b", "adsb"]): srcs.append("adsb")
+    if any(s in q for s in ["vessel", "ais", "maritime"]): srcs.append("ais")
+    if any(s in q for s in ["seismic", "usgs", "earthquake"]): srcs.append("usgs_seismic")
+    if any(s in q for s in ["weather", "noaa", "storm", "wind"]): srcs.append("noaa_weather")
+
+    events = db.query(DataEvent).all()
+    anomalies = db.query(Anomaly).all()
+
+    def ser_e(e: DataEvent):
+        return {
+            "id": e.id,
+            "source": e.source,
+            "timestamp": e.timestamp.isoformat() if e.timestamp else None,
+            "latitude": e.latitude,
+            "longitude": e.longitude,
+        }
+    def ser_a(a: Anomaly):
+        return {
+            "id": a.id,
+            "event_id": a.event_id,
+            "type": a.type,
+            "severity": a.severity,
+            "timestamp": a.timestamp.isoformat() if a.timestamp else None,
+        }
+
+    evs = [e for e in events if window_filter(e.timestamp)]
+    if srcs:
+        evs = [e for e in evs if e.source in srcs]
+    anoms = [a for a in anomalies if window_filter(a.timestamp)]
+    if srcs:
+        anoms = [a for a in anoms if any(e.id == a.event_id and e.source in srcs for e in evs)]
+
+    # Simple intent routing
+    out_lines: List[str] = []
+    if "brief" in q or "summary" in q:
+        out_lines.append(f"Summary: {len(evs)} events, {len(anoms)} anomalies in scope.")
+        by_src = {}
+        for e in evs: by_src[e.source] = by_src.get(e.source, 0) + 1
+        for src, c in sorted(by_src.items()): out_lines.append(f"- {src.upper()}: {c} events")
+        sev_hist = {}
+        for a in anoms: sev_hist[a.severity] = sev_hist.get(a.severity, 0) + 1
+        if sev_hist: out_lines.append("- Anomalies by severity: " + ", ".join(f"{k}:{v}" for k,v in sorted(sev_hist.items())))
+    elif "anomal" in q or "abnormal" in q:
+        out_lines.append(f"Anomalies: {len(anoms)} detections")
+        for a in anoms[:10]:
+            ev = next((e for e in evs if e.id == a.event_id), None)
+            if ev:
+                out_lines.append(f"- {ev.source.upper()} id={ev.id} sev={a.severity} at ({ev.latitude},{ev.longitude}) {ev.timestamp.isoformat()}")
+    elif "explain" in q or "why" in q:
+        out_lines.append("Rationale: spike due to increased anomaly density and velocity compared to prior window.")
+    else:
+        out_lines.append(f"Scope: sources={[s.upper() for s in srcs] or 'ALL'}, window=filtered, events={len(evs)}, anomalies={len(anoms)}.")
+        for e in evs[:10]:
+            out_lines.append(f"- {e.source.upper()} id={e.id} at ({e.latitude},{e.longitude}) {e.timestamp.isoformat()}")
+
+    return {"type": "analysis", "output": "\n".join(out_lines), "events": [ser_e(e) for e in evs[:50]], "anomalies": [ser_a(a) for a in anoms[:50]]}
 
 @app.get("/seed")
 def seed(db: Session = Depends(get_db)):
