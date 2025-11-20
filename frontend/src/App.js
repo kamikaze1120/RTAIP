@@ -41,6 +41,13 @@ function App() {
   const [selectedEventId, setSelectedEventId] = useState(null);
   const [accentDim, setAccentDim] = useState(false);
   const [clusterResDeg, setClusterResDeg] = useState(0.5);
+  const [showHelp, setShowHelp] = useState(false);
+  const [mapOnboard, setMapOnboard] = useState(() => {
+    try { return !localStorage.getItem('rtaip_onboard_map_done'); } catch { return true; }
+  });
+  const [basemapStyle, setBasemapStyle] = useState('light');
+  const [showAircraftTrails, setShowAircraftTrails] = useState(true);
+  const [beginnerMode, setBeginnerMode] = useState(false);
    // API base configurable via environment; defaults to 8000
    const API = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
@@ -599,11 +606,38 @@ function App() {
                 <div className="tactical-panel" style={{ height: '80vh' }}>
                   <div className="panel-header">
                     <div style={{ color: 'var(--accent)' }}>Operational Map</div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button className="button-tactical" onClick={() => setShowHelp(s => !s)}>Help</button>
+                      <button className="button-tactical" onClick={() => { setFilters(f => ({ ...f, source: 'adsb' })); setRefreshInterval(30000); }}>Live Aircraft</button>
+                      <select className="button-tactical" value={basemapStyle} onChange={(e) => setBasemapStyle(e.target.value)}>
+                        <option value="light">Light</option>
+                        <option value="dark">Dark</option>
+                        <option value="satellite">Satellite</option>
+                        <option value="terrain">Terrain</option>
+                        <option value="osm">OSM</option>
+                      </select>
+                      <button className={`button-tactical ${beginnerMode ? 'active' : ''}`} onClick={() => setBeginnerMode(b => !b)}>Beginner Mode</button>
+                      <button className={`button-tactical ${showAircraftTrails ? 'active' : ''}`} onClick={() => setShowAircraftTrails(v => !v)}>Trails</button>
+                    </div>
                   </div>
                   <div style={{ height: 'calc(100% - 42px)' }}>
-                    <MapComponent events={visibleEvents} anomalies={visibleAnomalies} focusEventId={focusEventId} onSelect={handleSelectEvent} />
+                    <MapComponent events={visibleEvents} anomalies={visibleAnomalies} focusEventId={focusEventId} onSelect={handleSelectEvent} basemapStyle={basemapStyle} showAircraftTrails={showAircraftTrails} />
                   </div>
                 </div>
+                {showHelp && (
+                  <div className="tactical-panel" style={{ marginTop: 12 }}>
+                    <div className="panel-header">
+                      <div style={{ color: 'var(--accent)' }}>What am I seeing?</div>
+                      <div className="button-tactical" onClick={() => setShowHelp(false)}>Close</div>
+                    </div>
+                    <div className="p-2" style={{ fontSize: 13 }}>
+                      <div>Heat layer shows density and hotspots.</div>
+                      <div>Red markers indicate anomalies by severity.</div>
+                      <div>Use Live Aircraft for global flight activity from ADS‑B.</div>
+                      <div>Ask the AI Analyst for a briefing or explanations.</div>
+                    </div>
+                  </div>
+                )}
                 {selectedEventId && (() => {
                   const ev = events.find(e => e.id === selectedEventId);
                   const anom = anomalies.find(a => a.event_id === selectedEventId);
@@ -643,7 +677,56 @@ function App() {
                 })()}
               </div>
               <div className="w-1/3 p-4">
+                {mapOnboard && (
+                  <div className="tactical-panel" style={{ marginBottom: 12 }}>
+                    <div className="panel-header">
+                      <div style={{ color: 'var(--accent)' }}>Quick Start</div>
+                      <div className="button-tactical" onClick={() => { setMapOnboard(false); try { localStorage.setItem('rtaip_onboard_map_done', '1'); } catch {} }}>Got it</div>
+                    </div>
+                    <div className="p-2" style={{ fontSize: 13 }}>
+                      <div>1) Click Live Aircraft or choose a source.</div>
+                      <div>2) Use the heat layer to find hotspots.</div>
+                      <div>3) Ask the Analyst for a summary.</div>
+                      <div>4) Click markers to see details.</div>
+                    </div>
+                  </div>
+                )}
                 <ChatPanel apiBase={API} />
+                {beginnerMode && (
+                  <div className="tactical-panel" style={{ marginTop: 12 }}>
+                    <div className="panel-header">
+                      <div style={{ color: 'var(--accent)' }}>Beginner Prompts</div>
+                    </div>
+                    <div className="p-2" style={{ fontSize: 13 }}>
+                      <div>What changed in the last hour?</div>
+                      <div>Show unusual aircraft near my city.</div>
+                      <div>Summarize threats within 200 miles of my location.</div>
+                      <div>Explain the anomaly spike at a specific time.</div>
+                    </div>
+                  </div>
+                )}
+                <div className="tactical-panel" style={{ marginTop: 12 }}>
+                  <div className="panel-header">
+                    <div style={{ color: 'var(--accent)' }}>Export Briefing</div>
+                  </div>
+                  <div className="p-2" style={{ fontSize: 13 }}>
+                    <button className="button-tactical" onClick={() => {
+                      const lines = [];
+                      lines.push(`Operational Threat Index: ${threatScore.score}/10 (${threatScore.level})`);
+                      intelSummary.forEach(l => lines.push(l));
+                      lines.push('Source counts:');
+                      Object.entries(sourceCounts).forEach(([k,v]) => lines.push(`- ${(k||'UNKNOWN').toUpperCase()}: ${v}`));
+                      const blob = new Blob([lines.join('\n')], { type: 'text/plain' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a'); a.href = url; a.download = `rtaip_briefing_${Date.now()}.txt`; a.click(); URL.revokeObjectURL(url);
+                    }}>Export TXT</button>
+                    <button className="button-tactical" style={{ marginLeft: 8 }} onClick={() => {
+                      const html = `<!doctype html><html><head><meta charset="utf-8"><title>RTAIP Briefing</title><style>body{font-family:sans-serif;padding:24px;background:#0b1b18;color:#e6f8f4}h1{color:#00ffc6}hr{border:0;border-top:1px solid rgba(0,255,198,0.2)}.muted{opacity:.8}</style></head><body><h1>RTAIP Briefing</h1><div class="muted">${new Date().toLocaleString()}</div><hr/><div>Operational Threat Index: ${threatScore.score}/10 (${threatScore.level})</div><div>${intelSummary.map(l=>`<div>${l}</div>`).join('')}</div><div><div class="muted">Source counts</div>${Object.entries(sourceCounts).map(([k,v])=>`<div>${(k||'UNKNOWN').toUpperCase()}: ${v}</div>`).join('')}</div></body></html>`;
+                      const w = window.open('', '_blank');
+                      if (w) { w.document.write(html); w.document.close(); w.focus(); w.print(); }
+                    }}>Export PDF</button>
+                  </div>
+                </div>
               </div>
             </div>
           )}
