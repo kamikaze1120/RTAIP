@@ -341,7 +341,36 @@ function App() {
         <Route
           path="/"
           element={(
-            <div className="flex flex-1" style={{ minHeight: 'calc(100vh - 60px)' }}>
+            <>
+              <div className="tactical-panel" style={{ margin: '12px 16px 0 16px' }}>
+                <div className="panel-header">
+                  <div style={{ color: 'var(--accent)' }}>Operational Overview</div>
+                </div>
+                <div className="p-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12 }}>
+                  <div className="tactical-panel">
+                    <div className="p-3" style={{ textAlign: 'center' }}>
+                      <div style={{ fontSize: 12, opacity: 0.8 }}>Total Events</div>
+                      <div style={{ fontSize: 28, letterSpacing: 1, color: 'var(--accent)' }}>{totalEvents}</div>
+                      <div style={{ fontSize: 12, opacity: 0.7 }}>Last update: {lastUpdate}</div>
+                    </div>
+                  </div>
+                  <div className="tactical-panel">
+                    <div className="p-3" style={{ textAlign: 'center' }}>
+                      <div style={{ fontSize: 12, opacity: 0.8 }}>Anomalies</div>
+                      <div style={{ fontSize: 28, letterSpacing: 1, color: 'var(--danger)' }}>{totalAnomalies}</div>
+                      <div style={{ fontSize: 12, opacity: 0.7 }}>Severity varies by type</div>
+                    </div>
+                  </div>
+                  <div className="tactical-panel">
+                    <div className="p-3" style={{ textAlign: 'center' }}>
+                      <div style={{ fontSize: 12, opacity: 0.8 }}>Sources</div>
+                      <div style={{ fontSize: 28, letterSpacing: 1, color: 'var(--accent)' }}>{Object.keys(sourceCounts).length}</div>
+                      <div style={{ fontSize: 12, opacity: 0.7 }}>Filter from the left</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="flex flex-1" style={{ minHeight: 'calc(100vh - 60px)' }}>
               <div className="w-1/4 p-4">
                 <div className="tactical-panel">
                   <div className="panel-header">
@@ -594,7 +623,8 @@ function App() {
                   </div>
                 </div>
               </div>
-            </div>
+              </div>
+            </>
           )}
         />
 
@@ -608,6 +638,13 @@ function App() {
                     <div style={{ color: 'var(--accent)' }}>Operational Map</div>
                     <div style={{ display: 'flex', gap: 8 }}>
                       <button className="button-tactical" onClick={() => setShowHelp(s => !s)}>Help</button>
+                      <select className="button-tactical" value={filters.source || ''} onChange={(e) => setFilters(f => ({ ...f, source: e.target.value || undefined }))}>
+                        <option value="">All</option>
+                        <option value="adsb">ADSB</option>
+                        <option value="ais">AIS</option>
+                        <option value="usgs_seismic">USGS</option>
+                        <option value="noaa_weather">NOAA</option>
+                      </select>
                       <button className="button-tactical" onClick={() => setBasemapStyle(s => baseStyles[(baseStyles.indexOf(s)+1)%baseStyles.length])}>{basemapStyle.toUpperCase()}</button>
                     </div>
                   </div>
