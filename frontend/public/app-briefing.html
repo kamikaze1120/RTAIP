@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RTAIP App Briefing</title>
+  <style>
+    body { font-family: Arial, sans-serif; color: #111; line-height: 1.5; margin: 24px; }
+    h1, h2 { color: #0a3d31; }
+    h1 { margin-bottom: 4px; }
+    .subtitle { color: #555; margin-bottom: 20px; }
+    .section { margin-bottom: 20px; }
+    .kv { margin: 4px 0; }
+    .code { font-family: Consolas, monospace; background: #f5f5f5; padding: 2px 6px; border-radius: 4px; }
+    ul { margin: 6px 0 12px 20px; }
+    .foot { margin-top: 24px; font-size: 12px; color: #666; }
+    .box { border: 1px solid #ddd; border-radius: 8px; padding: 12px; }
+  </style>
+</head>
+<body>
+  <h1>RTAIP Application Briefing</h1>
+  <div class="subtitle">Operational intelligence platform for multi‑source events, anomalies, and analyst workflows</div>
+
+  <div class="section box">
+    <h2>Overview</h2>
+    <div>RTAIP ingests data from multiple sources (ADSB aircraft, AIS maritime, USGS seismic, NOAA weather), detects anomalies using machine learning and rules, and provides an analyst‑oriented UI with map, replay, and briefing capabilities.</div>
+  </div>
+
+  <div class="section box">
+    <h2>Key Capabilities</h2>
+    <ul>
+      <li>Confidence scoring per event and summarized per source</li>
+      <li>Realtime alerts via WebSocket and optional email notifications</li>
+      <li>Briefing mode with time window, source filter, and geographic bounding box</li>
+      <li>AI Analyst endpoint for summaries and anomaly context</li>
+      <li>Operational map, replay timeline, and event feed</li>
+    </ul>
+  </div>
+
+  <div class="section box">
+    <h2>Confidence Scoring</h2>
+    <div>Events include a numeric confidence metric reflecting data completeness and source‑specific heuristics. The UI displays per‑source confidence and event counts for situational awareness.</div>
+    <div class="kv">Backend model: <span class="code">data_events.confidence</span></div>
+    <div class="kv">Frontend display: Source Metadata and Source Cards</div>
+  </div>
+
+  <div class="section box">
+    <h2>Alerting & Notifications</h2>
+    <ul>
+      <li>Define alert rules with severity threshold, minimum confidence, and optional geofence</li>
+      <li>On detection, alerts are broadcast to clients and can be emailed via SMTP</li>
+      <li>Frontend alert bar provides audio cue and recent alert log</li>
+    </ul>
+    <div class="kv">Create rule: <span class="code">POST /alert-rules</span></div>
+    <div class="kv">Realtime channel: <span class="code">/ws</span> (WebSocket)</div>
+    <div class="kv">Email endpoint: <span class="code">POST /notify/email</span></div>
+  </div>
+
+  <div class="section box">
+    <h2>Briefing Mode</h2>
+    <div>Generate a summarized threat brief for a selected time window, source filter, and optional bounding box. The backend applies window and geofence filtering to events and anomalies.</div>
+    <div class="kv">Analyst API: <span class="code">POST /api/ai-analyst</span> (supports <span class="code">bbox:minLat,minLon,maxLat,maxLon</span>)</div>
+  </div>
+
+  <div class="section box">
+    <h2>APIs</h2>
+    <ul>
+      <li><span class="code">GET /events</span>, <span class="code">GET /anomalies</span>, <span class="code">GET /health</span></li>
+      <li><span class="code">POST /api/ai-analyst</span> (briefings, summaries)</li>
+      <li><span class="code">GET /alert-rules</span>, <span class="code">POST /alert-rules</span>, <span class="code">DELETE /alert-rules/{id}</span></li>
+      <li><span class="code">POST /notify/email</span> (SMTP required)</li>
+      <li><span class="code">POST /perf/seed_many?count=10000</span> (performance seeding)</li>
+    </ul>
+  </div>
+
+  <div class="section box">
+    <h2>Configuration</h2>
+    <ul>
+      <li>Frontend: <span class="code">REACT_APP_API_URL</span>, <span class="code">REACT_APP_SUPABASE_URL</span>, <span class="code">REACT_APP_SUPABASE_ANON_KEY</span>, <span class="code">REACT_APP_ALERT_EMAIL</span> (optional)</li>
+      <li>Backend SMTP: <span class="code">SMTP_HOST</span>, <span class="code">SMTP_PORT</span>, <span class="code">SMTP_USERNAME</span>, <span class="code">SMTP_PASSWORD</span>, <span class="code">EMAIL_FROM</span>, <span class="code">EMAIL_TO_DEFAULT</span></li>
+      <li>Database: <span class="code">DATABASE_URL</span>, <span class="code">DIRECT_URL</span> for schema management</li>
+    </ul>
+  </div>
+
+  <div class="section box">
+    <h2>Deployment</h2>
+    <div>Frontend is a Create React App. In Vercel, set root to <span class="code">frontend</span>, install with <span class="code">npm install</span>, build with <span class="code">npm run build</span>, output <span class="code">build</span>. Backend should be hosted with FastAPI (e.g., Railway) and configured with the required environment variables.</div>
+  </div>
+
+  <div class="foot">Print to PDF: Use the browser Print dialog to save this page as a PDF.</div>
+</body>
+</html>

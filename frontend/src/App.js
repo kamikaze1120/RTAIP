@@ -46,8 +46,9 @@ function useAnimatedNumber(target, duration = 400) {
   return value;
 }
 
-function SourceCard({ card, selectedSources, setSelectedSources, count }) {
+function SourceCard({ card, selectedSources, setSelectedSources, count, conf }) {
   const animCount = useAnimatedNumber(count, 500);
+  const animConf = useAnimatedNumber(Math.round(conf || 0), 500);
   const selected = selectedSources.includes(card.key);
   return (
     <div
@@ -67,6 +68,9 @@ function SourceCard({ card, selectedSources, setSelectedSources, count }) {
       <div className="p-2" style={{ fontSize: 13, opacity: 0.9 }}>{card.desc}</div>
       <div className="p-2" style={{ fontSize: 12, opacity: 0.8 }}>
         <span style={{ color: 'var(--accent-muted)' }}>Current events:</span> {animCount}
+      </div>
+      <div className="p-2" style={{ fontSize: 12, opacity: 0.8 }}>
+        <span style={{ color: 'var(--accent-muted)' }}>Confidence:</span> {animConf}%
       </div>
     </div>
   );
@@ -99,6 +103,10 @@ function App() {
     try { return !localStorage.getItem('rtaip_onboard_map_done'); } catch { return true; }
   });
   const [basemapStyle, setBasemapStyle] = useState('light');
+  const [briefingTime, setBriefingTime] = useState('last 24 hours');
+  const [briefingSource, setBriefingSource] = useState('');
+  const [briefingBbox, setBriefingBbox] = useState('');
+  const [briefingOutput, setBriefingOutput] = useState('');
   
   const baseStyles = ['light','dark','terrain','satellite','osm'];
    // API base configurable via environment; defaults to 8000
@@ -386,6 +394,8 @@ function App() {
     return { src, anomalyRate, last10, topClusters, confidence };
   });
 
+  const confidenceBySrc = Object.fromEntries(sourcesMeta.map(m => [m.src, m.confidence]));
+
   return (
     <div className="app-root">
       {showSplash && <SplashScreen />}
@@ -427,7 +437,7 @@ function App() {
             </div>
             <div className="p-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 12 }}>
               {sourceCardDefs.map(card => (
-                <SourceCard key={card.key} card={card} selectedSources={selectedSources} setSelectedSources={setSelectedSources} count={sourceCounts[card.key] || 0} />
+                <SourceCard key={card.key} card={card} selectedSources={selectedSources} setSelectedSources={setSelectedSources} count={sourceCounts[card.key] || 0} conf={confidenceBySrc[card.key] || 0} />
               ))}
             </div>
             <div className="p-3" style={{ display: 'grid', gridTemplateColumns: '1fr auto', alignItems: 'center', gap: 8 }}>
@@ -506,18 +516,56 @@ function App() {
                     <div style={{ marginTop: 12 }}>
                       <NavLink to="/map" className="button-tactical">Open Full Map</NavLink>
                     </div>
-                  </div>
-                </div>
+          </div>
+        </div>
 
-                <div className="tactical-panel" style={{ marginTop: 12 }}>
-                  <div className="panel-header">
-                    <div style={{ color: 'var(--accent)' }}>Timeline & Feed</div>
-                    <div className="button-tactical" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>Top</div>
-                  </div>
-                  <div className="p-2">
+        <div className="tactical-panel" style={{ marginTop: 12 }}>
+          <div className="panel-header">
+            <div style={{ color: 'var(--accent)' }}>Timeline & Feed</div>
+            <div className="button-tactical" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>Top</div>
+          </div>
+          <div className="p-2">
                     <div className="mt-3">
                       <ReplayTimeline events={events} onTimeChange={handleTimeChange} />
-                    </div>
+        </div>
+        <div className="tactical-panel" style={{ marginTop: 12 }}>
+          <div className="panel-header" style={{ justifyContent: 'space-between' }}>
+            <div style={{ color: 'var(--accent)' }}>Briefing Mode</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <select className="button-tactical" value={briefingTime} onChange={(e)=>setBriefingTime(e.target.value)}>
+                <option>last hour</option>
+                <option>last 24 hours</option>
+              </select>
+              <select className="button-tactical" value={briefingSource} onChange={(e)=>setBriefingSource(e.target.value)}>
+                <option value="">ALL</option>
+                {Object.keys(sourceCounts).map(s => (<option key={s} value={s}>{(s||'UNKNOWN').toUpperCase()}</option>))}
+              </select>
+            </div>
+          </div>
+          <div className="p-2" style={{ fontSize: 13 }}>
+            <div style={{ marginBottom: 8 }}>
+              <input value={briefingBbox} onChange={(e)=>setBriefingBbox(e.target.value)} className="button-tactical" placeholder="bbox minLat,minLon,maxLat,maxLon (optional)" style={{ width: '100%' }} />
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="button-tactical" onClick={async ()=>{
+                const parts = [];
+                parts.push('brief summary');
+                parts.push(briefingTime);
+                if (briefingSource) parts.push(briefingSource);
+                if (briefingBbox) parts.push(`bbox:${briefingBbox}`);
+                try {
+                  const res = await fetch(`${API}/api/ai-analyst`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: parts.join(' ') }) });
+                  const data = await res.json();
+                  setBriefingOutput(String(data?.output || 'No analysis available.'));
+                } catch {
+                  setBriefingOutput('Error contacting analyst API.');
+                }
+              }}>Generate</button>
+              <button className="button-tactical" onClick={()=>setBriefingOutput('')}>Clear</button>
+            </div>
+            <div style={{ marginTop: 8, whiteSpace: 'pre-wrap', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 8, minHeight: 80 }}>{briefingOutput || 'Briefing output will appear here.'}</div>
+          </div>
+        </div>
                     <div className="mt-3">
                       <EventFeed events={visibleEvents} anomalies={visibleAnomalies} onSelect={handleSelectEvent} selectedEventId={selectedEventId} />
                     </div>

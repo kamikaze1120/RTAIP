@@ -13,7 +13,7 @@ def read_root():
 from fastapi import FastAPI, Depends, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from database import Session, DataEvent, Anomaly
+from database import Session, DataEvent, Anomaly, AlertRule
 import threading
 from ingestion import schedule_ingestion
 from anomaly import schedule_detection
@@ -67,6 +67,7 @@ def serialize_event(ev: DataEvent):
         "latitude": ev.latitude,
         "longitude": ev.longitude,
         "data": ev.data,
+        "confidence": ev.confidence,
     }
 
 def serialize_anomaly(a: Anomaly):
@@ -98,6 +99,7 @@ class EmailRequest(BaseModel):
     subject: str
     message: str
     to: Optional[str] = None
+    to_email: Optional[str] = None
 
 @app.post("/notify/email")
 def notify_email(req: EmailRequest):
@@ -106,7 +108,7 @@ def notify_email(req: EmailRequest):
     user = os.getenv("SMTP_USERNAME")
     pwd = os.getenv("SMTP_PASSWORD")
     from_addr = os.getenv("EMAIL_FROM")
-    to_addr = req.to or os.getenv("EMAIL_TO_DEFAULT")
+    to_addr = req.to or req.to_email or os.getenv("EMAIL_TO_DEFAULT")
 
     missing = [k for k, v in {
         "SMTP_HOST": host,
@@ -133,6 +135,73 @@ def notify_email(req: EmailRequest):
     except Exception as e:
         return {"status": "error", "error": str(e)}
 
+# Alert Rules CRUD
+class AlertRuleIn(BaseModel):
+    name: str
+    source: Optional[str] = None
+    severity_threshold: int = 5
+    min_confidence: float = 0.5
+    min_lat: Optional[float] = None
+    min_lon: Optional[float] = None
+    max_lat: Optional[float] = None
+    max_lon: Optional[float] = None
+    email_to: Optional[str] = None
+
+def _in_bbox(lat: float, lon: float, r: AlertRule) -> bool:
+    try:
+        if None in (lat, lon):
+            return False
+        if r.min_lat is None or r.min_lon is None or r.max_lat is None or r.max_lon is None:
+            return True
+        return (r.min_lat <= lat <= r.max_lat) and (r.min_lon <= lon <= r.max_lon)
+    except Exception:
+        return False
+
+@app.get("/alert-rules")
+def list_alert_rules(db: Session = Depends(get_db)):
+    return [
+        {
+            "id": r.id,
+            "name": r.name,
+            "source": r.source,
+            "severity_threshold": r.severity_threshold,
+            "min_confidence": r.min_confidence,
+            "min_lat": r.min_lat,
+            "min_lon": r.min_lon,
+            "max_lat": r.max_lat,
+            "max_lon": r.max_lon,
+            "email_to": r.email_to,
+        }
+        for r in db.query(AlertRule).all()
+    ]
+
+@app.post("/alert-rules")
+def create_alert_rule(rule: AlertRuleIn, db: Session = Depends(get_db)):
+    r = AlertRule(
+        name=rule.name,
+        source=rule.source,
+        severity_threshold=rule.severity_threshold,
+        min_confidence=rule.min_confidence,
+        min_lat=rule.min_lat,
+        min_lon=rule.min_lon,
+        max_lat=rule.max_lat,
+        max_lon=rule.max_lon,
+        email_to=rule.email_to,
+    )
+    db.add(r)
+    db.commit()
+    db.refresh(r)
+    return {"id": r.id}
+
+@app.delete("/alert-rules/{rule_id}")
+def delete_alert_rule(rule_id: int, db: Session = Depends(get_db)):
+    r = db.query(AlertRule).get(rule_id)
+    if not r:
+        return {"status": "not_found"}
+    db.delete(r)
+    db.commit()
+    return {"status": "deleted"}
+
 # Analyst API
 class AnalystQuery(BaseModel):
     query: str
@@ -141,6 +210,15 @@ class AnalystQuery(BaseModel):
 @app.post("/api/ai-analyst")
 def ai_analyst(req: AnalystQuery, db: Session = Depends(get_db)):
     q = (req.query or "").lower()
+    import re
+    bbox_match = re.search(r"bbox[:=]\s*([\-0-9\.]+),([\-0-9\.]+),([\-0-9\.]+),([\-0-9\.]+)", q)
+    bbox = None
+    if bbox_match:
+        try:
+            min_lat = float(bbox_match.group(1)); min_lon = float(bbox_match.group(2)); max_lat = float(bbox_match.group(3)); max_lon = float(bbox_match.group(4))
+            bbox = (min_lat, min_lon, max_lat, max_lon)
+        except Exception:
+            bbox = None
     def window_filter(ts):
         # Simplified temporal parsing
         from datetime import datetime, timedelta
@@ -179,7 +257,14 @@ def ai_analyst(req: AnalystQuery, db: Session = Depends(get_db)):
             "timestamp": a.timestamp.isoformat() if a.timestamp else None,
         }
 
-    evs = [e for e in events if window_filter(e.timestamp)]
+    def in_bbox(e: DataEvent):
+        if not bbox:
+            return True
+        if e.latitude is None or e.longitude is None:
+            return False
+        return bbox[0] <= e.latitude <= bbox[2] and bbox[1] <= e.longitude <= bbox[3]
+
+    evs = [e for e in events if window_filter(e.timestamp) and in_bbox(e)]
     if srcs:
         evs = [e for e in evs if e.source in srcs]
     anoms = [a for a in anomalies if window_filter(a.timestamp)]
@@ -258,12 +343,60 @@ def seed(db: Session = Depends(get_db)):
             pass
         return {"status": "error", "message": str(e)}
 
+@app.post("/perf/seed_many")
+def seed_many(count: int = 1000, sources: Optional[str] = None, db: Session = Depends(get_db)):
+    import random
+    try:
+        src_list = [s.strip() for s in (sources or "adsb,ais,usgs_seismic,noaa_weather").split(",") if s.strip()]
+        created = 0
+        now = datetime.utcnow()
+        for i in range(count):
+            src = random.choice(src_list)
+            lat = random.uniform(-85, 85)
+            lon = random.uniform(-180, 180)
+            data = {"note": "perf seed", "i": i}
+            conf = 0.7
+            ev = DataEvent(source=src, timestamp=now, latitude=lat, longitude=lon, data=data, confidence=conf)
+            db.add(ev)
+            created += 1
+        db.commit()
+        return {"inserted_events": created}
+    except Exception as e:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        return {"status": "error", "message": str(e)}
+
+subscribers: List[WebSocket] = []
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
-    while True:
-        data = await websocket.receive_text()
-        await websocket.send_text(f"Message text was: {data}")
+    subscribers.append(websocket)
+    try:
+        while True:
+            _ = await websocket.receive_text()
+            # No-op: server-driven pushes only
+    except Exception:
+        pass
+    finally:
+        try:
+            subscribers.remove(websocket)
+        except Exception:
+            pass
+
+def broadcast_alert(text: str):
+    for ws in list(subscribers):
+        try:
+            # FastAPI WebSocket requires await; here we schedule via thread-safe path
+            import asyncio
+            asyncio.run(ws.send_text(text))
+        except Exception:
+            try:
+                subscribers.remove(ws)
+            except Exception:
+                pass
 
 @app.get("/")
 def read_root():

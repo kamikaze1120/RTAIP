@@ -30,6 +30,7 @@ class DataEvent(Base):
     latitude = Column(Float)
     longitude = Column(Float)
     data = Column(JSON)
+    confidence = Column(Float, default=0.5)
 
 class Anomaly(Base):
     __tablename__ = 'anomalies'
@@ -40,6 +41,20 @@ class Anomaly(Base):
     severity = Column(Integer)
     description = Column(Text)
     timestamp = Column(DateTime, default=datetime.utcnow)
+
+class AlertRule(Base):
+    __tablename__ = 'alert_rules'
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String)
+    source = Column(String)  # optional filter
+    severity_threshold = Column(Integer, default=5)
+    min_confidence = Column(Float, default=0.5)
+    min_lat = Column(Float)
+    min_lon = Column(Float)
+    max_lat = Column(Float)
+    max_lon = Column(Float)
+    email_to = Column(String)  # optional notification target
 
 # Create tables: prefer DIRECT_URL (Supabase 5432) for DDL, otherwise use runtime engine
 try:
@@ -81,6 +96,15 @@ def ensure_schema():
             return False, "DIRECT_URL not set. Please set DIRECT_URL to the Supabase 5432 connection string (not pgbouncer) and retry."
         # Fallback: try runtime engine (e.g., SQLite or direct Postgres without pgbouncer)
         Base.metadata.create_all(engine)
+        try:
+            if DATABASE_URL.startswith('sqlite'):
+                with engine.connect() as conn:
+                    rows = conn.execute("PRAGMA table_info('data_events')").fetchall()
+                    cols = [r[1] for r in rows]
+                    if 'confidence' not in cols:
+                        conn.execute("ALTER TABLE data_events ADD COLUMN confidence REAL DEFAULT 0.5")
+        except Exception as _:
+            pass
         return True, "schema ensured via runtime engine"
     except Exception as e:
         return False, str(e)
