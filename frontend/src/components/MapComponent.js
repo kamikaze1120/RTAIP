@@ -6,6 +6,7 @@ import OSM from 'ol/source/OSM';
 import XYZ from 'ol/source/XYZ';
 import VectorLayer from 'ol/layer/Vector';
 import VectorSource from 'ol/source/Vector';
+import ClusterSource from 'ol/source/Cluster';
 import Heatmap from 'ol/layer/Heatmap';
 import { fromLonLat } from 'ol/proj';
 import Feature from 'ol/Feature';
@@ -36,6 +37,7 @@ const basemapFor = (style) => {
 
 const MapComponent = ({ events, anomalies, focusEventId, onSelect, basemapStyle }) => {
   const mapRef = useRef();
+  const fpsRef = useRef({ last: performance.now(), frames: 0 });
   
 
   useEffect(() => {
@@ -53,11 +55,27 @@ const MapComponent = ({ events, anomalies, focusEventId, onSelect, basemapStyle 
     map.addLayer(heatmapLayer);
 
     const eventSource = new VectorSource();
-    const eventLayer = new VectorLayer({ source: eventSource });
-    map.addLayer(eventLayer);
+    const clusterSource = new ClusterSource({ distance: 40, source: eventSource });
+    const clusterLayer = new VectorLayer({
+      source: clusterSource,
+      style: (feature) => {
+        const size = feature.get('features')?.length || 1;
+        const radius = Math.min(24, 8 + Math.log(size + 1) * 4);
+        return new Style({
+          image: new CircleStyle({ radius, fill: new Fill({ color: 'rgba(0,255,198,0.35)' }), stroke: new Stroke({ color: 'rgba(0,255,198,0.85)', width: 2 }) }),
+          text: size > 1 ? undefined : undefined,
+        });
+      }
+    });
+    map.addLayer(clusterLayer);
 
     const anomalySource = new VectorSource();
-    const anomalyLayer = new VectorLayer({ source: anomalySource, style: anomalyStyle });
+    const anomalyCluster = new ClusterSource({ distance: 40, source: anomalySource });
+    const anomalyLayer = new VectorLayer({ source: anomalyCluster, style: (feature) => {
+      const size = feature.get('features')?.length || 1;
+      const radius = Math.min(26, 10 + Math.log(size + 1) * 4);
+      return new Style({ image: new CircleStyle({ radius, fill: new Fill({ color: 'rgba(220,53,69,0.45)' }), stroke: new Stroke({ color: '#dc3545', width: 2 }) }) });
+    } });
     map.addLayer(anomalyLayer);
 
     
@@ -120,11 +138,15 @@ const MapComponent = ({ events, anomalies, focusEventId, onSelect, basemapStyle 
     const handleClick = (evt) => {
       let selectedId = null;
       map.forEachFeatureAtPixel(evt.pixel, (feature) => {
-        const id = feature.get('eventId');
-        if (id) {
-          selectedId = id;
-          return true; // stop after first hit
+        // If cluster, pick first child feature
+        const clustered = feature.get('features');
+        if (Array.isArray(clustered) && clustered.length > 0) {
+          const child = clustered[0];
+          const id = child.get('eventId');
+          if (id) { selectedId = id; return true; }
         }
+        const id = feature.get('eventId');
+        if (id) { selectedId = id; return true; }
         return false;
       });
       if (selectedId && typeof onSelect === 'function') {
@@ -145,6 +167,23 @@ const MapComponent = ({ events, anomalies, focusEventId, onSelect, basemapStyle 
         }
       }
     }
+
+    // Simple FPS monitor
+    let rafId;
+    const tick = () => {
+      const now = performance.now();
+      const delta = now - fpsRef.current.last;
+      fpsRef.current.frames++;
+      if (delta >= 1000) {
+        // eslint-disable-next-line no-console
+        console.debug(`[Map FPS] ${fpsRef.current.frames} fps`);
+        fpsRef.current.frames = 0;
+        fpsRef.current.last = now;
+      }
+      rafId = requestAnimationFrame(tick);
+    };
+    rafId = requestAnimationFrame(tick);
+    cleanupFns.push(() => cancelAnimationFrame(rafId));
 
     return () => {
       map.un('click', handleClick);

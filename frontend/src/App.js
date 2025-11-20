@@ -528,54 +528,54 @@ function App() {
                     <div className="mt-3">
                       <ReplayTimeline events={events} onTimeChange={handleTimeChange} />
         </div>
-        <div className="tactical-panel" style={{ marginTop: 12 }}>
-          <div className="panel-header" style={{ justifyContent: 'space-between' }}>
-            <div style={{ color: 'var(--accent)' }}>Briefing Mode</div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <select className="button-tactical" value={briefingTime} onChange={(e)=>setBriefingTime(e.target.value)}>
-                <option>last hour</option>
-                <option>last 24 hours</option>
-              </select>
-              <select className="button-tactical" value={briefingSource} onChange={(e)=>setBriefingSource(e.target.value)}>
-                <option value="">ALL</option>
-                {Object.keys(sourceCounts).map(s => (<option key={s} value={s}>{(s||'UNKNOWN').toUpperCase()}</option>))}
-              </select>
+          <div className="tactical-panel" style={{ marginTop: 12 }}>
+            <div className="panel-header" style={{ justifyContent: 'space-between' }}>
+              <div style={{ color: 'var(--accent)' }}>Briefing Mode</div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <select className="button-tactical" value={briefingTime} onChange={(e)=>setBriefingTime(e.target.value)}>
+                  <option>last hour</option>
+                  <option>last 24 hours</option>
+                </select>
+                <select className="button-tactical" value={briefingSource} onChange={(e)=>setBriefingSource(e.target.value)}>
+                  <option value="">ALL</option>
+                  {Object.keys(sourceCounts).map(s => (<option key={s} value={s}>{(s||'UNKNOWN').toUpperCase()}</option>))}
+                </select>
+              </div>
+            </div>
+            <div className="p-2" style={{ fontSize: 13 }}>
+              <div style={{ marginBottom: 8 }}>
+                <input value={briefingBbox} onChange={(e)=>setBriefingBbox(e.target.value)} className="button-tactical" placeholder="bbox minLat,minLon,maxLat,maxLon (optional)" style={{ width: '100%' }} />
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="button-tactical" onClick={async ()=>{
+                  const parts = [];
+                  parts.push('brief summary');
+                  parts.push(briefingTime);
+                  if (briefingSource) parts.push(briefingSource);
+                  if (briefingBbox) parts.push(`bbox:${briefingBbox}`);
+                  try {
+                    const res = await fetch(`${API}/api/ai-analyst`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: parts.join(' ') }) });
+                    const data = await res.json();
+                    setBriefingOutput(String(data?.output || 'No analysis available.'));
+                  } catch {
+                    setBriefingOutput('Error contacting analyst API.');
+                  }
+                }}>Generate</button>
+                <button className="button-tactical" onClick={()=>setBriefingOutput('')}>Clear</button>
+              </div>
+              <div style={{ marginTop: 8, whiteSpace: 'pre-wrap', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 8, minHeight: 80 }}>{briefingOutput || 'Briefing output will appear here.'}</div>
             </div>
           </div>
-          <div className="p-2" style={{ fontSize: 13 }}>
-            <div style={{ marginBottom: 8 }}>
-              <input value={briefingBbox} onChange={(e)=>setBriefingBbox(e.target.value)} className="button-tactical" placeholder="bbox minLat,minLon,maxLat,maxLon (optional)" style={{ width: '100%' }} />
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button className="button-tactical" onClick={async ()=>{
-                const parts = [];
-                parts.push('brief summary');
-                parts.push(briefingTime);
-                if (briefingSource) parts.push(briefingSource);
-                if (briefingBbox) parts.push(`bbox:${briefingBbox}`);
-                try {
-                  const res = await fetch(`${API}/api/ai-analyst`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: parts.join(' ') }) });
-                  const data = await res.json();
-                  setBriefingOutput(String(data?.output || 'No analysis available.'));
-                } catch {
-                  setBriefingOutput('Error contacting analyst API.');
-                }
-              }}>Generate</button>
-              <button className="button-tactical" onClick={()=>setBriefingOutput('')}>Clear</button>
-            </div>
-            <div style={{ marginTop: 8, whiteSpace: 'pre-wrap', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 8, minHeight: 80 }}>{briefingOutput || 'Briefing output will appear here.'}</div>
-          </div>
-        </div>
                     <div className="mt-3">
                       <EventFeed events={visibleEvents} anomalies={visibleAnomalies} onSelect={handleSelectEvent} selectedEventId={selectedEventId} />
                     </div>
                   </div>
 
-                  {selectedEventId && (() => {
-                    const ev = events.find(e => e.id === selectedEventId);
-                    const anom = anomalies.find(a => a.event_id === selectedEventId);
-                    return (
-                      <div className="tactical-panel" style={{ marginTop: 12 }}>
+                        {selectedEventId && (() => {
+                          const ev = events.find(e => e.id === selectedEventId);
+                          const anom = anomalies.find(a => a.event_id === selectedEventId);
+                          return (
+                            <div className="tactical-panel" style={{ marginTop: 12 }}>
                         <div className="panel-header">
                           <div style={{ color: 'var(--accent)' }}>Event Details</div>
                           <div className="button-tactical" onClick={() => setSelectedEventId(null)}>Close</div>
@@ -583,24 +583,26 @@ function App() {
                         <div className="p-2" style={{ fontSize: 13 }}>
                           <div>Source: <span style={{ color: 'var(--accent-muted)' }}>{(ev?.source || 'UNKNOWN').toUpperCase()}</span></div>
                           <div>Timestamp: {ev?.timestamp ? new Date(ev.timestamp).toLocaleString() : '—'}</div>
-                          <div>Latitude: {ev?.latitude ?? '—'} | Longitude: {ev?.longitude ?? '—'}</div>
-                          <div>ID: {ev?.id ?? '—'}</div>
-                          <div style={{ marginTop: 6, color: anom ? 'var(--danger)' : 'var(--accent-muted)' }}>
-                            {anom ? 'Anomaly detected for this event' : 'Status: normal'}
-                          </div>
+                              <div>Latitude: {ev?.latitude ?? '—'} | Longitude: {ev?.longitude ?? '—'}</div>
+                              <div>ID: {ev?.id ?? '—'}</div>
+                              <div>Confidence: {typeof ev?.confidence === 'number' ? Math.round(ev.confidence * 100) : (typeof ev?.confidence === 'string' ? Math.round(Number(ev.confidence) * 100) : '—')}%</div>
+                              <div style={{ marginTop: 6, color: anom ? 'var(--danger)' : 'var(--accent-muted)' }}>
+                                {anom ? 'Anomaly detected for this event' : 'Status: normal'}
+                              </div>
                           {anom && (
                             <div style={{ marginTop: 8 }}>
                               <div>Type: <span style={{ color: 'var(--accent-muted)' }}>{anom.type}</span></div>
                               <div>Severity: <span style={{ color: 'var(--accent)' }}>{anom.severity}</span></div>
                               <div>Description: <span style={{ opacity: 0.9 }}>{anom.description}</span></div>
-                              {(() => { const meta = parseAnomalyMeta(anom); return (
-                                <>
-                                  {meta.algorithm && <div>Algorithm: <span style={{ color: 'var(--accent-muted)' }}>{meta.algorithm}</span></div>}
-                                  {typeof meta.score === 'number' && <div>Model score: <span style={{ color: 'var(--accent)' }}>{meta.score.toFixed(4)}</span></div>}
-                                  {meta.rule && <div>Rule: <span style={{ color: 'var(--accent-muted)' }}>{meta.rule}</span></div>}
-                                  {typeof meta.magnitude === 'number' && <div>Magnitude: <span style={{ color: 'var(--accent)' }}>{meta.magnitude}</span></div>}
-                                </>
-                              ); })()}
+                                  {(() => { const meta = parseAnomalyMeta(anom); return (
+                                    <>
+                                      {meta.algorithm && <div>Algorithm: <span style={{ color: 'var(--accent-muted)' }}>{meta.algorithm}</span></div>}
+                                      {typeof meta.score === 'number' && <div>Model score: <span style={{ color: 'var(--accent)' }}>{meta.score.toFixed(4)}</span></div>}
+                                      {meta.rule && <div>Rule: <span style={{ color: 'var(--accent-muted)' }}>{meta.rule}</span></div>}
+                                      {typeof meta.magnitude === 'number' && <div>Magnitude: <span style={{ color: 'var(--accent)' }}>{meta.magnitude}</span></div>}
+                                      {typeof ev?.confidence === 'number' && <div>Confidence: <span style={{ color: 'var(--accent)' }}>{Math.round(ev.confidence * 100)}%</span></div>}
+                                    </>
+                                  ); })()}
                               <div>Detected: {anom.timestamp ? new Date(anom.timestamp).toLocaleString() : '—'}</div>
                             </div>
                           )}
@@ -705,6 +707,39 @@ function App() {
                         </div>
                       </div>
                       <div className="p-2" style={{ fontSize: 12, opacity: 0.8 }}>Calculated from anomaly density + event velocity + source volatility.</div>
+                    </div>
+
+                    {/* Smart Summary */}
+                    <div className="tactical-panel">
+                      <div className="panel-header">
+                        <div style={{ color: 'var(--accent)' }}>Smart Summary</div>
+                      </div>
+                      <div className="p-2" style={{ fontSize: 13 }}>
+                        {(() => {
+                          const hotClusters = sourcesMeta.flatMap(m => m.topClusters.map(([k,c]) => ({ src: m.src, key: k, count: c, conf: m.confidence })));
+                          const top = hotClusters.sort((a,b)=>b.count - a.count).slice(0,5);
+                          const criticalAnoms = anomalies.filter(a => a.severity >= 7).slice(0,5);
+                          return (
+                            <>
+                              <div style={{ marginBottom: 8 }}>Top Hot Spots:</div>
+                              {top.length === 0 ? <div style={{ opacity: 0.8 }}>No clusters detected.</div> : (
+                                <ul style={{ margin: 0, paddingLeft: 18 }}>
+                                  {top.map((t, i) => (<li key={`${t.src}-${t.key}-${i}`}>{(t.src||'UNK').toUpperCase()} • {t.key} • count={t.count} • conf={t.conf}%</li>))}
+                                </ul>
+                              )}
+                              <div style={{ marginTop: 12, marginBottom: 8 }}>High-Risk Anomalies:</div>
+                              {criticalAnoms.length === 0 ? <div style={{ opacity: 0.8 }}>None</div> : (
+                                <ul style={{ margin: 0, paddingLeft: 18 }}>
+                                  {criticalAnoms.map((a, i) => {
+                                    const ev = events.find(e => e.id === a.event_id);
+                                    return (<li key={`${a.id}-${i}`}>{a.type} • sev={a.severity} • {(ev?.source||'UNK').toUpperCase()} • ({ev?.latitude},{ev?.longitude})</li>);
+                                  })}
+                                </ul>
+                              )}
+                            </>
+                          );
+                        })()}
+                      </div>
                     </div>
 
                     {/* Last 60-Minute Intelligence */}

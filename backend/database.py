@@ -103,6 +103,8 @@ def ensure_schema():
                     cols = [r[1] for r in rows]
                     if 'confidence' not in cols:
                         conn.execute("ALTER TABLE data_events ADD COLUMN confidence REAL DEFAULT 0.5")
+                    conn.execute("CREATE INDEX IF NOT EXISTS idx_data_events_lat_lon ON data_events(latitude, longitude)")
+                    conn.execute("CREATE INDEX IF NOT EXISTS idx_anomalies_event_id ON anomalies(event_id)")
         except Exception as _:
             pass
         return True, "schema ensured via runtime engine"

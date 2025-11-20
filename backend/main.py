@@ -81,13 +81,33 @@ def serialize_anomaly(a: Anomaly):
     }
 
 @app.get("/events")
-def get_events(db: Session = Depends(get_db)):
-    events = db.query(DataEvent).all()
+def get_events(db: Session = Depends(get_db), bbox: Optional[str] = None):
+    q = db.query(DataEvent)
+    try:
+        if bbox:
+            parts = [p.strip() for p in bbox.split(',')]
+            if len(parts) == 4:
+                min_lat, min_lon, max_lat, max_lon = map(float, parts)
+                q = q.filter(DataEvent.latitude >= min_lat, DataEvent.latitude <= max_lat, DataEvent.longitude >= min_lon, DataEvent.longitude <= max_lon)
+    except Exception:
+        pass
+    events = q.all()
     return [serialize_event(ev) for ev in events]
 
 @app.get("/anomalies")
-def get_anomalies(db: Session = Depends(get_db)):
-    anomalies = db.query(Anomaly).all()
+def get_anomalies(db: Session = Depends(get_db), bbox: Optional[str] = None):
+    q = db.query(Anomaly)
+    try:
+        if bbox:
+            parts = [p.strip() for p in bbox.split(',')]
+            if len(parts) == 4:
+                min_lat, min_lon, max_lat, max_lon = map(float, parts)
+                from sqlalchemy.orm import aliased
+                Ev = aliased(DataEvent)
+                q = q.join(Ev, Ev.id == Anomaly.event_id).filter(Ev.latitude >= min_lat, Ev.latitude <= max_lat, Ev.longitude >= min_lon, Ev.longitude <= max_lon)
+    except Exception:
+        pass
+    anomalies = q.all()
     return [serialize_anomaly(a) for a in anomalies]
 
 @app.get("/health")
