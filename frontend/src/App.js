@@ -46,8 +46,8 @@ function App() {
     try { return !localStorage.getItem('rtaip_onboard_map_done'); } catch { return true; }
   });
   const [basemapStyle, setBasemapStyle] = useState('light');
-  const [showAircraftTrails, setShowAircraftTrails] = useState(true);
-  const [beginnerMode, setBeginnerMode] = useState(false);
+  
+  const baseStyles = ['light','dark','terrain','satellite','osm'];
    // API base configurable via environment; defaults to 8000
    const API = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
@@ -609,19 +609,11 @@ function App() {
                     <div style={{ display: 'flex', gap: 8 }}>
                       <button className="button-tactical" onClick={() => setShowHelp(s => !s)}>Help</button>
                       <button className="button-tactical" onClick={() => { setFilters(f => ({ ...f, source: 'adsb' })); setRefreshInterval(30000); }}>Live Aircraft</button>
-                      <select className="button-tactical" value={basemapStyle} onChange={(e) => setBasemapStyle(e.target.value)}>
-                        <option value="light">Light</option>
-                        <option value="dark">Dark</option>
-                        <option value="satellite">Satellite</option>
-                        <option value="terrain">Terrain</option>
-                        <option value="osm">OSM</option>
-                      </select>
-                      <button className={`button-tactical ${beginnerMode ? 'active' : ''}`} onClick={() => setBeginnerMode(b => !b)}>Beginner Mode</button>
-                      <button className={`button-tactical ${showAircraftTrails ? 'active' : ''}`} onClick={() => setShowAircraftTrails(v => !v)}>Trails</button>
+                      <button className="button-tactical" onClick={() => setBasemapStyle(s => baseStyles[(baseStyles.indexOf(s)+1)%baseStyles.length])}>{basemapStyle.toUpperCase()}</button>
                     </div>
                   </div>
                   <div style={{ height: 'calc(100% - 42px)' }}>
-                    <MapComponent events={visibleEvents} anomalies={visibleAnomalies} focusEventId={focusEventId} onSelect={handleSelectEvent} basemapStyle={basemapStyle} showAircraftTrails={showAircraftTrails} liveAircraft={filters.source === 'adsb'} />
+                    <MapComponent events={visibleEvents} anomalies={visibleAnomalies} focusEventId={focusEventId} onSelect={handleSelectEvent} basemapStyle={basemapStyle} showAircraftTrails={false} liveAircraft={filters.source === 'adsb'} />
                   </div>
                   {showHelp && (
                     <div style={{ position: 'absolute', top: 50, right: 20, background: 'rgba(0,0,0,0.75)', border: '1px solid rgba(0,255,198,0.2)', borderRadius: 8, padding: 12, maxWidth: 320 }}>
@@ -690,19 +682,7 @@ function App() {
                   </div>
                 )}
                 <ChatPanel apiBase={API} />
-                {beginnerMode && (
-                  <div className="tactical-panel" style={{ marginTop: 12 }}>
-                    <div className="panel-header">
-                      <div style={{ color: 'var(--accent)' }}>Beginner Prompts</div>
-                    </div>
-                    <div className="p-2" style={{ fontSize: 13 }}>
-                      <div>What changed in the last hour?</div>
-                      <div>Show unusual aircraft near my city.</div>
-                      <div>Summarize threats within 200 miles of my location.</div>
-                      <div>Explain the anomaly spike at a specific time.</div>
-                    </div>
-                  </div>
-                )}
+                
                 <div className="tactical-panel" style={{ marginTop: 12 }}>
                   <div className="panel-header">
                     <div style={{ color: 'var(--accent)' }}>Export Briefing</div>

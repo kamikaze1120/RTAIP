@@ -41,6 +41,9 @@ const MapComponent = ({ events, anomalies, focusEventId, onSelect, basemapStyle,
   const trailsRef = useRef({});
   const planeFeaturesRef = useRef({});
   const overlayRef = useRef(null);
+  const firstCoordRef = useRef({});
+  const lastCoordRef = useRef({});
+  const cityCacheRef = useRef({});
 
   useEffect(() => {
     const cleanupFns = [];
@@ -101,6 +104,27 @@ const MapComponent = ({ events, anomalies, focusEventId, onSelect, basemapStyle,
       const overlay = new Overlay({ element: tooltip, positioning: 'bottom-center', offset: [0, -10] });
       overlayRef.current = overlay;
       map.addOverlay(overlay);
+      const pickCity = (obj) => {
+        if (!obj) return null;
+        if (obj.address) {
+          return obj.address.city || obj.address.town || obj.address.village || obj.address.hamlet || obj.address.county || null;
+        }
+        return obj.display_name || null;
+      };
+      const reverseGeocode = async (lonLat) => {
+        const key = `${lonLat[1].toFixed(2)},${lonLat[0].toFixed(2)}`;
+        if (cityCacheRef.current[key]) return cityCacheRef.current[key];
+        try {
+          const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lonLat[1]}&lon=${lonLat[0]}`;
+          const res = await fetch(url, { headers: { 'Accept': 'application/json', 'User-Agent': 'RTAIP/1.0' } });
+          const json = await res.json();
+          const city = pickCity(json);
+          cityCacheRef.current[key] = city || '—';
+          return cityCacheRef.current[key];
+        } catch {
+          return '—';
+        }
+      };
       map.on('pointermove', (evt) => {
         let hit = null;
         map.forEachFeatureAtPixel(evt.pixel, (feature) => {
@@ -111,9 +135,27 @@ const MapComponent = ({ events, anomalies, focusEventId, onSelect, basemapStyle,
           const g = hit.getGeometry();
           const p = g.getCoordinates();
           const meta = hit.get('meta') || {};
-          tooltip.innerHTML = `${meta.callsign || meta.icao || 'Aircraft'}<br/>Speed: ${meta.speedKts ?? '—'} kts • Heading: ${meta.heading ?? '—'}°`;
-          overlay.setPosition(p);
-          tooltip.style.display = 'block';
+          const icao = meta.icao;
+          const first = firstCoordRef.current[icao];
+          const last = lastCoordRef.current[icao];
+          const showTooltip = (originCity, destCity) => {
+            const o = originCity || meta.originCity || '—';
+            const d = destCity || meta.destCity || '—';
+            tooltip.innerHTML = `${meta.callsign || meta.icao || 'Aircraft'}<br/>Origin: ${o} • Destination: ${d}<br/>Speed: ${meta.speedKts ?? '—'} kts • Heading: ${meta.heading ?? '—'}°`;
+            overlay.setPosition(p);
+            tooltip.style.display = 'block';
+          };
+          if (icao && first && last && (!meta.originCity || !meta.destCity)) {
+            Promise.all([reverseGeocode(first), reverseGeocode(last)]).then(([oc, dc]) => {
+              const m = hit.get('meta') || {};
+              hit.set('meta', { ...m, originCity: oc, destCity: dc });
+              showTooltip(oc, dc);
+            }).catch(() => {
+              showTooltip();
+            });
+          } else {
+            showTooltip();
+          }
         } else {
           tooltip.style.display = 'none';
         }
@@ -146,6 +188,8 @@ const MapComponent = ({ events, anomalies, focusEventId, onSelect, basemapStyle,
               f.set('meta', { icao, callsign, speedKts, heading });
               planeSource.addFeature(f);
               planeFeaturesRef.current[icao] = f;
+              firstCoordRef.current[icao] = [lon, lat];
+              lastCoordRef.current[icao] = [lon, lat];
             } else {
               const g = f.getGeometry();
               const from = g.getCoordinates();
@@ -160,6 +204,7 @@ const MapComponent = ({ events, anomalies, focusEventId, onSelect, basemapStyle,
               }
               f.setStyle(style);
               f.set('meta', { icao, callsign, speedKts, heading });
+              lastCoordRef.current[icao] = [lon, lat];
             }
             seen.add(icao);
             if (showAircraftTrails) {
@@ -178,6 +223,8 @@ const MapComponent = ({ events, anomalies, focusEventId, onSelect, basemapStyle,
               const f = planeFeaturesRef.current[k];
               try { planeSource.removeFeature(f); } catch {}
               delete planeFeaturesRef.current[k];
+              delete firstCoordRef.current[k];
+              delete lastCoordRef.current[k];
             }
           });
         } catch (e) {}
