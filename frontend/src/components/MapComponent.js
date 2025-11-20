@@ -162,8 +162,15 @@ const MapComponent = ({ events, anomalies, focusEventId, onSelect, basemapStyle,
       });
       const fetchPlanes = async () => {
         try {
-          const res = await fetch('https://opensky-network.org/api/states/all');
-          const json = await res.json();
+          let json;
+          try {
+            const res = await fetch('https://opensky-network.org/api/states/all');
+            json = await res.json();
+          } catch (e) {
+            const prox = await fetch('https://api.allorigins.win/raw?url=' + encodeURIComponent('https://opensky-network.org/api/states/all'));
+            const txt = await prox.text();
+            json = JSON.parse(txt);
+          }
           const states = Array.isArray(json.states) ? json.states.slice(0, 200) : [];
           const seen = new Set();
           states.forEach(st => {
