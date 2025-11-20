@@ -16,6 +16,7 @@ const ChatPanel = ({ apiBase }) => {
   const [streaming, setStreaming] = useState(false);
   const [sessionId] = useState(() => Math.random().toString(36).slice(2));
   const listRef = useRef(null);
+  const [showLatestOnly, setShowLatestOnly] = useState(true);
 
   useEffect(() => {
     try { sessionStorage.setItem('rtaip_chat', JSON.stringify(messages)); } catch {}
@@ -24,6 +25,14 @@ const ChatPanel = ({ apiBase }) => {
   useEffect(() => {
     if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
   }, [messages, streaming]);
+
+  const displayedMessages = useMemo(() => {
+    if (!showLatestOnly) return messages;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === 'assistant') return [messages[i]];
+    }
+    return [];
+  }, [messages, showLatestOnly]);
 
   const exportJSON = () => {
     const blob = new Blob([JSON.stringify(messages, null, 2)], { type: 'application/json' });
@@ -86,6 +95,7 @@ const ChatPanel = ({ apiBase }) => {
       <div className="panel-header" style={{ justifyContent: 'space-between' }}>
         <div style={{ color: 'var(--accent)' }}>RTAIP-AI Analyst</div>
         <div style={{ display: 'flex', gap: 8 }}>
+          <button className={`button-tactical ${showLatestOnly ? 'active' : ''}`} onClick={() => setShowLatestOnly(v => !v)}>{showLatestOnly ? 'Latest' : 'History'}</button>
           <button className="button-tactical" onClick={exportTXT}>Export TXT</button>
           <button className="button-tactical" onClick={exportJSON}>Export JSON</button>
         </div>
@@ -97,8 +107,8 @@ const ChatPanel = ({ apiBase }) => {
           ))}
         </div>
         <div ref={listRef} style={{ flex: 1, overflowY: 'auto', border: '1px solid rgba(0,255,198,0.12)', borderRadius: 6, padding: 8 }}>
-          {messages.length === 0 && <div style={{ opacity: 0.7 }}>Ask a question to the analyst…</div>}
-          {messages.map((m, idx) => (
+          {displayedMessages.length === 0 && <div style={{ opacity: 0.7 }}>Ask a question to the analyst…</div>}
+          {displayedMessages.map((m, idx) => (
             <div key={idx} style={{ marginBottom: 10 }}>
               <div style={{ fontSize: 11, opacity: 0.65 }}>{m.ts} • {m.role.toUpperCase()}</div>
               <div style={{ whiteSpace: 'pre-wrap' }}>{m.text}</div>
@@ -108,6 +118,7 @@ const ChatPanel = ({ apiBase }) => {
         <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
           <input value={input} onChange={e => setInput(e.target.value)} placeholder="Type your question…" className="button-tactical" style={{ flex: 1 }} />
           <button className="button-tactical" onClick={() => send()} disabled={streaming}>Send</button>
+          <button className="button-tactical" onClick={() => { if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight; }}>Scroll Latest</button>
         </div>
       </div>
     </div>

@@ -11,6 +11,7 @@ import { fromLonLat } from 'ol/proj';
 import Feature from 'ol/Feature';
 import Point from 'ol/geom/Point';
 import LineString from 'ol/geom/LineString';
+import Overlay from 'ol/Overlay';
 import Style from 'ol/style/Style';
 import Icon from 'ol/style/Icon';
 import Fill from 'ol/style/Fill';
@@ -35,10 +36,14 @@ const basemapFor = (style) => {
   return new OSM();
 };
 
-const MapComponent = ({ events, anomalies, focusEventId, onSelect, basemapStyle, showAircraftTrails }) => {
+const MapComponent = ({ events, anomalies, focusEventId, onSelect, basemapStyle, showAircraftTrails, liveAircraft }) => {
   const mapRef = useRef();
+  const trailsRef = useRef({});
+  const planeFeaturesRef = useRef({});
+  const overlayRef = useRef(null);
 
   useEffect(() => {
+    const cleanupFns = [];
     const map = new Map({
       target: mapRef.current,
       layers: [
@@ -79,6 +84,107 @@ const MapComponent = ({ events, anomalies, focusEventId, onSelect, basemapStyle,
           trackSource.addFeature(feat);
         }
       });
+    }
+
+    const planeSource = new VectorSource();
+    const planeLayer = new VectorLayer({ source: planeSource });
+    if (liveAircraft) {
+      map.addLayer(planeLayer);
+      const tooltip = document.createElement('div');
+      tooltip.style.position = 'absolute';
+      tooltip.style.background = 'rgba(0,0,0,0.8)';
+      tooltip.style.color = '#e6f8f4';
+      tooltip.style.border = '1px solid rgba(0,255,198,0.2)';
+      tooltip.style.borderRadius = '6px';
+      tooltip.style.padding = '6px 8px';
+      tooltip.style.fontSize = '12px';
+      const overlay = new Overlay({ element: tooltip, positioning: 'bottom-center', offset: [0, -10] });
+      overlayRef.current = overlay;
+      map.addOverlay(overlay);
+      map.on('pointermove', (evt) => {
+        let hit = null;
+        map.forEachFeatureAtPixel(evt.pixel, (feature) => {
+          if (feature && feature.get('plane')) { hit = feature; return true; }
+          return false;
+        });
+        if (hit) {
+          const g = hit.getGeometry();
+          const p = g.getCoordinates();
+          const meta = hit.get('meta') || {};
+          tooltip.innerHTML = `${meta.callsign || meta.icao || 'Aircraft'}<br/>Speed: ${meta.speedKts ?? '—'} kts • Heading: ${meta.heading ?? '—'}°`;
+          overlay.setPosition(p);
+          tooltip.style.display = 'block';
+        } else {
+          tooltip.style.display = 'none';
+        }
+      });
+      const fetchPlanes = async () => {
+        try {
+          const res = await fetch('https://opensky-network.org/api/states/all');
+          const json = await res.json();
+          const states = Array.isArray(json.states) ? json.states.slice(0, 200) : [];
+          const seen = new Set();
+          states.forEach(st => {
+            const icao = st[0];
+            const callsign = st[1];
+            const lon = st[5];
+            const lat = st[6];
+            const vel = st[9];
+            const heading = st[10];
+            if (lat == null || lon == null) return;
+            const coords = fromLonLat([lon, lat]);
+            const rotation = (Number(heading) || 0) * Math.PI / 180;
+            const icon = new Icon({ src: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24"><path d="M2 13l20-3-20-3 6 3-6 3z" fill="%2300b4ff"/></svg>', rotateWithView: true, rotation, scale: 1.0 });
+            const style = new Style({ image: icon });
+            let f = planeFeaturesRef.current[icao];
+            const speedKts = vel != null ? Math.round(vel * 1.94384) : null;
+            if (!f) {
+              f = new Feature({ geometry: new Point(coords) });
+              f.setStyle(style);
+              f.set('eventId', callsign || icao);
+              f.set('plane', true);
+              f.set('meta', { icao, callsign, speedKts, heading });
+              planeSource.addFeature(f);
+              planeFeaturesRef.current[icao] = f;
+            } else {
+              const g = f.getGeometry();
+              const from = g.getCoordinates();
+              const to = coords;
+              const steps = 10;
+              for (let i = 1; i <= steps; i++) {
+                setTimeout(() => {
+                  const xi = from[0] + (to[0] - from[0]) * (i / steps);
+                  const yi = from[1] + (to[1] - from[1]) * (i / steps);
+                  g.setCoordinates([xi, yi]);
+                }, i * 80);
+              }
+              f.setStyle(style);
+              f.set('meta', { icao, callsign, speedKts, heading });
+            }
+            seen.add(icao);
+            if (showAircraftTrails) {
+              const arr = trailsRef.current[icao] || [];
+              arr.push(coords);
+              if (arr.length > 20) arr.shift();
+              trailsRef.current[icao] = arr;
+              if (arr.length >= 2) {
+                const lf = new Feature({ geometry: new LineString(arr) });
+                trackSource.addFeature(lf);
+              }
+            }
+          });
+          Object.keys(planeFeaturesRef.current).forEach(k => {
+            if (!seen.has(k)) {
+              const f = planeFeaturesRef.current[k];
+              try { planeSource.removeFeature(f); } catch {}
+              delete planeFeaturesRef.current[k];
+            }
+          });
+        } catch (e) {}
+      };
+      fetchPlanes();
+      const intv = setInterval(fetchPlanes, 30000);
+      cleanupFns.push(() => clearInterval(intv));
     }
 
     events.forEach(event => {
@@ -166,8 +272,9 @@ const MapComponent = ({ events, anomalies, focusEventId, onSelect, basemapStyle,
     return () => {
       map.un('click', handleClick);
       map.setTarget(undefined);
+      cleanupFns.forEach(fn => { try { fn(); } catch {} });
     };
-  }, [events, anomalies, focusEventId, onSelect, basemapStyle, showAircraftTrails]);
+  }, [events, anomalies, focusEventId, onSelect, basemapStyle, showAircraftTrails, liveAircraft]);
 
   return <div ref={mapRef} style={{ width: '100%', height: '100%' }} />;
 };

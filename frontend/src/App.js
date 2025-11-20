@@ -603,7 +603,7 @@ function App() {
           element={(
             <div className="flex flex-1" style={{ minHeight: 'calc(100vh - 60px)' }}>
               <div className="w-2/3 p-4">
-                <div className="tactical-panel" style={{ height: '80vh' }}>
+                <div className="tactical-panel" style={{ height: '80vh', position: 'relative' }}>
                   <div className="panel-header">
                     <div style={{ color: 'var(--accent)' }}>Operational Map</div>
                     <div style={{ display: 'flex', gap: 8 }}>
@@ -621,23 +621,21 @@ function App() {
                     </div>
                   </div>
                   <div style={{ height: 'calc(100% - 42px)' }}>
-                    <MapComponent events={visibleEvents} anomalies={visibleAnomalies} focusEventId={focusEventId} onSelect={handleSelectEvent} basemapStyle={basemapStyle} showAircraftTrails={showAircraftTrails} />
+                    <MapComponent events={visibleEvents} anomalies={visibleAnomalies} focusEventId={focusEventId} onSelect={handleSelectEvent} basemapStyle={basemapStyle} showAircraftTrails={showAircraftTrails} liveAircraft={filters.source === 'adsb'} />
                   </div>
+                  {showHelp && (
+                    <div style={{ position: 'absolute', top: 50, right: 20, background: 'rgba(0,0,0,0.75)', border: '1px solid rgba(0,255,198,0.2)', borderRadius: 8, padding: 12, maxWidth: 320 }}>
+                      <div style={{ color: 'var(--accent)', marginBottom: 6 }}>What am I seeing?</div>
+                      <div style={{ fontSize: 13 }}>
+                        <div>Heat layer shows density and hotspots.</div>
+                        <div>Red markers indicate anomalies.</div>
+                        <div>Live Aircraft shows global flight activity.</div>
+                        <div>Ask the Analyst for a briefing.</div>
+                      </div>
+                      <div className="button-tactical" style={{ marginTop: 8 }} onClick={() => setShowHelp(false)}>Close</div>
+                    </div>
+                  )}
                 </div>
-                {showHelp && (
-                  <div className="tactical-panel" style={{ marginTop: 12 }}>
-                    <div className="panel-header">
-                      <div style={{ color: 'var(--accent)' }}>What am I seeing?</div>
-                      <div className="button-tactical" onClick={() => setShowHelp(false)}>Close</div>
-                    </div>
-                    <div className="p-2" style={{ fontSize: 13 }}>
-                      <div>Heat layer shows density and hotspots.</div>
-                      <div>Red markers indicate anomalies by severity.</div>
-                      <div>Use Live Aircraft for global flight activity from ADS‑B.</div>
-                      <div>Ask the AI Analyst for a briefing or explanations.</div>
-                    </div>
-                  </div>
-                )}
                 {selectedEventId && (() => {
                   const ev = events.find(e => e.id === selectedEventId);
                   const anom = anomalies.find(a => a.event_id === selectedEventId);
