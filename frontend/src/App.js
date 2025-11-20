@@ -31,6 +31,12 @@ function App() {
   const [events, setEvents] = useState([]);
   const [anomalies, setAnomalies] = useState([]);
   const [filters, setFilters] = useState({});
+  const [selectedSources, setSelectedSources] = useState(() => {
+    try { const saved = localStorage.getItem('rtaip_selected_sources'); return saved ? JSON.parse(saved) : []; } catch { return []; }
+  });
+  const [showSourceSelect, setShowSourceSelect] = useState(() => {
+    try { const saved = localStorage.getItem('rtaip_selected_sources'); return !saved || JSON.parse(saved).length === 0; } catch { return true; }
+  });
   const [backendOnline, setBackendOnline] = useState(false);
   const [replayIndex, setReplayIndex] = useState(null);
   const [showSplash, setShowSplash] = useState(true);
@@ -70,7 +76,9 @@ function App() {
         const anomaliesData = await anomaliesRes.json();
 
         const filteredEvents = eventsData.filter(event => {
-          if (filters.source && event.source !== filters.source) return false;
+          const src = (event.source || '').toLowerCase();
+          if (Array.isArray(selectedSources) && selectedSources.length > 0 && !selectedSources.includes(src)) return false;
+          if (filters.source && src !== filters.source) return false;
           if (filters.anomaliesOnly) return anomaliesData.some(a => a.event_id === event.id);
           return true;
         });
@@ -89,7 +97,9 @@ function App() {
           const anomaliesData2 = await anomaliesRes2.json();
 
           const filteredEvents2 = eventsData2.filter(event => {
-            if (filters.source && event.source !== filters.source) return false;
+            const src = (event.source || '').toLowerCase();
+            if (Array.isArray(selectedSources) && selectedSources.length > 0 && !selectedSources.includes(src)) return false;
+            if (filters.source && src !== filters.source) return false;
             if (filters.anomaliesOnly) return anomaliesData2.some(a => a.event_id === event.id);
             return true;
           });
@@ -115,7 +125,16 @@ function App() {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [filters, refreshInterval, API]);
+  }, [filters, refreshInterval, API, selectedSources]);
+
+  useEffect(() => {
+    try { localStorage.setItem('rtaip_selected_sources', JSON.stringify(selectedSources)); } catch {}
+    setShowSourceSelect(!(Array.isArray(selectedSources) && selectedSources.length > 0));
+    // if active single-source filter is not included anymore, clear it
+    if (filters.source && Array.isArray(selectedSources) && selectedSources.length > 0 && !selectedSources.includes(filters.source)) {
+      setFilters(f => ({ ...f, source: undefined }));
+    }
+  }, [selectedSources]);
 
   // Filter visible data based on replay index
   const visibleEvents = (() => {
@@ -337,6 +356,42 @@ function App() {
       </div>
       <AlertBar anomalies={visibleAnomalies} />
 
+      {/* Source selection gate */}
+      {showSourceSelect ? (
+        <div className="p-4">
+          <div className="tactical-panel" style={{ margin: '12px 0', paddingBottom: 12 }}>
+            <div className="panel-header" style={{ justifyContent: 'space-between' }}>
+              <div style={{ color: 'var(--accent)' }}>Select Data Sources</div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="button-tactical" onClick={() => setSelectedSources(['adsb','ais','usgs_seismic','noaa_weather'])}>Select All</button>
+                <button className="button-tactical" onClick={() => setSelectedSources([])}>Clear</button>
+              </div>
+            </div>
+            <div className="p-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 12 }}>
+              {[
+                { key: 'adsb', title: 'ADSB', desc: 'Aircraft transponder signals; flight positions and headings.' },
+                { key: 'ais', title: 'AIS', desc: 'Maritime vessel positions and identifiers.' },
+                { key: 'usgs_seismic', title: 'USGS', desc: 'Seismic event feeds reported by USGS.' },
+                { key: 'noaa_weather', title: 'NOAA', desc: 'Weather alerts and anomalies from NOAA.' }
+              ].map(card => (
+                <div key={card.key} className="tactical-panel" style={{ cursor: 'pointer', background: 'rgba(0,0,0,0.25)' }} onClick={() => setSelectedSources(prev => prev.includes(card.key) ? prev.filter(s => s !== card.key) : [...prev, card.key])}>
+                  <div className="panel-header" style={{ justifyContent: 'space-between' }}>
+                    <div style={{ color: 'var(--accent)' }}>{card.title}</div>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+                      <input type="checkbox" checked={selectedSources.includes(card.key)} onChange={() => setSelectedSources(prev => prev.includes(card.key) ? prev.filter(s => s !== card.key) : [...prev, card.key])} />
+                      Include
+                    </label>
+                  </div>
+                  <div className="p-2" style={{ fontSize: 13, opacity: 0.9 }}>{card.desc}</div>
+                </div>
+              ))}
+            </div>
+            <div className="p-3" style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button className="button-tactical" disabled={selectedSources.length === 0} onClick={() => setShowSourceSelect(false)}>Continue</button>
+            </div>
+          </div>
+        </div>
+      ) : (
       <Routes>
         <Route
           path="/"
@@ -638,13 +693,14 @@ function App() {
                     <div style={{ color: 'var(--accent)' }}>Operational Map</div>
                     <div style={{ display: 'flex', gap: 8 }}>
                       <button className="button-tactical" onClick={() => setShowHelp(s => !s)}>Help</button>
-                      <select className="button-tactical" value={filters.source || ''} onChange={(e) => setFilters(f => ({ ...f, source: e.target.value || undefined }))}>
-                        <option value="">All</option>
-                        <option value="adsb">ADSB</option>
-                        <option value="ais">AIS</option>
-                        <option value="usgs_seismic">USGS</option>
-                        <option value="noaa_weather">NOAA</option>
-                      </select>
+                      {selectedSources.length > 0 && (
+                        <select className="button-tactical" value={filters.source || ''} onChange={(e) => setFilters(f => ({ ...f, source: e.target.value || undefined }))}>
+                          <option value="">All</option>
+                          {selectedSources.map(s => (
+                            <option key={s} value={s}>{(s || 'UNKNOWN').toUpperCase()}</option>
+                          ))}
+                        </select>
+                      )}
                       <button className="button-tactical" onClick={() => setBasemapStyle(s => baseStyles[(baseStyles.indexOf(s)+1)%baseStyles.length])}>{basemapStyle.toUpperCase()}</button>
                     </div>
                   </div>
@@ -796,6 +852,7 @@ function App() {
           )}
         />
       </Routes>
+      )}
     </div>
   );
 }
