@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Routes, Route, NavLink, useNavigate } from 'react-router-dom';
+import { Routes, Route, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import MapComponent from './components/MapComponent';
 import EventFeed from './components/EventFeed';
 // Removed Filters import
@@ -29,6 +29,7 @@ const parseAnomalyMeta = (anom) => {
 
 function App() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [events, setEvents] = useState([]);
   const [anomalies, setAnomalies] = useState([]);
   const [filters, setFilters] = useState({});
@@ -57,6 +58,12 @@ function App() {
   const baseStyles = ['light','dark','terrain','satellite','osm'];
    // API base configurable via environment; defaults to 8000
    const API = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+  const sourceCardDefs = [
+    { key: 'adsb', title: 'ADSB', desc: 'Aircraft transponder signals; flight positions and headings.' },
+    { key: 'ais', title: 'AIS', desc: 'Maritime vessel positions and identifiers.' },
+    { key: 'usgs_seismic', title: 'USGS', desc: 'Seismic event feeds reported by USGS.' },
+    { key: 'noaa_weather', title: 'NOAA', desc: 'Weather alerts and anomalies from NOAA.' }
+  ];
 
   useEffect(() => {
     const t = setTimeout(() => setShowSplash(false), 2200);
@@ -359,7 +366,7 @@ function App() {
       <AlertBar anomalies={visibleAnomalies} />
 
       {/* Source selection gate */}
-      {showSourceSelect ? (
+      {showSourceSelect && location.pathname !== '/database' ? (
         <div className="p-4">
           <div className="tactical-panel" style={{ margin: '12px 0', paddingBottom: 12 }}>
             <div className="panel-header" style={{ justifyContent: 'space-between' }}>
@@ -367,15 +374,14 @@ function App() {
               <div style={{ display: 'flex', gap: 8 }}>
                 <button className="button-tactical" onClick={() => setSelectedSources(['adsb','ais','usgs_seismic','noaa_weather'])}>Select All</button>
                 <button className="button-tactical" onClick={() => setSelectedSources([])}>Clear</button>
+                <button className="button-tactical" onClick={() => setSelectedSources(prev => {
+                  const all = sourceCardDefs.map(s => s.key);
+                  return all.filter(k => !prev.includes(k));
+                })}>Invert</button>
               </div>
             </div>
             <div className="p-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 12 }}>
-              {[
-                { key: 'adsb', title: 'ADSB', desc: 'Aircraft transponder signals; flight positions and headings.' },
-                { key: 'ais', title: 'AIS', desc: 'Maritime vessel positions and identifiers.' },
-                { key: 'usgs_seismic', title: 'USGS', desc: 'Seismic event feeds reported by USGS.' },
-                { key: 'noaa_weather', title: 'NOAA', desc: 'Weather alerts and anomalies from NOAA.' }
-              ].map(card => (
+              {sourceCardDefs.map(card => (
                 <div
                   key={card.key}
                   className="tactical-panel"
@@ -398,8 +404,13 @@ function App() {
                 </div>
               ))}
             </div>
-            <div className="p-3" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ fontSize: 12, opacity: 0.8 }}>Selected: {selectedSources.map(s => (s||'UNKNOWN').toUpperCase()).join(', ') || 'None'}</div>
+            <div className="p-3" style={{ display: 'grid', gridTemplateColumns: '1fr auto', alignItems: 'center', gap: 8 }}>
+              <div>
+                <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 4 }}>Selected: {selectedSources.map(s => (s||'UNKNOWN').toUpperCase()).join(', ') || 'None'} ({selectedSources.length}/{sourceCardDefs.length})</div>
+                <div style={{ width: '100%', height: 6, borderRadius: 3, background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
+                  <div style={{ width: `${Math.round((selectedSources.length / sourceCardDefs.length) * 100)}%`, height: '100%', background: 'var(--accent)' }} />
+                </div>
+              </div>
               <button className="button-tactical" disabled={selectedSources.length === 0} onClick={() => { setShowSourceSelect(false); navigate('/'); }}>Continue</button>
             </div>
           </div>
@@ -876,15 +887,14 @@ function App() {
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button className="button-tactical" onClick={() => setSelectedSources(['adsb','ais','usgs_seismic','noaa_weather'])}>Select All</button>
                   <button className="button-tactical" onClick={() => setSelectedSources([])}>Clear</button>
+                  <button className="button-tactical" onClick={() => setSelectedSources(prev => {
+                    const all = sourceCardDefs.map(s => s.key);
+                    return all.filter(k => !prev.includes(k));
+                  })}>Invert</button>
                 </div>
               </div>
               <div className="p-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 12 }}>
-                {[
-                  { key: 'adsb', title: 'ADSB', desc: 'Aircraft transponder signals; flight positions and headings.' },
-                  { key: 'ais', title: 'AIS', desc: 'Maritime vessel positions and identifiers.' },
-                  { key: 'usgs_seismic', title: 'USGS', desc: 'Seismic event feeds reported by USGS.' },
-                  { key: 'noaa_weather', title: 'NOAA', desc: 'Weather alerts and anomalies from NOAA.' }
-                ].map(card => (
+                {sourceCardDefs.map(card => (
                   <div
                     key={card.key}
                     className="tactical-panel"
@@ -907,8 +917,13 @@ function App() {
                   </div>
                 ))}
               </div>
-              <div className="p-3" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ fontSize: 12, opacity: 0.8 }}>Selected: {selectedSources.map(s => (s||'UNKNOWN').toUpperCase()).join(', ') || 'None'}</div>
+              <div className="p-3" style={{ display: 'grid', gridTemplateColumns: '1fr auto', alignItems: 'center', gap: 8 }}>
+                <div>
+                  <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 4 }}>Selected: {selectedSources.map(s => (s||'UNKNOWN').toUpperCase()).join(', ') || 'None'} ({selectedSources.length}/{sourceCardDefs.length})</div>
+                  <div style={{ width: '100%', height: 6, borderRadius: 3, background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
+                    <div style={{ width: `${Math.round((selectedSources.length / sourceCardDefs.length) * 100)}%`, height: '100%', background: 'var(--accent)' }} />
+                  </div>
+                </div>
                 <button className="button-tactical" disabled={selectedSources.length === 0} onClick={() => navigate('/')}>Continue</button>
               </div>
             </div>
