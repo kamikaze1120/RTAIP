@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Routes, Route, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import MapComponent from './components/MapComponent';
 import EventFeed from './components/EventFeed';
@@ -26,6 +26,51 @@ const parseAnomalyMeta = (anom) => {
     magnitude: magMatch ? parseFloat(magMatch[1]) : null,
   };
 };
+
+function useAnimatedNumber(target, duration = 400) {
+  const [value, setValue] = useState(Number(target) || 0);
+  const prevRef = useRef(value);
+  useEffect(() => {
+    const start = Number(prevRef.current) || 0;
+    const end = Number(target) || 0;
+    if (start === end) return;
+    const startTs = Date.now();
+    const tick = () => {
+      const t = Math.min(1, (Date.now() - startTs) / duration);
+      const eased = 1 - Math.pow(1 - t, 3);
+      setValue(Math.round(start + (end - start) * eased));
+      if (t < 1) requestAnimationFrame(tick); else prevRef.current = end;
+    };
+    requestAnimationFrame(tick);
+  }, [target, duration]);
+  return value;
+}
+
+function SourceCard({ card, selectedSources, setSelectedSources, count }) {
+  const animCount = useAnimatedNumber(count, 500);
+  const selected = selectedSources.includes(card.key);
+  return (
+    <div
+      className="tactical-panel"
+      style={{ cursor: 'pointer', background: 'rgba(0,0,0,0.25)', transition: 'transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease', border: selected ? '1px solid rgba(0,255,198,0.35)' : '1px solid rgba(255,255,255,0.08)', animation: selected ? 'pulse 600ms ease-out' : 'none' }}
+      onClick={() => setSelectedSources(prev => prev.includes(card.key) ? prev.filter(s => s !== card.key) : [...prev, card.key])}
+      onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.02)'; e.currentTarget.style.boxShadow = '0 6px 16px rgba(0,0,0,0.35)'; }}
+      onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}
+    >
+      <div className="panel-header" style={{ justifyContent: 'space-between' }}>
+        <div style={{ color: 'var(--accent)' }}>{card.title}</div>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+          <input type="checkbox" checked={selected} onChange={() => setSelectedSources(prev => prev.includes(card.key) ? prev.filter(s => s !== card.key) : [...prev, card.key])} />
+          Include
+        </label>
+      </div>
+      <div className="p-2" style={{ fontSize: 13, opacity: 0.9 }}>{card.desc}</div>
+      <div className="p-2" style={{ fontSize: 12, opacity: 0.8 }}>
+        <span style={{ color: 'var(--accent-muted)' }}>Current events:</span> {animCount}
+      </div>
+    </div>
+  );
+}
 
 function App() {
   const navigate = useNavigate();
@@ -382,33 +427,14 @@ function App() {
             </div>
             <div className="p-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 12 }}>
               {sourceCardDefs.map(card => (
-                <div
-                  key={card.key}
-                  className="tactical-panel"
-                  style={{ cursor: 'pointer', background: 'rgba(0,0,0,0.25)', transition: 'transform 180ms ease, box-shadow 180ms ease', border: selectedSources.includes(card.key) ? '1px solid rgba(0,255,198,0.35)' : '1px solid rgba(255,255,255,0.08)' }}
-                  onClick={() => setSelectedSources(prev => prev.includes(card.key) ? prev.filter(s => s !== card.key) : [...prev, card.key])}
-                  onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.02)'; e.currentTarget.style.boxShadow = '0 6px 16px rgba(0,0,0,0.35)'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}
-                >
-                  <div className="panel-header" style={{ justifyContent: 'space-between' }}>
-                    <div style={{ color: 'var(--accent)' }}>{card.title}</div>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
-                      <input type="checkbox" checked={selectedSources.includes(card.key)} onChange={() => setSelectedSources(prev => prev.includes(card.key) ? prev.filter(s => s !== card.key) : [...prev, card.key])} />
-                      Include
-                    </label>
-                  </div>
-                  <div className="p-2" style={{ fontSize: 13, opacity: 0.9 }}>{card.desc}</div>
-                  <div className="p-2" style={{ fontSize: 12, opacity: 0.8 }}>
-                    <span style={{ color: 'var(--accent-muted)' }}>Current events:</span> {sourceCounts[card.key] || 0}
-                  </div>
-                </div>
+                <SourceCard key={card.key} card={card} selectedSources={selectedSources} setSelectedSources={setSelectedSources} count={sourceCounts[card.key] || 0} />
               ))}
             </div>
             <div className="p-3" style={{ display: 'grid', gridTemplateColumns: '1fr auto', alignItems: 'center', gap: 8 }}>
               <div>
                 <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 4 }}>Selected: {selectedSources.map(s => (s||'UNKNOWN').toUpperCase()).join(', ') || 'None'} ({selectedSources.length}/{sourceCardDefs.length})</div>
                 <div style={{ width: '100%', height: 6, borderRadius: 3, background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
-                  <div style={{ width: `${Math.round((selectedSources.length / sourceCardDefs.length) * 100)}%`, height: '100%', background: 'var(--accent)' }} />
+                  <div style={{ width: `${Math.round((selectedSources.length / sourceCardDefs.length) * 100)}%`, height: '100%', background: 'var(--accent)', transition: 'width 300ms ease' }} />
                 </div>
               </div>
               <button className="button-tactical" disabled={selectedSources.length === 0} onClick={() => { setShowSourceSelect(false); navigate('/'); }}>Continue</button>
