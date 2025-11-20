@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Routes, Route, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import MapComponent from './components/MapComponent';
 import EventFeed from './components/EventFeed';
@@ -105,6 +105,7 @@ function App() {
   const [basemapStyle, setBasemapStyle] = useState('light');
   const [useWebGL, setUseWebGL] = useState(false);
   const [perfInfo, setPerfInfo] = useState({ fps: 0, events: 0, anomalies: 0 });
+  const handlePerfUpdate = useCallback((m) => { setPerfInfo(m); }, []);
   const [briefingTime, setBriefingTime] = useState('last 24 hours');
   const [briefingSource, setBriefingSource] = useState('');
   const [briefingBbox, setBriefingBbox] = useState('');
@@ -900,7 +901,7 @@ function App() {
                     </div>
                   </div>
                   <div style={{ height: 'calc(100% - 42px)' }}>
-                    <MapComponent events={visibleEvents} anomalies={visibleAnomalies} focusEventId={focusEventId} onSelect={handleSelectEvent} basemapStyle={basemapStyle} useWebGL={useWebGL} onPerfUpdate={setPerfInfo} />
+                    <MapComponent events={visibleEvents} anomalies={visibleAnomalies} focusEventId={focusEventId} onSelect={handleSelectEvent} basemapStyle={basemapStyle} useWebGL={useWebGL} onPerfUpdate={handlePerfUpdate} />
                   </div>
                   {showHelp && (
                     <div style={{ position: 'absolute', top: 50, right: 20, background: 'rgba(0,0,0,0.75)', border: '1px solid rgba(0,255,198,0.2)', borderRadius: 8, padding: 12, maxWidth: 320 }}>

@@ -39,47 +39,45 @@ const basemapFor = (style) => {
 const MapComponent = ({ events, anomalies, focusEventId, onSelect, basemapStyle, useWebGL, onPerfUpdate }) => {
   const mapRef = useRef();
   const fpsRef = useRef({ last: performance.now(), frames: 0 });
-  
+  const eventSourceRef = useRef();
+  const anomalySourceRef = useRef();
+  const heatmapSourceRef = useRef();
+  const mapInstanceRef = useRef();
 
   useEffect(() => {
     const cleanupFns = [];
     const map = new Map({
       target: mapRef.current,
-      layers: [
-        new TileLayer({ source: basemapFor(basemapStyle) }),
-      ],
+      layers: [ new TileLayer({ source: basemapFor(basemapStyle) }) ],
       view: new View({ center: fromLonLat([0, 0]), zoom: 2 }),
     });
+    mapInstanceRef.current = map;
 
     const heatmapSource = new VectorSource();
+    heatmapSourceRef.current = heatmapSource;
     const heatmapLayer = new Heatmap({ source: heatmapSource, blur: 12, radius: 10 });
     map.addLayer(heatmapLayer);
 
     const eventSource = new VectorSource();
+    eventSourceRef.current = eventSource;
     const clusterSource = new ClusterSource({ distance: 40, source: eventSource });
     let eventLayer;
     if (useWebGL) {
-      eventLayer = new WebGLPoints({ source: eventSource, style: {
-        symbol: { symbolType: 'circle', size: 8, color: '#00ffc6', opacity: 0.9 }
-      } });
+      eventLayer = new WebGLPoints({ source: eventSource, style: { symbol: { symbolType: 'circle', size: 8, color: '#00ffc6', opacity: 0.9 } } });
     } else {
-      eventLayer = new VectorLayer({
-        source: clusterSource,
-        style: (feature) => {
-          const size = feature.get('features')?.length || 1;
-          const radius = Math.min(24, 8 + Math.log(size + 1) * 4);
-          return new Style({ image: new CircleStyle({ radius, fill: new Fill({ color: 'rgba(0,255,198,0.35)' }), stroke: new Stroke({ color: 'rgba(0,255,198,0.85)', width: 2 }) }) });
-        }
-      });
+      eventLayer = new VectorLayer({ source: clusterSource, style: (feature) => {
+        const size = feature.get('features')?.length || 1;
+        const radius = Math.min(24, 8 + Math.log(size + 1) * 4);
+        return new Style({ image: new CircleStyle({ radius, fill: new Fill({ color: 'rgba(0,255,198,0.35)' }), stroke: new Stroke({ color: 'rgba(0,255,198,0.85)', width: 2 }) }) });
+      } });
     }
     map.addLayer(eventLayer);
 
     const anomalySource = new VectorSource();
+    anomalySourceRef.current = anomalySource;
     let anomalyLayer;
     if (useWebGL) {
-      anomalyLayer = new WebGLPoints({ source: anomalySource, style: {
-        symbol: { symbolType: 'circle', size: 10, color: '#dc3545', opacity: 0.9 }
-      } });
+      anomalyLayer = new WebGLPoints({ source: anomalySource, style: { symbol: { symbolType: 'circle', size: 10, color: '#dc3545', opacity: 0.9 } } });
     } else {
       const anomalyCluster = new ClusterSource({ distance: 40, source: anomalySource });
       anomalyLayer = new VectorLayer({ source: anomalyCluster, style: (feature) => {
@@ -90,67 +88,9 @@ const MapComponent = ({ events, anomalies, focusEventId, onSelect, basemapStyle,
     }
     map.addLayer(anomalyLayer);
 
-    
-
-    
-
-    events.forEach(event => {
-      if (event.latitude && event.longitude) {
-        const feature = new Feature({
-          geometry: new Point(fromLonLat([event.longitude, event.latitude])),
-        });
-        feature.setStyle(sourceStyles[event.source] || sourceStyles.default);
-        feature.set('eventId', event.id);
-        feature.set('meta', event);
-        eventSource.addFeature(feature);
-
-        // Add all events to heat layer with a modest weight to visualize density
-        const heatFeature = new Feature({ geometry: new Point(fromLonLat([event.longitude, event.latitude])) });
-        heatFeature.set('weight', 0.25);
-        heatmapSource.addFeature(heatFeature);
-      }
-    });
-
-    const weightFromAnomaly = (anomaly) => {
-      let w = 0.5;
-      if (typeof anomaly.severity === 'number') {
-        w = Math.min(1, Math.max(0, anomaly.severity / 10));
-      }
-      if (anomaly.description && typeof anomaly.description === 'string') {
-        const m = anomaly.description.match(/score=([\-0-9\.]+)/);
-        if (m) {
-          const s = parseFloat(m[1]);
-          if (!isNaN(s)) {
-            const nw = Math.max(0, -s); // more negative -> stronger weight
-            w = Math.min(1, nw);
-          }
-        }
-      }
-      return w;
-    };
-
-    anomalies.forEach(anomaly => {
-      const event = events.find(e => e.id === anomaly.event_id);
-      if (event && event.latitude && event.longitude) {
-        const coords = fromLonLat([event.longitude, event.latitude]);
-        const feature = new Feature({ geometry: new Point(coords) });
-        feature.setStyle(anomalyStyle);
-        feature.set('eventId', event.id);
-        feature.set('meta', { ...event, anomaly });
-        anomalySource.addFeature(feature);
-
-        // Add to heatmap with weight derived from severity/score
-        const heatFeature = new Feature({ geometry: new Point(coords) });
-        heatFeature.set('weight', weightFromAnomaly(anomaly));
-        heatmapSource.addFeature(heatFeature);
-      }
-    });
-
-    // Click handler: select feature and bubble up selection
     const handleClick = (evt) => {
       let selectedId = null;
       map.forEachFeatureAtPixel(evt.pixel, (feature) => {
-        // If cluster, pick first child feature
         const clustered = feature.get('features');
         if (Array.isArray(clustered) && clustered.length > 0) {
           const child = clustered[0];
@@ -167,19 +107,6 @@ const MapComponent = ({ events, anomalies, focusEventId, onSelect, basemapStyle,
     };
     map.on('click', handleClick);
 
-    // Focus/zoom to event if focusEventId changes
-    if (focusEventId) {
-      const feature = eventSource.getFeatures().find(f => f.get('eventId') === focusEventId) ||
-                      anomalySource.getFeatures().find(f => f.get('eventId') === focusEventId);
-      if (feature) {
-        const geom = feature.getGeometry();
-        if (geom) {
-          const coords = geom.getCoordinates();
-          map.getView().animate({ center: coords, zoom: 6, duration: 500 });
-        }
-      }
-    }
-
     let rafId;
     const tick = () => {
       const now = performance.now();
@@ -190,7 +117,7 @@ const MapComponent = ({ events, anomalies, focusEventId, onSelect, basemapStyle,
         fpsRef.current.frames = 0;
         fpsRef.current.last = now;
         if (typeof onPerfUpdate === 'function') {
-          try { onPerfUpdate({ fps, events: eventSource.getFeatures().length, anomalies: anomalySource.getFeatures().length }); } catch {}
+          try { onPerfUpdate({ fps, events: eventSourceRef.current?.getFeatures().length || 0, anomalies: anomalySourceRef.current?.getFeatures().length || 0 }); } catch {}
         }
       }
       rafId = requestAnimationFrame(tick);
@@ -203,7 +130,74 @@ const MapComponent = ({ events, anomalies, focusEventId, onSelect, basemapStyle,
       map.setTarget(undefined);
       cleanupFns.forEach(fn => { try { fn(); } catch {} });
     };
-  }, [events, anomalies, focusEventId, onSelect, basemapStyle]);
+  }, [basemapStyle, useWebGL, onSelect, onPerfUpdate]);
+
+  useEffect(() => {
+    const eventSource = eventSourceRef.current;
+    const anomalySource = anomalySourceRef.current;
+    const heatmapSource = heatmapSourceRef.current;
+    if (!eventSource || !anomalySource || !heatmapSource) return;
+    eventSource.clear();
+    anomalySource.clear();
+    heatmapSource.clear();
+
+    events.forEach(event => {
+      if (event.latitude && event.longitude) {
+        const feature = new Feature({ geometry: new Point(fromLonLat([event.longitude, event.latitude])) });
+        feature.setStyle(sourceStyles[event.source] || sourceStyles.default);
+        feature.set('eventId', event.id);
+        feature.set('meta', event);
+        eventSource.addFeature(feature);
+        const heatFeature = new Feature({ geometry: new Point(fromLonLat([event.longitude, event.latitude])) });
+        heatFeature.set('weight', 0.25);
+        heatmapSource.addFeature(heatFeature);
+      }
+    });
+
+    const weightFromAnomaly = (anomaly) => {
+      let w = 0.5;
+      if (typeof anomaly.severity === 'number') w = Math.min(1, Math.max(0, anomaly.severity / 10));
+      if (anomaly.description && typeof anomaly.description === 'string') {
+        const m = anomaly.description.match(/score=([\-0-9\.]+)/);
+        if (m) {
+          const s = parseFloat(m[1]);
+          if (!isNaN(s)) { const nw = Math.max(0, -s); w = Math.min(1, nw); }
+        }
+      }
+      return w;
+    };
+
+    anomalies.forEach(anomaly => {
+      const event = events.find(e => e.id === anomaly.event_id);
+      if (event && event.latitude && event.longitude) {
+        const coords = fromLonLat([event.longitude, event.latitude]);
+        const feature = new Feature({ geometry: new Point(coords) });
+        feature.setStyle(anomalyStyle);
+        feature.set('eventId', event.id);
+        feature.set('meta', { ...event, anomaly });
+        anomalySource.addFeature(feature);
+        const heatFeature = new Feature({ geometry: new Point(coords) });
+        heatFeature.set('weight', weightFromAnomaly(anomaly));
+        heatmapSource.addFeature(heatFeature);
+      }
+    });
+  }, [events, anomalies]);
+
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    const eventSource = eventSourceRef.current;
+    const anomalySource = anomalySourceRef.current;
+    if (!map || !eventSource || !anomalySource || !focusEventId) return;
+    const feature = eventSource.getFeatures().find(f => f.get('eventId') === focusEventId) ||
+                    anomalySource.getFeatures().find(f => f.get('eventId') === focusEventId);
+    if (feature) {
+      const geom = feature.getGeometry();
+      if (geom) {
+        const coords = geom.getCoordinates();
+        map.getView().animate({ center: coords, zoom: 6, duration: 500 });
+      }
+    }
+  }, [focusEventId]);
 
   return <div ref={mapRef} style={{ width: '100%', height: '100%' }} />;
 };
