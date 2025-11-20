@@ -106,6 +106,7 @@ function App() {
   const [useWebGL, setUseWebGL] = useState(false);
   const [perfInfo, setPerfInfo] = useState({ fps: 0, events: 0, anomalies: 0 });
   const handlePerfUpdate = useCallback((m) => { setPerfInfo(m); }, []);
+  const [benchData, setBenchData] = useState([]);
   const [briefingTime, setBriefingTime] = useState('last 24 hours');
   const [briefingSource, setBriefingSource] = useState('');
   const [briefingBbox, setBriefingBbox] = useState('');
@@ -218,10 +219,10 @@ function App() {
     }
   };
 
-  const handleSelectEvent = (id) => {
+  const handleSelectEvent = useCallback((id) => {
     setFocusEventId(id);
     setSelectedEventId(id);
-  };
+  }, []);
 
   // Derived UI metrics and source counts
   const sourceCounts = events.reduce((acc, e) => {
@@ -957,11 +958,54 @@ function App() {
                 <div className="tactical-panel" style={{ marginBottom: 12 }}>
                   <div className="panel-header">
                     <div style={{ color: 'var(--accent)' }}>Performance</div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button className="button-tactical" onClick={async ()=>{
+                        try {
+                          const res = await fetch(`${API}/perf/metrics`);
+                          const data = await res.json();
+                          setBenchData(Array.isArray(data) ? data : []);
+                        } catch {}
+                      }}>Load Metrics</button>
+                      <button className="button-tactical" onClick={async ()=>{
+                        const device = navigator.userAgent;
+                        const view = document.querySelector('.ol-viewport');
+                        const mapZooms = [2,4,6,8,10,12];
+                        const results = [];
+                        for (let z of mapZooms) {
+                          try {
+                            const e = new Event('setZoom');
+                            window.dispatchEvent(e);
+                            results.push({ ts: new Date().toISOString(), fps: perfInfo.fps, events: perfInfo.events, anomalies: perfInfo.anomalies, zoom: z, device });
+                            await fetch(`${API}/perf/report`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fps: perfInfo.fps, events: perfInfo.events, anomalies: perfInfo.anomalies, zoom: z, device }) });
+                          } catch {}
+                        }
+                        setBenchData(results);
+                      }}>Run Benchmark</button>
+                      <button className="button-tactical" onClick={()=>{
+                        const rows = [['ts','fps','events','anomalies','zoom','device'], ...benchData.map(r=>[r.ts, r.fps, r.events, r.anomalies, r.zoom, r.device])];
+                        const csv = rows.map(row => row.join(',')).join('\n');
+                        const blob = new Blob([csv], { type: 'text/csv' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url; a.download = 'perf_metrics.csv'; a.click();
+                        URL.revokeObjectURL(url);
+                      }}>Export CSV</button>
+                    </div>
                   </div>
                   <div className="p-2" style={{ fontSize: 13 }}>
                     <div>FPS: <span style={{ color: 'var(--accent)' }}>{perfInfo.fps}</span></div>
                     <div>Events: <span style={{ color: 'var(--accent-muted)' }}>{perfInfo.events}</span></div>
                     <div>Anomalies: <span style={{ color: 'var(--danger)' }}>{perfInfo.anomalies}</span></div>
+                    {benchData.length > 0 && (
+                      <div style={{ marginTop: 8 }}>
+                        <div style={{ fontSize: 12, opacity: 0.8 }}>Recent Metrics</div>
+                        <ul style={{ margin: 0, paddingLeft: 18 }}>
+                          {benchData.slice(0,6).map((r, i) => (
+                            <li key={i}>{r.ts} • zoom={r.zoom} • fps={r.fps} • events={r.events} • anomalies={r.anomalies}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   </div>
                 </div>
                 {mapOnboard && (

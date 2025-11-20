@@ -43,6 +43,8 @@ const MapComponent = ({ events, anomalies, focusEventId, onSelect, basemapStyle,
   const anomalySourceRef = useRef();
   const heatmapSourceRef = useRef();
   const mapInstanceRef = useRef();
+  const eventsSigRef = useRef('');
+  const anomsSigRef = useRef('');
 
   useEffect(() => {
     const cleanupFns = [];
@@ -137,6 +139,15 @@ const MapComponent = ({ events, anomalies, focusEventId, onSelect, basemapStyle,
     const anomalySource = anomalySourceRef.current;
     const heatmapSource = heatmapSourceRef.current;
     if (!eventSource || !anomalySource || !heatmapSource) return;
+    const eSig = `${events.length}:${events[0]?.id || ''}:${events[events.length-1]?.id || ''}`;
+    const aSig = `${anomalies.length}:${anomalies[0]?.id || ''}:${anomalies[anomalies.length-1]?.id || ''}`;
+    const eChanged = eSig !== eventsSigRef.current;
+    const aChanged = aSig !== anomsSigRef.current;
+    if (!eChanged && !aChanged) {
+      return;
+    }
+    eventsSigRef.current = eSig;
+    anomsSigRef.current = aSig;
     eventSource.clear();
     anomalySource.clear();
     heatmapSource.clear();
@@ -148,9 +159,7 @@ const MapComponent = ({ events, anomalies, focusEventId, onSelect, basemapStyle,
         feature.set('eventId', event.id);
         feature.set('meta', event);
         eventSource.addFeature(feature);
-        const heatFeature = new Feature({ geometry: new Point(fromLonLat([event.longitude, event.latitude])) });
-        heatFeature.set('weight', 0.25);
-        heatmapSource.addFeature(heatFeature);
+        // do not add every event to heatmap to avoid repaint flicker; anomalies drive heat
       }
     });
 
