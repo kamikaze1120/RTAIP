@@ -608,12 +608,11 @@ function App() {
                     <div style={{ color: 'var(--accent)' }}>Operational Map</div>
                     <div style={{ display: 'flex', gap: 8 }}>
                       <button className="button-tactical" onClick={() => setShowHelp(s => !s)}>Help</button>
-                      <button className="button-tactical" onClick={() => { setFilters(f => ({ ...f, source: 'adsb' })); setRefreshInterval(30000); }}>Live Aircraft</button>
                       <button className="button-tactical" onClick={() => setBasemapStyle(s => baseStyles[(baseStyles.indexOf(s)+1)%baseStyles.length])}>{basemapStyle.toUpperCase()}</button>
                     </div>
                   </div>
                   <div style={{ height: 'calc(100% - 42px)' }}>
-                    <MapComponent events={visibleEvents} anomalies={visibleAnomalies} focusEventId={focusEventId} onSelect={handleSelectEvent} basemapStyle={basemapStyle} showAircraftTrails={false} liveAircraft={filters.source === 'adsb'} />
+                    <MapComponent events={visibleEvents} anomalies={visibleAnomalies} focusEventId={focusEventId} onSelect={handleSelectEvent} basemapStyle={basemapStyle} />
                   </div>
                   {showHelp && (
                     <div style={{ position: 'absolute', top: 50, right: 20, background: 'rgba(0,0,0,0.75)', border: '1px solid rgba(0,255,198,0.2)', borderRadius: 8, padding: 12, maxWidth: 320 }}>
@@ -621,7 +620,6 @@ function App() {
                       <div style={{ fontSize: 13 }}>
                         <div>Heat layer shows density and hotspots.</div>
                         <div>Red markers indicate anomalies.</div>
-                        <div>Live Aircraft shows global flight activity.</div>
                         <div>Ask the Analyst for a briefing.</div>
                       </div>
                       <div className="button-tactical" style={{ marginTop: 8 }} onClick={() => setShowHelp(false)}>Close</div>
@@ -674,7 +672,7 @@ function App() {
                       <div className="button-tactical" onClick={() => { setMapOnboard(false); try { localStorage.setItem('rtaip_onboard_map_done', '1'); } catch {} }}>Got it</div>
                     </div>
                     <div className="p-2" style={{ fontSize: 13 }}>
-                      <div>1) Click Live Aircraft or choose a source.</div>
+                      <div>1) Choose a source.</div>
                       <div>2) Use the heat layer to find hotspots.</div>
                       <div>3) Ask the Analyst for a summary.</div>
                       <div>4) Click markers to see details.</div>

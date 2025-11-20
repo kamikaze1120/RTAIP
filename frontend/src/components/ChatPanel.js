@@ -93,7 +93,7 @@ const ChatPanel = ({ apiBase }) => {
   return (
     <div className="tactical-panel" style={{ height: '100%' }}>
       <div className="panel-header" style={{ justifyContent: 'space-between' }}>
-        <div style={{ color: 'var(--accent)' }}>RTAIP-AI Analyst</div>
+        <div style={{ color: 'var(--accent)' }}>RTAIP Analyst</div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className={`button-tactical ${showLatestOnly ? 'active' : ''}`} onClick={() => setShowLatestOnly(v => !v)}>{showLatestOnly ? 'Latest' : 'History'}</button>
           <button className="button-tactical" onClick={exportTXT}>Export TXT</button>

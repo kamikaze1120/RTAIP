@@ -10,10 +10,8 @@ import Heatmap from 'ol/layer/Heatmap';
 import { fromLonLat } from 'ol/proj';
 import Feature from 'ol/Feature';
 import Point from 'ol/geom/Point';
-import LineString from 'ol/geom/LineString';
-import Overlay from 'ol/Overlay';
+// removed unused LineString import
 import Style from 'ol/style/Style';
-import Icon from 'ol/style/Icon';
 import Fill from 'ol/style/Fill';
 import Stroke from 'ol/style/Stroke';
 import CircleStyle from 'ol/style/Circle';
@@ -36,14 +34,9 @@ const basemapFor = (style) => {
   return new OSM();
 };
 
-const MapComponent = ({ events, anomalies, focusEventId, onSelect, basemapStyle, showAircraftTrails, liveAircraft }) => {
+const MapComponent = ({ events, anomalies, focusEventId, onSelect, basemapStyle }) => {
   const mapRef = useRef();
-  const trailsRef = useRef({});
-  const planeFeaturesRef = useRef({});
-  const overlayRef = useRef(null);
-  const firstCoordRef = useRef({});
-  const lastCoordRef = useRef({});
-  const cityCacheRef = useRef({});
+  
 
   useEffect(() => {
     const cleanupFns = [];
@@ -67,179 +60,9 @@ const MapComponent = ({ events, anomalies, focusEventId, onSelect, basemapStyle,
     const anomalyLayer = new VectorLayer({ source: anomalySource, style: anomalyStyle });
     map.addLayer(anomalyLayer);
 
-    const trackSource = new VectorSource();
-    const trackLayer = new VectorLayer({ source: trackSource, style: new Style({ stroke: new Stroke({ color: '#1e90ff', width: 2 }) }) });
-    if (showAircraftTrails) {
-      map.addLayer(trackLayer);
-      const adsb = events.filter(e => (e.source || '').toLowerCase() === 'adsb' && e.latitude != null && e.longitude != null);
-      const groups = adsb.reduce((acc, e) => {
-        const icao = Array.isArray(e.data) ? e.data[0] : (e.data && e.data.icao24);
-        const id = icao || e.id;
-        (acc[id] = acc[id] || []).push(e);
-        return acc;
-      }, {});
-      Object.values(groups).forEach(list => {
-        const sorted = list.slice().sort((a,b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-        const recent = sorted.slice(Math.max(0, sorted.length - 5));
-        if (recent.length >= 2) {
-          const coords = recent.map(ev => fromLonLat([ev.longitude, ev.latitude]));
-          const feat = new Feature({ geometry: new LineString(coords) });
-          trackSource.addFeature(feat);
-        }
-      });
-    }
+    
 
-    const planeSource = new VectorSource();
-    const planeLayer = new VectorLayer({ source: planeSource });
-    if (liveAircraft) {
-      map.addLayer(planeLayer);
-      const tooltip = document.createElement('div');
-      tooltip.style.position = 'absolute';
-      tooltip.style.background = 'rgba(0,0,0,0.8)';
-      tooltip.style.color = '#e6f8f4';
-      tooltip.style.border = '1px solid rgba(0,255,198,0.2)';
-      tooltip.style.borderRadius = '6px';
-      tooltip.style.padding = '6px 8px';
-      tooltip.style.fontSize = '12px';
-      const overlay = new Overlay({ element: tooltip, positioning: 'bottom-center', offset: [0, -10] });
-      overlayRef.current = overlay;
-      map.addOverlay(overlay);
-      const pickCity = (obj) => {
-        if (!obj) return null;
-        if (obj.address) {
-          return obj.address.city || obj.address.town || obj.address.village || obj.address.hamlet || obj.address.county || null;
-        }
-        return obj.display_name || null;
-      };
-      const reverseGeocode = async (lonLat) => {
-        const key = `${lonLat[1].toFixed(2)},${lonLat[0].toFixed(2)}`;
-        if (cityCacheRef.current[key]) return cityCacheRef.current[key];
-        try {
-          const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lonLat[1]}&lon=${lonLat[0]}`;
-          const res = await fetch(url, { headers: { 'Accept': 'application/json', 'User-Agent': 'RTAIP/1.0' } });
-          const json = await res.json();
-          const city = pickCity(json);
-          cityCacheRef.current[key] = city || '—';
-          return cityCacheRef.current[key];
-        } catch {
-          return '—';
-        }
-      };
-      map.on('pointermove', (evt) => {
-        let hit = null;
-        map.forEachFeatureAtPixel(evt.pixel, (feature) => {
-          if (feature && feature.get('plane')) { hit = feature; return true; }
-          return false;
-        });
-        if (hit) {
-          const g = hit.getGeometry();
-          const p = g.getCoordinates();
-          const meta = hit.get('meta') || {};
-          const icao = meta.icao;
-          const first = firstCoordRef.current[icao];
-          const last = lastCoordRef.current[icao];
-          const showTooltip = (originCity, destCity) => {
-            const o = originCity || meta.originCity || '—';
-            const d = destCity || meta.destCity || '—';
-            tooltip.innerHTML = `${meta.callsign || meta.icao || 'Aircraft'}<br/>Origin: ${o} • Destination: ${d}<br/>Speed: ${meta.speedKts ?? '—'} kts • Heading: ${meta.heading ?? '—'}°`;
-            overlay.setPosition(p);
-            tooltip.style.display = 'block';
-          };
-          if (icao && first && last && (!meta.originCity || !meta.destCity)) {
-            Promise.all([reverseGeocode(first), reverseGeocode(last)]).then(([oc, dc]) => {
-              const m = hit.get('meta') || {};
-              hit.set('meta', { ...m, originCity: oc, destCity: dc });
-              showTooltip(oc, dc);
-            }).catch(() => {
-              showTooltip();
-            });
-          } else {
-            showTooltip();
-          }
-        } else {
-          tooltip.style.display = 'none';
-        }
-      });
-      const fetchPlanes = async () => {
-        try {
-          let json;
-          try {
-            const res = await fetch('https://opensky-network.org/api/states/all');
-            json = await res.json();
-          } catch (e) {
-            const prox = await fetch('https://api.allorigins.win/raw?url=' + encodeURIComponent('https://opensky-network.org/api/states/all'));
-            const txt = await prox.text();
-            json = JSON.parse(txt);
-          }
-          const states = Array.isArray(json.states) ? json.states.slice(0, 200) : [];
-          const seen = new Set();
-          states.forEach(st => {
-            const icao = st[0];
-            const callsign = st[1];
-            const lon = st[5];
-            const lat = st[6];
-            const vel = st[9];
-            const heading = st[10];
-            if (lat == null || lon == null) return;
-            const coords = fromLonLat([lon, lat]);
-            const rotation = (Number(heading) || 0) * Math.PI / 180;
-            const icon = new Icon({ src: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24"><path d="M2 13l20-3-20-3 6 3-6 3z" fill="%2300b4ff"/></svg>', rotateWithView: true, rotation, scale: 1.0 });
-            const style = new Style({ image: icon });
-            let f = planeFeaturesRef.current[icao];
-            const speedKts = vel != null ? Math.round(vel * 1.94384) : null;
-            if (!f) {
-              f = new Feature({ geometry: new Point(coords) });
-              f.setStyle(style);
-              f.set('eventId', callsign || icao);
-              f.set('plane', true);
-              f.set('meta', { icao, callsign, speedKts, heading });
-              planeSource.addFeature(f);
-              planeFeaturesRef.current[icao] = f;
-              firstCoordRef.current[icao] = [lon, lat];
-              lastCoordRef.current[icao] = [lon, lat];
-            } else {
-              const g = f.getGeometry();
-              const from = g.getCoordinates();
-              const to = coords;
-              const steps = 10;
-              for (let i = 1; i <= steps; i++) {
-                setTimeout(() => {
-                  const xi = from[0] + (to[0] - from[0]) * (i / steps);
-                  const yi = from[1] + (to[1] - from[1]) * (i / steps);
-                  g.setCoordinates([xi, yi]);
-                }, i * 80);
-              }
-              f.setStyle(style);
-              f.set('meta', { icao, callsign, speedKts, heading });
-              lastCoordRef.current[icao] = [lon, lat];
-            }
-            seen.add(icao);
-            if (showAircraftTrails) {
-              const arr = trailsRef.current[icao] || [];
-              arr.push(coords);
-              if (arr.length > 20) arr.shift();
-              trailsRef.current[icao] = arr;
-              if (arr.length >= 2) {
-                const lf = new Feature({ geometry: new LineString(arr) });
-                trackSource.addFeature(lf);
-              }
-            }
-          });
-          Object.keys(planeFeaturesRef.current).forEach(k => {
-            if (!seen.has(k)) {
-              const f = planeFeaturesRef.current[k];
-              try { planeSource.removeFeature(f); } catch {}
-              delete planeFeaturesRef.current[k];
-              delete firstCoordRef.current[k];
-              delete lastCoordRef.current[k];
-            }
-          });
-        } catch (e) {}
-      };
-      fetchPlanes();
-      const intv = setInterval(fetchPlanes, 30000);
-      cleanupFns.push(() => clearInterval(intv));
-    }
+    
 
     events.forEach(event => {
       if (event.latitude && event.longitude) {
@@ -328,7 +151,7 @@ const MapComponent = ({ events, anomalies, focusEventId, onSelect, basemapStyle,
       map.setTarget(undefined);
       cleanupFns.forEach(fn => { try { fn(); } catch {} });
     };
-  }, [events, anomalies, focusEventId, onSelect, basemapStyle, showAircraftTrails, liveAircraft]);
+  }, [events, anomalies, focusEventId, onSelect, basemapStyle]);
 
   return <div ref={mapRef} style={{ width: '100%', height: '100%' }} />;
 };
