@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Routes, Route, NavLink } from 'react-router-dom';
+import { Routes, Route, NavLink, useNavigate } from 'react-router-dom';
 import MapComponent from './components/MapComponent';
 import EventFeed from './components/EventFeed';
 // Removed Filters import
@@ -28,6 +28,7 @@ const parseAnomalyMeta = (anom) => {
 };
 
 function App() {
+  const navigate = useNavigate();
   const [events, setEvents] = useState([]);
   const [anomalies, setAnomalies] = useState([]);
   const [filters, setFilters] = useState({});
@@ -338,15 +339,16 @@ function App() {
       {showSplash && <SplashScreen />}
 
       {/* Tactical top navbar */}
-      <div className="tactical-panel" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px' }}>
-        <div style={{ color: 'var(--accent)', fontWeight: 600 }}>RTAIP</div>
-        <div style={{ display: 'flex', gap: 12 }}>
-          <NavLink to="/" end className={({ isActive }) => `button-tactical ${isActive ? 'active' : ''}`}>Dashboard</NavLink>
-          <NavLink to="/map" className={({ isActive }) => `button-tactical ${isActive ? 'active' : ''}`}>Map</NavLink>
-          <NavLink to="/replay" className={({ isActive }) => `button-tactical ${isActive ? 'active' : ''}`}>Replay</NavLink>
-          <NavLink to="/settings" className={({ isActive }) => `button-tactical ${isActive ? 'active' : ''}`}>Settings</NavLink>
+        <div className="tactical-panel" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px' }}>
+          <div style={{ color: 'var(--accent)', fontWeight: 600 }}>RTAIP</div>
+          <div style={{ display: 'flex', gap: 12 }}>
+            <NavLink to="/" end className={({ isActive }) => `button-tactical ${isActive ? 'active' : ''}`}>Dashboard</NavLink>
+            <NavLink to="/database" className={({ isActive }) => `button-tactical ${isActive ? 'active' : ''}`}>Database</NavLink>
+            <NavLink to="/map" className={({ isActive }) => `button-tactical ${isActive ? 'active' : ''}`}>Map</NavLink>
+            <NavLink to="/replay" className={({ isActive }) => `button-tactical ${isActive ? 'active' : ''}`}>Replay</NavLink>
+            <NavLink to="/settings" className={({ isActive }) => `button-tactical ${isActive ? 'active' : ''}`}>Settings</NavLink>
+          </div>
         </div>
-      </div>
 
       <div className="p-2">
         <div className={`health-badge ${backendOnline ? '' : 'offline'}`}>
@@ -374,7 +376,14 @@ function App() {
                 { key: 'usgs_seismic', title: 'USGS', desc: 'Seismic event feeds reported by USGS.' },
                 { key: 'noaa_weather', title: 'NOAA', desc: 'Weather alerts and anomalies from NOAA.' }
               ].map(card => (
-                <div key={card.key} className="tactical-panel" style={{ cursor: 'pointer', background: 'rgba(0,0,0,0.25)' }} onClick={() => setSelectedSources(prev => prev.includes(card.key) ? prev.filter(s => s !== card.key) : [...prev, card.key])}>
+                <div
+                  key={card.key}
+                  className="tactical-panel"
+                  style={{ cursor: 'pointer', background: 'rgba(0,0,0,0.25)', transition: 'transform 180ms ease, box-shadow 180ms ease', border: selectedSources.includes(card.key) ? '1px solid rgba(0,255,198,0.35)' : '1px solid rgba(255,255,255,0.08)' }}
+                  onClick={() => setSelectedSources(prev => prev.includes(card.key) ? prev.filter(s => s !== card.key) : [...prev, card.key])}
+                  onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.02)'; e.currentTarget.style.boxShadow = '0 6px 16px rgba(0,0,0,0.35)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}
+                >
                   <div className="panel-header" style={{ justifyContent: 'space-between' }}>
                     <div style={{ color: 'var(--accent)' }}>{card.title}</div>
                     <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
@@ -383,16 +392,20 @@ function App() {
                     </label>
                   </div>
                   <div className="p-2" style={{ fontSize: 13, opacity: 0.9 }}>{card.desc}</div>
+                  <div className="p-2" style={{ fontSize: 12, opacity: 0.8 }}>
+                    <span style={{ color: 'var(--accent-muted)' }}>Current events:</span> {sourceCounts[card.key] || 0}
+                  </div>
                 </div>
               ))}
             </div>
-            <div className="p-3" style={{ display: 'flex', justifyContent: 'flex-end' }}>
-              <button className="button-tactical" disabled={selectedSources.length === 0} onClick={() => setShowSourceSelect(false)}>Continue</button>
+            <div className="p-3" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ fontSize: 12, opacity: 0.8 }}>Selected: {selectedSources.map(s => (s||'UNKNOWN').toUpperCase()).join(', ') || 'None'}</div>
+              <button className="button-tactical" disabled={selectedSources.length === 0} onClick={() => { setShowSourceSelect(false); navigate('/'); }}>Continue</button>
             </div>
           </div>
         </div>
       ) : (
-      <Routes>
+        <Routes>
         <Route
           path="/"
           element={(
@@ -851,8 +864,57 @@ function App() {
             </div>
           )}
         />
-      </Routes>
+        </Routes>
       )}
+
+      <Routes>
+        <Route path="/database" element={(
+          <div className="p-4">
+            <div className="tactical-panel" style={{ margin: '12px 0', paddingBottom: 12 }}>
+              <div className="panel-header" style={{ justifyContent: 'space-between' }}>
+                <div style={{ color: 'var(--accent)' }}>Select Data Sources</div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button className="button-tactical" onClick={() => setSelectedSources(['adsb','ais','usgs_seismic','noaa_weather'])}>Select All</button>
+                  <button className="button-tactical" onClick={() => setSelectedSources([])}>Clear</button>
+                </div>
+              </div>
+              <div className="p-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 12 }}>
+                {[
+                  { key: 'adsb', title: 'ADSB', desc: 'Aircraft transponder signals; flight positions and headings.' },
+                  { key: 'ais', title: 'AIS', desc: 'Maritime vessel positions and identifiers.' },
+                  { key: 'usgs_seismic', title: 'USGS', desc: 'Seismic event feeds reported by USGS.' },
+                  { key: 'noaa_weather', title: 'NOAA', desc: 'Weather alerts and anomalies from NOAA.' }
+                ].map(card => (
+                  <div
+                    key={card.key}
+                    className="tactical-panel"
+                    style={{ cursor: 'pointer', background: 'rgba(0,0,0,0.25)', transition: 'transform 180ms ease, box-shadow 180ms ease', border: selectedSources.includes(card.key) ? '1px solid rgba(0,255,198,0.35)' : '1px solid rgba(255,255,255,0.08)' }}
+                    onClick={() => setSelectedSources(prev => prev.includes(card.key) ? prev.filter(s => s !== card.key) : [...prev, card.key])}
+                    onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.02)'; e.currentTarget.style.boxShadow = '0 6px 16px rgba(0,0,0,0.35)'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}
+                  >
+                    <div className="panel-header" style={{ justifyContent: 'space-between' }}>
+                      <div style={{ color: 'var(--accent)' }}>{card.title}</div>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+                        <input type="checkbox" checked={selectedSources.includes(card.key)} onChange={() => setSelectedSources(prev => prev.includes(card.key) ? prev.filter(s => s !== card.key) : [...prev, card.key])} />
+                        Include
+                      </label>
+                    </div>
+                    <div className="p-2" style={{ fontSize: 13, opacity: 0.9 }}>{card.desc}</div>
+                    <div className="p-2" style={{ fontSize: 12, opacity: 0.8 }}>
+                      <span style={{ color: 'var(--accent-muted)' }}>Current events:</span> {sourceCounts[card.key] || 0}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="p-3" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ fontSize: 12, opacity: 0.8 }}>Selected: {selectedSources.map(s => (s||'UNKNOWN').toUpperCase()).join(', ') || 'None'}</div>
+                <button className="button-tactical" disabled={selectedSources.length === 0} onClick={() => navigate('/')}>Continue</button>
+              </div>
+            </div>
+          </div>
+        )} />
+      </Routes>
     </div>
   );
 }
