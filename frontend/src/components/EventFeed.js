@@ -29,7 +29,7 @@ const EventFeed = ({ events, anomalies = [], onSelect }) => {
                 </div>
               </div>
               <div style={{ fontSize: 12, opacity: 0.85, marginTop: 4 }}>
-                ID: {event.id} • Lat: {event.latitude ?? '—'} • Lon: {event.longitude ?? '—'}
+                ID: {event.id} • Lat: {event.latitude ?? '—'} • Lon: {event.longitude ?? '—'} • Conf: {typeof event.confidence === 'number' ? Math.round(event.confidence * 100) : (typeof event.confidence === 'string' ? Math.round(Number(event.confidence) * 100) : '—')}%
               </div>
               <div style={{ fontSize: 12, marginTop: 4, color: isAnomalous(event.id) ? 'var(--danger)' : 'var(--accent-muted)' }}>
                 {isAnomalous(event.id) ? 'Anomaly detected for this event' : 'Status: normal'}

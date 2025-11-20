@@ -103,10 +103,14 @@ function App() {
     try { return !localStorage.getItem('rtaip_onboard_map_done'); } catch { return true; }
   });
   const [basemapStyle, setBasemapStyle] = useState('light');
+  const [useWebGL, setUseWebGL] = useState(false);
+  const [perfInfo, setPerfInfo] = useState({ fps: 0, events: 0, anomalies: 0 });
   const [briefingTime, setBriefingTime] = useState('last 24 hours');
   const [briefingSource, setBriefingSource] = useState('');
   const [briefingBbox, setBriefingBbox] = useState('');
   const [briefingOutput, setBriefingOutput] = useState('');
+  const [alertRules, setAlertRules] = useState([]);
+  const [alertForm, setAlertForm] = useState({ name: '', source: '', severity_threshold: 5, min_confidence: 0.5, min_lat: '', min_lon: '', max_lat: '', max_lon: '', email_to: '' });
   
   const baseStyles = ['light','dark','terrain','satellite','osm'];
    // API base configurable via environment; defaults to 8000
@@ -528,9 +532,9 @@ function App() {
                     <div className="mt-3">
                       <ReplayTimeline events={events} onTimeChange={handleTimeChange} />
         </div>
-          <div className="tactical-panel" style={{ marginTop: 12 }}>
-            <div className="panel-header" style={{ justifyContent: 'space-between' }}>
-              <div style={{ color: 'var(--accent)' }}>Briefing Mode</div>
+        <div className="tactical-panel" style={{ marginTop: 12 }}>
+          <div className="panel-header" style={{ justifyContent: 'space-between' }}>
+            <div style={{ color: 'var(--accent)' }}>Briefing Mode</div>
               <div style={{ display: 'flex', gap: 8 }}>
                 <select className="button-tactical" value={briefingTime} onChange={(e)=>setBriefingTime(e.target.value)}>
                   <option>last hour</option>
@@ -540,8 +544,63 @@ function App() {
                   <option value="">ALL</option>
                   {Object.keys(sourceCounts).map(s => (<option key={s} value={s}>{(s||'UNKNOWN').toUpperCase()}</option>))}
                 </select>
-              </div>
+          </div>
+        </div>
+        <div className="tactical-panel" style={{ marginTop: 12 }}>
+          <div className="panel-header" style={{ justifyContent: 'space-between' }}>
+            <div style={{ color: 'var(--accent)' }}>Alert Rules</div>
+            <div className="button-tactical" onClick={async ()=>{
+              try {
+                const res = await fetch(`${API}/alert-rules`);
+                const data = await res.json();
+                setAlertRules(Array.isArray(data) ? data : []);
+              } catch {}
+            }}>Refresh</div>
+          </div>
+          <div className="p-2" style={{ fontSize: 13 }}>
+            <div style={{ marginBottom: 8 }}>
+              {alertRules.length === 0 ? <div style={{ opacity: 0.8 }}>No rules.</div> : (
+                <ul style={{ margin: 0, paddingLeft: 18 }}>
+                  {alertRules.map(r => (
+                    <li key={r.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span>{r.name} • {(r.source||'ALL').toUpperCase()} • sev≥{r.severity_threshold} • conf≥{Math.round((r.min_confidence||0)*100)}%</span>
+                      <button className="button-tactical" onClick={async ()=>{ try { await fetch(`${API}/alert-rules/${r.id}`, { method: 'DELETE' }); const res = await fetch(`${API}/alert-rules`); const data = await res.json(); setAlertRules(Array.isArray(data)?data:[]); } catch {} }}>Delete</button>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              <input className="button-tactical" placeholder="Name" value={alertForm.name} onChange={(e)=>setAlertForm(f=>({ ...f, name: e.target.value }))} />
+              <select className="button-tactical" value={alertForm.source} onChange={(e)=>setAlertForm(f=>({ ...f, source: e.target.value }))}>
+                <option value="">ALL</option>
+                {Object.keys(sourceCounts).map(s => (<option key={s} value={s}>{(s||'UNKNOWN').toUpperCase()}</option>))}
+              </select>
+              <input className="button-tactical" placeholder="Severity ≥" type="number" value={alertForm.severity_threshold} onChange={(e)=>setAlertForm(f=>({ ...f, severity_threshold: Number(e.target.value)||0 }))} />
+              <input className="button-tactical" placeholder="Confidence ≥" type="number" step="0.1" value={alertForm.min_confidence} onChange={(e)=>setAlertForm(f=>({ ...f, min_confidence: Number(e.target.value)||0 }))} />
+              <input className="button-tactical" placeholder="min_lat" value={alertForm.min_lat} onChange={(e)=>setAlertForm(f=>({ ...f, min_lat: e.target.value }))} />
+              <input className="button-tactical" placeholder="min_lon" value={alertForm.min_lon} onChange={(e)=>setAlertForm(f=>({ ...f, min_lon: e.target.value }))} />
+              <input className="button-tactical" placeholder="max_lat" value={alertForm.max_lat} onChange={(e)=>setAlertForm(f=>({ ...f, max_lat: e.target.value }))} />
+              <input className="button-tactical" placeholder="max_lon" value={alertForm.max_lon} onChange={(e)=>setAlertForm(f=>({ ...f, max_lon: e.target.value }))} />
+              <input className="button-tactical" placeholder="email_to" value={alertForm.email_to} onChange={(e)=>setAlertForm(f=>({ ...f, email_to: e.target.value }))} />
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+              <button className="button-tactical" onClick={async ()=>{
+                try {
+                  const payload = { ...alertForm };
+                  ['min_lat','min_lon','max_lat','max_lon'].forEach(k=>{ if(payload[k]==='') payload[k]=null; else payload[k]=Number(payload[k]); });
+                  if (payload.source==='') payload.source = null;
+                  const res = await fetch(`${API}/alert-rules`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                  await res.json();
+                  const r = await fetch(`${API}/alert-rules`);
+                  const data = await r.json();
+                  setAlertRules(Array.isArray(data)?data:[]);
+                } catch {}
+              }}>Create Rule</button>
+              <button className="button-tactical" onClick={()=>setAlertForm({ name: '', source: '', severity_threshold: 5, min_confidence: 0.5, min_lat: '', min_lon: '', max_lat: '', max_lon: '', email_to: '' })}>Clear</button>
+            </div>
+          </div>
+        </div>
             <div className="p-2" style={{ fontSize: 13 }}>
               <div style={{ marginBottom: 8 }}>
                 <input value={briefingBbox} onChange={(e)=>setBriefingBbox(e.target.value)} className="button-tactical" placeholder="bbox minLat,minLon,maxLat,maxLon (optional)" style={{ width: '100%' }} />
@@ -835,10 +894,13 @@ function App() {
                         </select>
                       )}
                       <button className="button-tactical" onClick={() => setBasemapStyle(s => baseStyles[(baseStyles.indexOf(s)+1)%baseStyles.length])}>{basemapStyle.toUpperCase()}</button>
+                      <label className="button-tactical" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <input type="checkbox" checked={useWebGL} onChange={(e)=>setUseWebGL(e.target.checked)} /> WebGL
+                      </label>
                     </div>
                   </div>
                   <div style={{ height: 'calc(100% - 42px)' }}>
-                    <MapComponent events={visibleEvents} anomalies={visibleAnomalies} focusEventId={focusEventId} onSelect={handleSelectEvent} basemapStyle={basemapStyle} />
+                    <MapComponent events={visibleEvents} anomalies={visibleAnomalies} focusEventId={focusEventId} onSelect={handleSelectEvent} basemapStyle={basemapStyle} useWebGL={useWebGL} onPerfUpdate={setPerfInfo} />
                   </div>
                   {showHelp && (
                     <div style={{ position: 'absolute', top: 50, right: 20, background: 'rgba(0,0,0,0.75)', border: '1px solid rgba(0,255,198,0.2)', borderRadius: 8, padding: 12, maxWidth: 320 }}>
@@ -891,6 +953,16 @@ function App() {
                 })()}
               </div>
               <div className="w-1/3 p-4">
+                <div className="tactical-panel" style={{ marginBottom: 12 }}>
+                  <div className="panel-header">
+                    <div style={{ color: 'var(--accent)' }}>Performance</div>
+                  </div>
+                  <div className="p-2" style={{ fontSize: 13 }}>
+                    <div>FPS: <span style={{ color: 'var(--accent)' }}>{perfInfo.fps}</span></div>
+                    <div>Events: <span style={{ color: 'var(--accent-muted)' }}>{perfInfo.events}</span></div>
+                    <div>Anomalies: <span style={{ color: 'var(--danger)' }}>{perfInfo.anomalies}</span></div>
+                  </div>
+                </div>
                 {mapOnboard && (
                   <div className="tactical-panel" style={{ marginBottom: 12 }}>
                     <div className="panel-header">
