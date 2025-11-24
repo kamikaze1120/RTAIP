@@ -57,9 +57,8 @@ async def ingest_nasa_eonet():
 async def ingest_gdacs_disasters():
     try:
         # Query last 14 days, all event types, all alert levels
-        from_dt = datetime.utcnow().date().isoformat()
-        # subtract 14 days
-        to_dt = from_dt
+        to_dt = datetime.utcnow().date().isoformat()
+        from_dt = (datetime.utcnow().date() - __import__('datetime').timedelta(days=14)).isoformat()
         # GDACS quickstart uses /events/geteventlist/SEARCH with query params
         params = {
             "eventlist": "EQ;FL;TC;VO;TS;DR;WF",
