@@ -100,6 +100,16 @@ def ensure_schema():
                 connect_args={"sslmode": "require"}
             )
             Base.metadata.create_all(direct_engine)
+            try:
+                with direct_engine.connect() as conn:
+                    res = conn.execute("SELECT column_name FROM information_schema.columns WHERE table_name='data_events'").fetchall()
+                    cols = [r[0] for r in res]
+                    if 'confidence' not in cols:
+                        conn.execute("ALTER TABLE data_events ADD COLUMN confidence DOUBLE PRECISION DEFAULT 0.5")
+                    conn.execute("CREATE INDEX IF NOT EXISTS idx_data_events_lat_lon ON data_events(latitude, longitude)")
+                    conn.execute("CREATE INDEX IF NOT EXISTS idx_anomalies_event_id ON anomalies(event_id)")
+            except Exception:
+                pass
             return True, "schema ensured via DIRECT_URL"
         # If DIRECT_URL is missing and DATABASE_URL looks like a pgbouncer URL, return a clear message.
         if DATABASE_URL.startswith('postgresql') and (':6543' in DATABASE_URL or 'pgbouncer=true' in DATABASE_URL):
