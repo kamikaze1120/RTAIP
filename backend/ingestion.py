@@ -55,32 +55,42 @@ async def ingest_nasa_eonet():
             session.commit()
 
 async def ingest_gdacs_disasters():
-    url = "https://www.gdacs.org/gdacsapi/api/events/geteventlist/json"
-    data = await fetch_data(url)
-    if data:
-        items = data.get('features') or data.get('events') or data.get('items') or []
-        # Some responses use 'events' with 'eventlist', others GeoJSON 'features'
-        with Session() as session:
-            for item in items:
-                lat = None; lon = None; ts = datetime.utcnow()
-                if isinstance(item, dict):
-                    lat = item.get('lat') or item.get('latitude')
-                    lon = item.get('lon') or item.get('longitude')
-                    dt = item.get('fromdate') or item.get('eventdate') or item.get('updated')
+    try:
+        # Query last 14 days, all event types, all alert levels
+        from_dt = datetime.utcnow().date().isoformat()
+        # subtract 14 days
+        to_dt = from_dt
+        # GDACS quickstart uses /events/geteventlist/SEARCH with query params
+        params = {
+            "eventlist": "EQ;FL;TC;VO;TS;DR;WF",
+            "fromdate": from_dt,
+            "todate": to_dt,
+            "alertlevel": "red;orange;green"
+        }
+        url = "https://www.gdacs.org/gdacsapi/api/events/geteventlist/SEARCH"
+        data = await fetch_data(url, params=params)
+        if data:
+            features = data.get('features') or []
+            with Session() as session:
+                for feat in features:
+                    lat = None; lon = None; ts = datetime.utcnow()
                     try:
+                        geom = feat.get('geometry') or {}
+                        coords = geom.get('coordinates')
+                        if isinstance(coords, (list, tuple)) and len(coords) >= 2 and isinstance(coords[0], (int,float)):
+                            lon = float(coords[0]); lat = float(coords[1])
+                        props = feat.get('properties') or {}
+                        dt = props.get('fromdate') or props.get('updated') or props.get('todate')
                         if dt:
                             ts = datetime.fromisoformat(str(dt).replace('Z',''))
                     except Exception:
-                        ts = datetime.utcnow()
-                try:
-                    lat = float(lat) if lat is not None else None
-                    lon = float(lon) if lon is not None else None
-                except Exception:
-                    lat = None; lon = None
-                conf = 0.6 if (lat is not None and lon is not None) else 0.4
-                event = DataEvent(source="gdacs_disasters", timestamp=ts, latitude=lat, longitude=lon, data=item, confidence=conf)
-                session.add(event)
-            session.commit()
+                        pass
+                    conf = 0.6 if (lat is not None and lon is not None) else 0.4
+                    event = DataEvent(source="gdacs_disasters", timestamp=ts, latitude=lat, longitude=lon, data=feat, confidence=conf)
+                    session.add(event)
+                session.commit()
+    except Exception as e:
+        print(f"GDACS ingestion failed: {e}")
 
 def _confidence_for_noaa(props):
     try:

@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 import threading
-from ingestion import schedule_ingestion
+from ingestion import schedule_ingestion, run_ingestion
 from anomaly import schedule_detection
 from database import ensure_schema
 
@@ -461,6 +461,11 @@ def migrate():
 # Run schedulers in background
 threading.Thread(target=schedule_ingestion, daemon=True).start()
 threading.Thread(target=schedule_detection, daemon=True).start()
+
+@app.get("/ingest")
+def ingest_now():
+    threading.Thread(target=run_ingestion, daemon=True).start()
+    return {"status": "started"}
 class PerfReport(BaseModel):
     fps: float
     events: int
