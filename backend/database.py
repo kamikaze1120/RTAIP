@@ -115,8 +115,12 @@ def ensure_schema():
                         conn.execute("ALTER TABLE data_events ADD COLUMN confidence REAL DEFAULT 0.5")
                     conn.execute("CREATE INDEX IF NOT EXISTS idx_data_events_lat_lon ON data_events(latitude, longitude)")
                     conn.execute("CREATE INDEX IF NOT EXISTS idx_anomalies_event_id ON anomalies(event_id)")
-            elif 'postgres' in DATABASE_URL:
+            elif DATABASE_URL.startswith('postgresql'):
                 with engine.connect() as conn:
+                    res = conn.execute("SELECT column_name FROM information_schema.columns WHERE table_name='data_events'").fetchall()
+                    cols = [r[0] for r in res]
+                    if 'confidence' not in cols:
+                        conn.execute("ALTER TABLE data_events ADD COLUMN confidence DOUBLE PRECISION DEFAULT 0.5")
                     conn.execute("CREATE INDEX IF NOT EXISTS idx_data_events_lat_lon ON data_events(latitude, longitude)")
                     conn.execute("CREATE INDEX IF NOT EXISTS idx_anomalies_event_id ON anomalies(event_id)")
         except Exception as _:

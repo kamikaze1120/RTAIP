@@ -513,3 +513,7 @@ def summary(window: str = "24h", bbox: Optional[str] = None, db: Session = Depen
         sev_hist[a.severity] = sev_hist.get(a.severity, 0) + 1
     top_sources = sorted(src_counts.items(), key=lambda x: x[1], reverse=True)[:5]
     return {"top_sources": top_sources, "avg_confidence": avg_conf, "severity_hist": sev_hist, "event_count": len(events), "anomaly_count": len(anomalies)}
+@app.get("/migrate")
+def migrate():
+    ok, msg = ensure_schema()
+    return {"ok": ok, "message": msg}
