@@ -122,10 +122,11 @@ function App() {
   const [alertRules, setAlertRules] = useState([]);
   const [alertForm, setAlertForm] = useState({ name: '', source: '', severity_threshold: 5, min_confidence: 0.5, min_lat: '', min_lon: '', max_lat: '', max_lon: '', email_to: '' });
   const [metrics, setMetrics] = useState([]);
+  const [apiInput, setApiInput] = useState(() => { try { return localStorage.getItem('rtaip_api') || ''; } catch { return ''; } });
   
   const baseStyles = ['light','dark','terrain','satellite','osm'];
    // API base configurable via environment; defaults to 8000
-   const API = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+   const API = (() => { try { const o = localStorage.getItem('rtaip_api'); if (o) return o; } catch {} return process.env.REACT_APP_API_URL || 'http://localhost:8000'; })();
   const sourceCardDefs = [
     { key: 'adsb', title: 'ADSB', desc: 'Aircraft transponder signals; flight positions and headings.' },
     { key: 'ais', title: 'AIS', desc: 'Maritime vessel positions and identifiers.' },
@@ -1239,6 +1240,13 @@ function App() {
                       <button className="button-tactical" onClick={() => setRefreshInterval(10 * 60 * 1000)} style={{ marginLeft: 8 }}>10m</button>
                     </div>
                     <div style={{ marginTop: 12, opacity: 0.8 }}>API: {API}</div>
+                    <div style={{ marginTop: 8 }}>
+                      <input className="button-tactical" placeholder="API Base URL (e.g., https://api.yourdomain.com)" value={apiInput} onChange={(e)=>setApiInput(e.target.value)} style={{ width: '100%' }} />
+                      <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                        <button className="button-tactical" onClick={() => { try { localStorage.setItem('rtaip_api', apiInput.trim()); } catch {} window.location.reload(); }}>Apply & Reload</button>
+                        <button className="button-tactical" onClick={() => { try { localStorage.removeItem('rtaip_api'); } catch {} window.location.reload(); }}>Clear & Reload</button>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
