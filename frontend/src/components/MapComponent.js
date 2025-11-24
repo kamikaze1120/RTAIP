@@ -41,6 +41,7 @@ const MapComponent = ({ events, anomalies, focusEventId, onSelect, basemapStyle,
   const fpsRef = useRef({ last: performance.now(), frames: 0 });
   const eventSourceRef = useRef();
   const anomalySourceRef = useRef();
+  const predictionSourceRef = useRef();
   const heatmapSourceRef = useRef();
   const mapInstanceRef = useRef();
   const eventsSigRef = useRef('');
@@ -89,6 +90,11 @@ const MapComponent = ({ events, anomalies, focusEventId, onSelect, basemapStyle,
       } });
     }
     map.addLayer(anomalyLayer);
+
+    const predictionSource = new VectorSource();
+    predictionSourceRef.current = predictionSource;
+    const predictionLayer = new VectorLayer({ source: predictionSource, style: new Style({ image: new CircleStyle({ radius: 10, fill: new Fill({ color: 'rgba(111,66,193,0.7)' }), stroke: new Stroke({ color: '#6f42c1', width: 2 }) }) }) });
+    map.addLayer(predictionLayer);
 
     const handleClick = (evt) => {
       let selectedId = null;
@@ -207,6 +213,24 @@ const MapComponent = ({ events, anomalies, focusEventId, onSelect, basemapStyle,
       }
     }
   }, [focusEventId]);
+
+  useEffect(() => {
+    const handler = (e) => {
+      const src = predictionSourceRef.current;
+      if (!src) return;
+      const preds = (e && e.detail) || [];
+      src.clear();
+      preds.forEach(p => {
+        const lat = p.latitude; const lon = p.longitude;
+        if (lat == null || lon == null) return;
+        const feature = new Feature({ geometry: new Point(fromLonLat([lon, lat])) });
+        feature.set('meta', p);
+        src.addFeature(feature);
+      });
+    };
+    window.addEventListener('rtaip_predictions', handler);
+    return () => { window.removeEventListener('rtaip_predictions', handler); };
+  }, []);
 
   return <div ref={mapRef} style={{ width: '100%', height: '100%' }} />;
 };

@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 const suggestions = [
-  'Show anomalies',
-  'Summarize threats',
-  'Explain situation',
-  'Show aircraft abnormalities in last hour',
-  'Briefing for last 24 hours',
+  'Summary for last 24 hours',
+  'How many anomalies by source in last 7 days',
+  'List anomalies severity >= 6 in bbox:33,-120,40,-100',
+  'Hotspots for anomalies last 24 hours',
+  'Trend of anomalies over time',
   'Predict future anomalies',
 ];
 
@@ -56,13 +56,19 @@ const ChatPanel = ({ apiBase }) => {
     const userMsg = { role: 'user', text: q, ts: new Date().toLocaleString() };
     setMessages(prev => [...prev, userMsg]);
     setStreaming(true);
-    try {
+  try {
       const res = await fetch(`${apiBase}/api/ai-analyst`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: q, sessionId })
       });
       const data = await res.json();
       const full = String(data?.output || 'No analysis available.');
+      try {
+        const preds = data?.predictions_points || [];
+        if (Array.isArray(preds) && preds.length > 0) {
+          window.dispatchEvent(new CustomEvent('rtaip_predictions', { detail: preds }));
+        }
+      } catch {}
       let acc = '';
       const tokens = full.split(/(\s+)/);
       for (let i = 0; i < tokens.length; i++) {
