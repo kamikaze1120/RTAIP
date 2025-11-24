@@ -6,6 +6,7 @@ const suggestions = [
   'Explain situation',
   'Show aircraft abnormalities in last hour',
   'Briefing for last 24 hours',
+  'Predict future anomalies',
 ];
 
 const ChatPanel = ({ apiBase }) => {

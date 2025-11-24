@@ -529,7 +529,7 @@ function App() {
                 })}>Invert</button>
               </div>
             </div>
-            <div className="p-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 12 }}>
+            <div className="p-3" style={{ display: 'grid', gridTemplateColumns: (typeof window !== 'undefined' && window.innerWidth < 768) ? '1fr' : 'repeat(4, minmax(0, 1fr))', gap: 12 }}>
               {sourceCardDefs.map(card => (
                 <SourceCard key={card.key} card={card} selectedSources={selectedSources} setSelectedSources={setSelectedSources} count={sourceCounts[card.key] || 0} conf={confidenceBySrc[card.key] || 0} />
               ))}
@@ -1272,7 +1272,7 @@ function App() {
                     })}>Invert</button>
                   </div>
                 </div>
-                <div className="p-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 12 }}>
+                <div className="p-3" style={{ display: 'grid', gridTemplateColumns: (typeof window !== 'undefined' && window.innerWidth < 768) ? '1fr' : 'repeat(4, minmax(0, 1fr))', gap: 12 }}>
                   {sourceCardDefs.map(card => (
                     <div
                       key={card.key}
@@ -1313,9 +1313,6 @@ function App() {
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button className="button-tactical" onClick={() => setShowSourceSelect(true)}>Change Sources</button>
                   </div>
-                </div>
-                <div className="p-2" style={{ fontSize: 13, opacity: 0.85 }}>
-                  Selection saved. Click Dashboard to view insights.
                 </div>
               </div>
             )}

@@ -324,6 +324,37 @@ def ai_analyst(req: AnalystQuery, db: Session = Depends(get_db)):
 
     # Simple intent routing
     out_lines: List[str] = []
+    if "predict" in q:
+        by_src_counts = {}
+        for a in anoms:
+            ev = next((e for e in evs if e.id == a.event_id), None)
+            if not ev:
+                continue
+            src = ev.source or "unknown"
+            ts = a.timestamp or datetime.utcnow()
+            bucket = ts.replace(minute=0, second=0, microsecond=0)
+            d = by_src_counts.setdefault(src, {})
+            d[bucket] = d.get(bucket, 0) + 1
+        preds = []
+        for src, hist in by_src_counts.items():
+            buckets = sorted(hist.keys())
+            series = [hist[b] for b in buckets]
+            if not series:
+                continue
+            alpha = 0.3
+            ewma = series[0]
+            for x in series[1:]:
+                ewma = alpha * x + (1 - alpha) * ewma
+            horizon_h = 6
+            expected = max(0.0, float(ewma) * horizon_h / max(1, len(series)))
+            peak = max(1, max(series))
+            prob = min(1.0, ewma / float(peak))
+            conf = min(1.0, 0.5 + min(0.5, len(series) / 24.0))
+            preds.append({"source": src, "next_hours": horizon_h, "probability": prob, "expected_count": expected, "confidence": conf})
+        out_lines.append(f"Prediction window: next 6 hours")
+        for p in sorted(preds, key=lambda x: -x["probability"])[:10]:
+            out_lines.append(f"- {p['source'].upper()}: prob={(p['probability']*100):.0f}% expected≈{p['expected_count']:.1f} confidence={(p['confidence']*100):.0f}%")
+        return {"type": "analysis", "output": "\n".join(out_lines), "events": [ser_e(e) for e in evs[:50]], "anomalies": [ser_a(a) for a in anoms[:50]], "predictions": preds}
     if "brief" in q or "summary" in q:
         out_lines.append(f"Summary: {len(evs)} events, {len(anoms)} anomalies in scope.")
         by_src = {}
