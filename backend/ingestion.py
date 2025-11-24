@@ -5,7 +5,7 @@ import schedule
 import time
 from datetime import datetime
 from sqlalchemy.orm import sessionmaker
-from database import engine, DataEvent
+from database import engine, DataEvent, Anomaly
 
 Session = sessionmaker(bind=engine)
 
@@ -50,6 +50,12 @@ async def ingest_nasa_eonet():
                     if isinstance(coords, (list, tuple)) and len(coords) >= 2:
                         lon = float(coords[0]); lat = float(coords[1])
                 conf = 0.7 if (lat is not None and lon is not None) else 0.5
+                # Only ingest recent (<=100 hours) data
+                try:
+                    if (datetime.utcnow() - ts).total_seconds() > 100 * 3600:
+                        continue
+                except Exception:
+                    pass
                 event = DataEvent(source="nasa_eonet", timestamp=ts, latitude=lat, longitude=lon, data=ev, confidence=conf)
                 session.add(event)
             session.commit()
@@ -85,6 +91,12 @@ async def ingest_gdacs_disasters():
                     except Exception:
                         pass
                     conf = 0.6 if (lat is not None and lon is not None) else 0.4
+                    # Only ingest recent (<=100 hours) data
+                    try:
+                        if (datetime.utcnow() - ts).total_seconds() > 100 * 3600:
+                            continue
+                    except Exception:
+                        pass
                     event = DataEvent(source="gdacs_disasters", timestamp=ts, latitude=lat, longitude=lon, data=feat, confidence=conf)
                     session.add(event)
                 session.commit()
@@ -204,6 +216,22 @@ def run_ingestion():
             ingest_nasa_eonet(),
             ingest_gdacs_disasters()
         ))
+        # Conditional backfill: if no anomalies for GDACS/EONET, ensure last 100 hours of data present
+        try:
+            with Session() as session:
+                start = datetime.utcnow() - __import__('datetime').timedelta(hours=100)
+                ev = session.query(DataEvent).filter(DataEvent.timestamp >= start).all()
+                ids_by_src = { 'gdacs_disasters': set(), 'nasa_eonet': set() }
+                for e in ev:
+                    if e.source in ids_by_src:
+                        ids_by_src[e.source].add(e.id)
+                anom_ids = set(a.event_id for a in session.query(Anomaly).filter(Anomaly.timestamp >= start).all())
+                need_backfill = any(len(ids_by_src[src] & anom_ids) == 0 for src in ids_by_src)
+                if need_backfill:
+                    # Re-run targeted ingestions; endpoints already filter to recent
+                    loop.run_until_complete(asyncio.gather(ingest_nasa_eonet(), ingest_gdacs_disasters()))
+        except Exception:
+            pass
     finally:
         loop.close()
 

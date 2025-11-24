@@ -1312,18 +1312,10 @@ function App() {
                   <div style={{ color: 'var(--accent)' }}>Database</div>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button className="button-tactical" onClick={() => setShowSourceSelect(true)}>Change Sources</button>
-                    {selectedSources.length > 0 && (
-                      <select className="button-tactical" value={filters.source || ''} onChange={(e) => setFilters(f => ({ ...f, source: e.target.value || undefined }))}>
-                        <option value="">All</option>
-                        {selectedSources.map(s => (
-                          <option key={s} value={s}>{(s || 'UNKNOWN').toUpperCase()}</option>
-                        ))}
-                      </select>
-                    )}
                   </div>
                 </div>
-                <div className="p-2">
-                  <EventFeed events={visibleEvents} anomalies={visibleAnomalies} onSelect={handleSelectEvent} />
+                <div className="p-2" style={{ fontSize: 13, opacity: 0.85 }}>
+                  Selection saved. Click Dashboard to view insights.
                 </div>
               </div>
             )}
