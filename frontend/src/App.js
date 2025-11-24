@@ -1259,63 +1259,52 @@ function App() {
       <Routes>
         <Route path="/database" element={(
           <div className="p-4">
-            {showSourceSelect ? (
-              <div className="tactical-panel" style={{ margin: '12px 0', paddingBottom: 12 }}>
-                <div className="panel-header" style={{ justifyContent: 'space-between' }}>
-                  <div style={{ color: 'var(--accent)' }}>Select Data Sources</div>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button className="button-tactical" onClick={() => setSelectedSources(sourceCardDefs.map(s => s.key))}>Select All</button>
-                    <button className="button-tactical" onClick={() => setSelectedSources([])}>Clear</button>
-                    <button className="button-tactical" onClick={() => setSelectedSources(prev => {
-                      const all = sourceCardDefs.map(s => s.key);
-                      return all.filter(k => !prev.includes(k));
-                    })}>Invert</button>
-                  </div>
-                </div>
-                <div className="p-3" style={{ display: 'grid', gridTemplateColumns: (typeof window !== 'undefined' && window.innerWidth < 768) ? '1fr' : 'repeat(4, minmax(0, 1fr))', gap: 12 }}>
-                  {sourceCardDefs.map(card => (
-                    <div
-                      key={card.key}
-                      className="tactical-panel"
-                      style={{ cursor: 'pointer', background: 'rgba(0,0,0,0.25)', transition: 'transform 180ms ease, box-shadow 180ms ease', border: selectedSources.includes(card.key) ? '1px solid rgba(0,255,198,0.35)' : '1px solid rgba(255,255,255,0.08)' }}
-                      onClick={() => setSelectedSources(prev => prev.includes(card.key) ? prev.filter(s => s !== card.key) : [...prev, card.key])}
-                      onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.02)'; e.currentTarget.style.boxShadow = '0 6px 16px rgba(0,0,0,0.35)'; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}
-                    >
-                      <div className="panel-header" style={{ justifyContent: 'space-between' }}>
-                        <div style={{ color: 'var(--accent)' }}>{card.title}</div>
-                        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
-                          <input type="checkbox" checked={selectedSources.includes(card.key)} onChange={() => setSelectedSources(prev => prev.includes(card.key) ? prev.filter(s => s !== card.key) : [...prev, card.key])} />
-                          Include
-                        </label>
-                      </div>
-                      <div className="p-2" style={{ fontSize: 13, opacity: 0.9 }}>{card.desc}</div>
-                      <div className="p-2" style={{ fontSize: 12, opacity: 0.8 }}>
-                        <span style={{ color: 'var(--accent-muted)' }}>Current events:</span> {sourceCounts[card.key] || 0}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <div className="p-3" style={{ display: 'grid', gridTemplateColumns: '1fr auto', alignItems: 'center', gap: 8 }}>
-                  <div>
-                    <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 4 }}>Selected: {selectedSources.map(s => (s||'UNKNOWN').toUpperCase()).join(', ') || 'None'} ({selectedSources.length}/{sourceCardDefs.length})</div>
-                    <div style={{ width: '100%', height: 6, borderRadius: 3, background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
-                      <div style={{ width: `${Math.round((selectedSources.length / sourceCardDefs.length) * 100)}%`, height: '100%', background: 'var(--accent)' }} />
-                    </div>
-                  </div>
-                  <button className="button-tactical" disabled={selectedSources.length === 0} onClick={() => { setShowSourceSelect(false); navigate('/'); }}>Continue</button>
+            <div className="tactical-panel" style={{ margin: '12px 0', paddingBottom: 12 }}>
+              <div className="panel-header" style={{ justifyContent: 'space-between' }}>
+                <div style={{ color: 'var(--accent)' }}>Select Data Sources</div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button className="button-tactical" onClick={() => setSelectedSources(sourceCardDefs.map(s => s.key))}>Select All</button>
+                  <button className="button-tactical" onClick={() => setSelectedSources([])}>Clear</button>
+                  <button className="button-tactical" onClick={() => setSelectedSources(prev => {
+                    const all = sourceCardDefs.map(s => s.key);
+                    return all.filter(k => !prev.includes(k));
+                  })}>Invert</button>
                 </div>
               </div>
-            ) : (
-              <div className="tactical-panel" style={{ margin: '12px 0' }}>
-                <div className="panel-header" style={{ justifyContent: 'space-between' }}>
-                  <div style={{ color: 'var(--accent)' }}>Database</div>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button className="button-tactical" onClick={() => setShowSourceSelect(true)}>Change Sources</button>
+              <div className="p-3" style={{ display: 'grid', gridTemplateColumns: (typeof window !== 'undefined' && window.innerWidth < 768) ? '1fr' : 'repeat(4, minmax(0, 1fr))', gap: 12 }}>
+                {sourceCardDefs.map(card => (
+                  <div
+                    key={card.key}
+                    className="tactical-panel"
+                    style={{ cursor: 'pointer', background: 'rgba(0,0,0,0.25)', transition: 'transform 180ms ease, box-shadow 180ms ease', border: selectedSources.includes(card.key) ? '1px solid rgba(0,255,198,0.35)' : '1px solid rgba(255,255,255,0.08)' }}
+                    onClick={() => setSelectedSources(prev => prev.includes(card.key) ? prev.filter(s => s !== card.key) : [...prev, card.key])}
+                    onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.02)'; e.currentTarget.style.boxShadow = '0 6px 16px rgba(0,0,0,0.35)'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}
+                  >
+                    <div className="panel-header" style={{ justifyContent: 'space-between' }}>
+                      <div style={{ color: 'var(--accent)' }}>{card.title}</div>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+                        <input type="checkbox" checked={selectedSources.includes(card.key)} onChange={() => setSelectedSources(prev => prev.includes(card.key) ? prev.filter(s => s !== card.key) : [...prev, card.key])} />
+                        Include
+                      </label>
+                    </div>
+                    <div className="p-2" style={{ fontSize: 13, opacity: 0.9 }}>{card.desc}</div>
+                    <div className="p-2" style={{ fontSize: 12, opacity: 0.8 }}>
+                      <span style={{ color: 'var(--accent-muted)' }}>Current events:</span> {sourceCounts[card.key] || 0}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="p-3" style={{ display: 'grid', gridTemplateColumns: '1fr auto', alignItems: 'center', gap: 8 }}>
+                <div>
+                  <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 4 }}>Selected: {selectedSources.map(s => (s||'UNKNOWN').toUpperCase()).join(', ') || 'None'} ({selectedSources.length}/{sourceCardDefs.length})</div>
+                  <div style={{ width: '100%', height: 6, borderRadius: 3, background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
+                    <div style={{ width: `${Math.round((selectedSources.length / sourceCardDefs.length) * 100)}%`, height: '100%', background: 'var(--accent)' }} />
                   </div>
                 </div>
+                <button className="button-tactical" disabled={selectedSources.length === 0} onClick={() => { setShowSourceSelect(false); navigate('/'); }}>Continue</button>
               </div>
-            )}
+            </div>
           </div>
         )} />
       </Routes>
