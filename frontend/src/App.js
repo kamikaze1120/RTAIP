@@ -320,7 +320,7 @@ function App() {
   }, {});
   const totalEvents = events.length;
   const totalAnomalies = anomalies.length;
-  const lastUpdate = events.length > 0 ? new Date(events[events.length - 1].timestamp).toLocaleString() : '—';
+  const lastUpdate = events.length > 0 ? new Date(events[events.length - 1].timestamp).toLocaleString('en-US', { timeZone: 'America/Chicago' }) : '—';
 
   // Build chart datasets for Dashboard visuals
   const hoursMap = {};
@@ -541,7 +541,7 @@ function App() {
                   <div style={{ width: `${Math.round((selectedSources.length / sourceCardDefs.length) * 100)}%`, height: '100%', background: 'var(--accent)', transition: 'width 300ms ease' }} />
                 </div>
               </div>
-              <button className="button-tactical" disabled={selectedSources.length === 0} onClick={() => { setShowSourceSelect(false); navigate('/database'); }}>Continue</button>
+              <button className="button-tactical" disabled={selectedSources.length === 0} onClick={() => { setShowSourceSelect(false); navigate('/'); }}>Continue</button>
             </div>
           </div>
         </div>
@@ -1303,7 +1303,7 @@ function App() {
                       <div style={{ width: `${Math.round((selectedSources.length / sourceCardDefs.length) * 100)}%`, height: '100%', background: 'var(--accent)' }} />
                     </div>
                   </div>
-                  <button className="button-tactical" disabled={selectedSources.length === 0} onClick={() => { setShowSourceSelect(false); }}>Continue</button>
+                  <button className="button-tactical" disabled={selectedSources.length === 0} onClick={() => { setShowSourceSelect(false); navigate('/'); }}>Continue</button>
                 </div>
               </div>
             ) : (
