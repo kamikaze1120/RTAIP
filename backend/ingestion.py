@@ -16,7 +16,7 @@ async def fetch_data(url, params=None):
                 return await response.json()
             else:
                 print(f"Error fetching {url}: {response.status}")
-                return None
+    return None
 
 async def ingest_nasa_fires():
     # NASA FIRMS API example (simplified, use actual endpoint)
@@ -26,6 +26,59 @@ async def ingest_nasa_fires():
         with Session() as session:
             for item in data:  # Assuming list of fires
                 event = DataEvent(source="nasa_fires", timestamp=datetime.utcnow(), latitude=item.get('latitude'), longitude=item.get('longitude'), data=item)
+                session.add(event)
+    session.commit()
+
+async def ingest_nasa_eonet():
+    url = "https://eonet.gsfc.nasa.gov/api/v3/events"
+    data = await fetch_data(url)
+    if data:
+        events = data.get('events', [])
+        with Session() as session:
+            for ev in events:
+                geos = ev.get('geometry') or ev.get('geometries') or []
+                lat = None; lon = None
+                ts = datetime.utcnow()
+                if geos:
+                    g = geos[-1]
+                    coords = g.get('coordinates')
+                    dt = g.get('date') or g.get('datetime')
+                    try:
+                        ts = datetime.fromisoformat((dt or '').replace('Z',''))
+                    except Exception:
+                        ts = datetime.utcnow()
+                    if isinstance(coords, (list, tuple)) and len(coords) >= 2:
+                        lon = float(coords[0]); lat = float(coords[1])
+                conf = 0.7 if (lat is not None and lon is not None) else 0.5
+                event = DataEvent(source="nasa_eonet", timestamp=ts, latitude=lat, longitude=lon, data=ev, confidence=conf)
+                session.add(event)
+            session.commit()
+
+async def ingest_gdacs_disasters():
+    url = "https://www.gdacs.org/gdacsapi/api/events/geteventlist/json"
+    data = await fetch_data(url)
+    if data:
+        items = data.get('features') or data.get('events') or data.get('items') or []
+        # Some responses use 'events' with 'eventlist', others GeoJSON 'features'
+        with Session() as session:
+            for item in items:
+                lat = None; lon = None; ts = datetime.utcnow()
+                if isinstance(item, dict):
+                    lat = item.get('lat') or item.get('latitude')
+                    lon = item.get('lon') or item.get('longitude')
+                    dt = item.get('fromdate') or item.get('eventdate') or item.get('updated')
+                    try:
+                        if dt:
+                            ts = datetime.fromisoformat(str(dt).replace('Z',''))
+                    except Exception:
+                        ts = datetime.utcnow()
+                try:
+                    lat = float(lat) if lat is not None else None
+                    lon = float(lon) if lon is not None else None
+                except Exception:
+                    lat = None; lon = None
+                conf = 0.6 if (lat is not None and lon is not None) else 0.4
+                event = DataEvent(source="gdacs_disasters", timestamp=ts, latitude=lat, longitude=lon, data=item, confidence=conf)
                 session.add(event)
             session.commit()
 
@@ -138,7 +191,9 @@ def run_ingestion():
             ingest_noaa_weather(),
             ingest_adsb_aircraft(),
             ingest_ais_maritime(),
-            ingest_usgs_seismic()
+            ingest_usgs_seismic(),
+            ingest_nasa_eonet(),
+            ingest_gdacs_disasters()
         ))
     finally:
         loop.close()

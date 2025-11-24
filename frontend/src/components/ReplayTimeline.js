@@ -34,6 +34,21 @@ const ReplayTimeline = ({ events, onTimeChange }) => {
   const togglePlay = () => setPlaying(p => !p);
   const handleSpeed = e => setSpeed(Number(e.target.value));
 
+  React.useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === 'ArrowLeft') {
+        setTime(t => Math.max(0, t - 1));
+      } else if (e.key === 'ArrowRight') {
+        setTime(t => Math.min(maxIdx, t + 1));
+      } else if (e.key === ' ') {
+        e.preventDefault();
+        setPlaying(p => !p);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [maxIdx]);
+
   return (
     <div className="tactical-panel">
       <div className="panel-header">

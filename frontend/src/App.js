@@ -81,13 +81,21 @@ function App() {
   const location = useLocation();
   const [events, setEvents] = useState([]);
   const [anomalies, setAnomalies] = useState([]);
-  const [filters, setFilters] = useState({});
+  const [filters, setFilters] = useState(() => {
+    try {
+      const saved = localStorage.getItem('rtaip_filters');
+      return saved ? JSON.parse(saved) : { search: '', anomaliesOnly: false, minConf: 0, minSev: 0, window: 'last 24 hours', bbox: '' };
+    } catch {
+      return { search: '', anomaliesOnly: false, minConf: 0, minSev: 0, window: 'last 24 hours', bbox: '' };
+    }
+  });
   const [selectedSources, setSelectedSources] = useState(() => {
     try { const saved = localStorage.getItem('rtaip_selected_sources'); return saved ? JSON.parse(saved) : []; } catch { return []; }
   });
   const [showSourceSelect, setShowSourceSelect] = useState(() => {
     try { const saved = localStorage.getItem('rtaip_selected_sources'); return !saved || JSON.parse(saved).length === 0; } catch { return true; }
   });
+  const initialRouteRedirectedRef = useRef(false);
   const [backendOnline, setBackendOnline] = useState(false);
   const [replayIndex, setReplayIndex] = useState(null);
   const [showSplash, setShowSplash] = useState(true);
@@ -113,6 +121,7 @@ function App() {
   const [briefingOutput, setBriefingOutput] = useState('');
   const [alertRules, setAlertRules] = useState([]);
   const [alertForm, setAlertForm] = useState({ name: '', source: '', severity_threshold: 5, min_confidence: 0.5, min_lat: '', min_lon: '', max_lat: '', max_lon: '', email_to: '' });
+  const [metrics, setMetrics] = useState([]);
   
   const baseStyles = ['light','dark','terrain','satellite','osm'];
    // API base configurable via environment; defaults to 8000
@@ -121,7 +130,9 @@ function App() {
     { key: 'adsb', title: 'ADSB', desc: 'Aircraft transponder signals; flight positions and headings.' },
     { key: 'ais', title: 'AIS', desc: 'Maritime vessel positions and identifiers.' },
     { key: 'usgs_seismic', title: 'USGS', desc: 'Seismic event feeds reported by USGS.' },
-    { key: 'noaa_weather', title: 'NOAA', desc: 'Weather alerts and anomalies from NOAA.' }
+    { key: 'noaa_weather', title: 'NOAA', desc: 'Weather alerts and anomalies from NOAA.' },
+    { key: 'nasa_eonet', title: 'EONET', desc: 'NASA curated natural events (fires, storms, volcanoes).' },
+    { key: 'gdacs_disasters', title: 'GDACS', desc: 'Global disaster alerts and coordination system events.' }
   ];
 
   useEffect(() => {
@@ -130,23 +141,52 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (!initialRouteRedirectedRef.current && location.pathname === '/') {
+      initialRouteRedirectedRef.current = true;
+      navigate('/database', { replace: true });
+    }
+  }, [location.pathname, navigate]);
+
+  useEffect(() => {
     let cancelled = false;
     const fetchData = async () => {
       try {
         const healthRes = await fetch(`${API}/health`);
         if (!cancelled) setBackendOnline(healthRes.ok);
 
-        const eventsRes = await fetch(`${API}/events`);
+        const evUrl = `${API}/events${filters.bbox ? `?bbox=${encodeURIComponent(filters.bbox)}` : ''}`;
+        const eventsRes = await fetch(evUrl);
         const eventsData = await eventsRes.json();
 
-        const anomaliesRes = await fetch(`${API}/anomalies`);
+        const anUrl = `${API}/anomalies${filters.bbox ? `?bbox=${encodeURIComponent(filters.bbox)}` : ''}`;
+        const anomaliesRes = await fetch(anUrl);
         const anomaliesData = await anomaliesRes.json();
 
         const filteredEvents = eventsData.filter(event => {
           const src = (event.source || '').toLowerCase();
           if (Array.isArray(selectedSources) && selectedSources.length > 0 && !selectedSources.includes(src)) return false;
           if (filters.source && src !== filters.source) return false;
-          if (filters.anomaliesOnly) return anomaliesData.some(a => a.event_id === event.id);
+          const hasAnom = anomaliesData.some(a => a.event_id === event.id);
+          if (filters.anomaliesOnly && !hasAnom) return false;
+          const confOk = typeof event.confidence === 'number' ? event.confidence >= (filters.minConf || 0) : true;
+          if (!confOk) return false;
+          if ((filters.minSev || 0) > 0 && !anomaliesData.some(a => a.event_id === event.id && (a.severity || 0) >= (filters.minSev || 0))) return false;
+          if (filters.window) {
+            const now = Date.now();
+            const ts = new Date(event.timestamp).getTime();
+            const w = (filters.window || '').toLowerCase();
+            let maxMs = 24 * 3600 * 1000;
+            if (w.includes('hour') && !w.includes('24')) maxMs = 3600 * 1000;
+            if (w.includes('7')) maxMs = 7 * 24 * 3600 * 1000;
+            if (isFinite(ts) && now - ts > maxMs) return false;
+          }
+          if ((filters.search || '').trim()) {
+            const q = (filters.search || '').toLowerCase();
+            const idStr = String(event.id || '').toLowerCase();
+            const srcStr = String(event.source || '').toLowerCase();
+            const dataStr = JSON.stringify(event.data || {}).toLowerCase();
+            if (!(idStr.includes(q) || srcStr.includes(q) || dataStr.includes(q))) return false;
+          }
           return true;
         });
 
@@ -158,16 +198,36 @@ function App() {
         // Auto-seed if backend is online and DB appears empty
         if (healthRes.ok && eventsData.length === 0) {
           await fetch(`${API}/seed`);
-          const eventsRes2 = await fetch(`${API}/events`);
+          const eventsRes2 = await fetch(evUrl);
           const eventsData2 = await eventsRes2.json();
-          const anomaliesRes2 = await fetch(`${API}/anomalies`);
+          const anomaliesRes2 = await fetch(anUrl);
           const anomaliesData2 = await anomaliesRes2.json();
 
           const filteredEvents2 = eventsData2.filter(event => {
             const src = (event.source || '').toLowerCase();
             if (Array.isArray(selectedSources) && selectedSources.length > 0 && !selectedSources.includes(src)) return false;
             if (filters.source && src !== filters.source) return false;
-            if (filters.anomaliesOnly) return anomaliesData2.some(a => a.event_id === event.id);
+            const hasAnom2 = anomaliesData2.some(a => a.event_id === event.id);
+            if (filters.anomaliesOnly && !hasAnom2) return false;
+            const confOk2 = typeof event.confidence === 'number' ? event.confidence >= (filters.minConf || 0) : true;
+            if (!confOk2) return false;
+            if ((filters.minSev || 0) > 0 && !anomaliesData2.some(a => a.event_id === event.id && (a.severity || 0) >= (filters.minSev || 0))) return false;
+            if (filters.window) {
+              const now = Date.now();
+              const ts = new Date(event.timestamp).getTime();
+              const w = (filters.window || '').toLowerCase();
+              let maxMs = 24 * 3600 * 1000;
+              if (w.includes('hour') && !w.includes('24')) maxMs = 3600 * 1000;
+              if (w.includes('7')) maxMs = 7 * 24 * 3600 * 1000;
+              if (isFinite(ts) && now - ts > maxMs) return false;
+            }
+            if ((filters.search || '').trim()) {
+              const q = (filters.search || '').toLowerCase();
+              const idStr = String(event.id || '').toLowerCase();
+              const srcStr = String(event.source || '').toLowerCase();
+              const dataStr = JSON.stringify(event.data || {}).toLowerCase();
+              if (!(idStr.includes(q) || srcStr.includes(q) || dataStr.includes(q))) return false;
+            }
             return true;
           });
 
@@ -202,6 +262,33 @@ function App() {
       setFilters(f => ({ ...f, source: undefined }));
     }
   }, [selectedSources]);
+
+  useEffect(() => {
+    try { localStorage.setItem('rtaip_filters', JSON.stringify(filters)); } catch {}
+    const params = new URLSearchParams();
+    if (filters.source) params.set('source', filters.source);
+    if (filters.anomaliesOnly) params.set('anom', '1');
+    if (filters.search) params.set('q', filters.search);
+    if (filters.minConf) params.set('minc', String(filters.minConf));
+    if (filters.minSev) params.set('mins', String(filters.minSev));
+    if (filters.window) params.set('win', filters.window);
+    if (filters.bbox) params.set('bbox', filters.bbox);
+    const qs = params.toString();
+    navigate({ pathname: location.pathname, search: qs ? `?${qs}` : '' }, { replace: true });
+  }, [filters, navigate, location.pathname]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search || '');
+    const f = { ...filters };
+    const src = params.get('source'); if (src) f.source = src;
+    const anom = params.get('anom'); if (anom) f.anomaliesOnly = anom === '1';
+    const q = params.get('q'); if (q) f.search = q;
+    const minc = params.get('minc'); if (minc) f.minConf = Number(minc) || 0;
+    const mins = params.get('mins'); if (mins) f.minSev = Number(mins) || 0;
+    const win = params.get('win'); if (win) f.window = win;
+    const bb = params.get('bbox'); if (bb) f.bbox = bb;
+    setFilters(f);
+  }, []);
 
   // Filter visible data based on replay index
   const visibleEvents = (() => {
@@ -410,8 +497,8 @@ function App() {
         <div className="tactical-panel" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px' }}>
           <div style={{ color: 'var(--accent)', fontWeight: 600 }}>RTAIP</div>
           <div style={{ display: 'flex', gap: 12 }}>
-            <NavLink to="/" end className={({ isActive }) => `button-tactical ${isActive ? 'active' : ''}`}>Dashboard</NavLink>
             <NavLink to="/database" className={({ isActive }) => `button-tactical ${isActive ? 'active' : ''}`}>Database</NavLink>
+            <NavLink to="/" end className={({ isActive }) => `button-tactical ${isActive ? 'active' : ''}`}>Dashboard</NavLink>
             <NavLink to="/map" className={({ isActive }) => `button-tactical ${isActive ? 'active' : ''}`}>Map</NavLink>
             <NavLink to="/replay" className={({ isActive }) => `button-tactical ${isActive ? 'active' : ''}`}>Replay</NavLink>
             <NavLink to="/settings" className={({ isActive }) => `button-tactical ${isActive ? 'active' : ''}`}>Settings</NavLink>
@@ -453,7 +540,7 @@ function App() {
                   <div style={{ width: `${Math.round((selectedSources.length / sourceCardDefs.length) * 100)}%`, height: '100%', background: 'var(--accent)', transition: 'width 300ms ease' }} />
                 </div>
               </div>
-              <button className="button-tactical" disabled={selectedSources.length === 0} onClick={() => { setShowSourceSelect(false); navigate('/'); }}>Continue</button>
+              <button className="button-tactical" disabled={selectedSources.length === 0} onClick={() => { setShowSourceSelect(false); navigate('/database'); }}>Continue</button>
             </div>
           </div>
         </div>
@@ -519,6 +606,48 @@ function App() {
                       </label>
                     </div>
 
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 10 }}>
+                      <input className="button-tactical" placeholder="Search" value={filters.search || ''} onChange={(e)=>setFilters(f=>({ ...f, search: e.target.value }))} />
+                      <input className="button-tactical" placeholder="bbox minLat,minLon,maxLat,maxLon" value={filters.bbox || ''} onChange={(e)=>setFilters(f=>({ ...f, bbox: e.target.value }))} />
+                      <input className="button-tactical" placeholder="Min Confidence" type="number" step="0.1" value={filters.minConf || 0} onChange={(e)=>setFilters(f=>({ ...f, minConf: Number(e.target.value)||0 }))} />
+                      <input className="button-tactical" placeholder="Min Severity" type="number" value={filters.minSev || 0} onChange={(e)=>setFilters(f=>({ ...f, minSev: Number(e.target.value)||0 }))} />
+                      <select className="button-tactical" value={filters.window || 'last 24 hours'} onChange={(e)=>setFilters(f=>({ ...f, window: e.target.value }))}>
+                        <option>last hour</option>
+                        <option>last 24 hours</option>
+                        <option>last 7 days</option>
+                      </select>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button className="button-tactical" onClick={() => {
+                          const rows = events.map(ev => ({
+                            id: ev.id,
+                            source: ev.source,
+                            timestamp: ev.timestamp,
+                            latitude: ev.latitude,
+                            longitude: ev.longitude,
+                            confidence: ev.confidence
+                          }));
+                          const header = Object.keys(rows[0] || {}).join(',');
+                          const body = rows.map(r => Object.values(r).map(v => String(v ?? '')).join(',')).join('\n');
+                          const blob = new Blob([header + '\n' + body], { type: 'text/csv' });
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement('a'); a.href = url; a.download = `events_${Date.now()}.csv`; a.click(); URL.revokeObjectURL(url);
+                        }}>Export CSV</button>
+                        <button className="button-tactical" onClick={() => {
+                          const geo = {
+                            type: 'FeatureCollection',
+                            features: events.filter(ev => ev.latitude != null && ev.longitude != null).map(ev => ({
+                              type: 'Feature',
+                              geometry: { type: 'Point', coordinates: [ev.longitude, ev.latitude] },
+                              properties: { id: ev.id, source: ev.source, timestamp: ev.timestamp, confidence: ev.confidence }
+                            }))
+                          };
+                          const blob = new Blob([JSON.stringify(geo)], { type: 'application/geo+json' });
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement('a'); a.href = url; a.download = `events_${Date.now()}.geojson`; a.click(); URL.revokeObjectURL(url);
+                        }}>Export GeoJSON</button>
+                      </div>
+                    </div>
+
                     <div style={{ marginTop: 12 }}>
                       <NavLink to="/map" className="button-tactical">Open Full Map</NavLink>
                     </div>
@@ -533,6 +662,21 @@ function App() {
           <div className="p-2">
                     <div className="mt-3">
                       <ReplayTimeline events={events} onTimeChange={handleTimeChange} />
+        </div>
+        <div className="tactical-panel" style={{ marginTop: 12 }}>
+          <div className="panel-header" style={{ justifyContent: 'space-between' }}>
+            <div style={{ color: 'var(--accent)' }}>Ingestion Health</div>
+            <div className="button-tactical" onClick={async ()=>{ try { const r = await fetch(`${API}/perf/metrics`); const d = await r.json(); setMetrics(Array.isArray(d)?d:[]); } catch {} }}>Refresh Health</div>
+          </div>
+          <div className="p-2" style={{ fontSize: 13 }}>
+            {metrics.length === 0 ? <div style={{ opacity: 0.8 }}>No metrics.</div> : (
+              <ul style={{ margin: 0, paddingLeft: 18 }}>
+                {metrics.slice(0,10).map((m, idx) => (
+                  <li key={idx}>FPS {m.fps} • events {m.events} • anomalies {m.anomalies} • zoom {m.zoom} • {m.device || 'unknown'}</li>
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
         <div className="tactical-panel" style={{ marginTop: 12 }}>
           <div className="panel-header" style={{ justifyContent: 'space-between' }}>
@@ -1150,7 +1294,7 @@ function App() {
                     <div style={{ width: `${Math.round((selectedSources.length / sourceCardDefs.length) * 100)}%`, height: '100%', background: 'var(--accent)' }} />
                   </div>
                 </div>
-                <button className="button-tactical" disabled={selectedSources.length === 0} onClick={() => navigate('/')}>Continue</button>
+                <button className="button-tactical" disabled={selectedSources.length === 0} onClick={() => navigate('/database')}>Continue</button>
               </div>
             </div>
           </div>

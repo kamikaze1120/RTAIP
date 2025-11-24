@@ -56,6 +56,16 @@ class AlertRule(Base):
     max_lon = Column(Float)
     email_to = Column(String)  # optional notification target
 
+class PerfMetric(Base):
+    __tablename__ = 'perf_metrics'
+    id = Column(Integer, primary_key=True)
+    ts = Column(DateTime, default=datetime.utcnow)
+    fps = Column(Float)
+    events = Column(Integer)
+    anomalies = Column(Integer)
+    zoom = Column(Integer)
+    device = Column(String)
+
 # Create tables: prefer DIRECT_URL (Supabase 5432) for DDL, otherwise use runtime engine
 try:
     if DIRECT_URL and DIRECT_URL.startswith('postgresql'):
@@ -103,6 +113,10 @@ def ensure_schema():
                     cols = [r[1] for r in rows]
                     if 'confidence' not in cols:
                         conn.execute("ALTER TABLE data_events ADD COLUMN confidence REAL DEFAULT 0.5")
+                    conn.execute("CREATE INDEX IF NOT EXISTS idx_data_events_lat_lon ON data_events(latitude, longitude)")
+                    conn.execute("CREATE INDEX IF NOT EXISTS idx_anomalies_event_id ON anomalies(event_id)")
+            elif 'postgres' in DATABASE_URL:
+                with engine.connect() as conn:
                     conn.execute("CREATE INDEX IF NOT EXISTS idx_data_events_lat_lon ON data_events(latitude, longitude)")
                     conn.execute("CREATE INDEX IF NOT EXISTS idx_anomalies_event_id ON anomalies(event_id)")
         except Exception as _:

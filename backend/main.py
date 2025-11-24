@@ -13,7 +13,7 @@ def read_root():
 from fastapi import FastAPI, Depends, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from database import Session, DataEvent, Anomaly, AlertRule
+from database import Session, DataEvent, Anomaly, AlertRule, PerfMetric
 import threading
 from ingestion import schedule_ingestion
 from anomaly import schedule_detection
@@ -21,6 +21,7 @@ from datetime import datetime
 # New imports for email notifications
 from pydantic import BaseModel
 from typing import Optional, List
+from datetime import timedelta
 import os
 import smtplib
 from email.mime.text import MIMEText
@@ -49,6 +50,23 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"]
 )
+
+cache_store = {}
+def cache_get(key):
+    v = cache_store.get(key)
+    if not v:
+        return None
+    data, exp = v
+    if exp < datetime.utcnow().timestamp():
+        try:
+            del cache_store[key]
+        except Exception:
+            pass
+        return None
+    return data
+
+def cache_set(key, data, ttl_sec=5):
+    cache_store[key] = (data, datetime.utcnow().timestamp() + ttl_sec)
 
 
 def get_db():
@@ -82,6 +100,10 @@ def serialize_anomaly(a: Anomaly):
 
 @app.get("/events")
 def get_events(db: Session = Depends(get_db), bbox: Optional[str] = None):
+    key = f"events:{bbox or 'all'}"
+    cached = cache_get(key)
+    if cached is not None:
+        return cached
     q = db.query(DataEvent)
     try:
         if bbox:
@@ -92,10 +114,16 @@ def get_events(db: Session = Depends(get_db), bbox: Optional[str] = None):
     except Exception:
         pass
     events = q.all()
-    return [serialize_event(ev) for ev in events]
+    data = [serialize_event(ev) for ev in events]
+    cache_set(key, data)
+    return data
 
 @app.get("/anomalies")
 def get_anomalies(db: Session = Depends(get_db), bbox: Optional[str] = None):
+    key = f"anomalies:{bbox or 'all'}"
+    cached = cache_get(key)
+    if cached is not None:
+        return cached
     q = db.query(Anomaly)
     try:
         if bbox:
@@ -108,7 +136,9 @@ def get_anomalies(db: Session = Depends(get_db), bbox: Optional[str] = None):
     except Exception:
         pass
     anomalies = q.all()
-    return [serialize_anomaly(a) for a in anomalies]
+    data = [serialize_anomaly(a) for a in anomalies]
+    cache_set(key, data)
+    return data
 
 @app.get("/health")
 def health():
@@ -430,3 +460,56 @@ def migrate():
 # Run schedulers in background
 threading.Thread(target=schedule_ingestion, daemon=True).start()
 threading.Thread(target=schedule_detection, daemon=True).start()
+class PerfReport(BaseModel):
+    fps: float
+    events: int
+    anomalies: int
+    zoom: Optional[int] = None
+    device: Optional[str] = None
+
+@app.post("/perf/report")
+def perf_report(rep: PerfReport, db: Session = Depends(get_db)):
+    m = PerfMetric(fps=rep.fps, events=rep.events, anomalies=rep.anomalies, zoom=rep.zoom or 0, device=rep.device or "")
+    db.add(m)
+    db.commit()
+    return {"id": m.id}
+
+@app.get("/perf/metrics")
+def perf_metrics(limit: int = 200, db: Session = Depends(get_db)):
+    rows = db.query(PerfMetric).order_by(PerfMetric.id.desc()).limit(limit).all()
+    return [{"ts": r.ts.isoformat(), "fps": r.fps, "events": r.events, "anomalies": r.anomalies, "zoom": r.zoom, "device": r.device} for r in rows]
+
+@app.get("/summary")
+def summary(window: str = "24h", bbox: Optional[str] = None, db: Session = Depends(get_db)):
+    now = datetime.utcnow()
+    delta_h = 24
+    wl = window.lower()
+    if wl.startswith("last ") and "hour" in wl:
+        delta_h = 1
+    start = now - timedelta(hours=delta_h)
+    Ev = DataEvent
+    qev = db.query(Ev).filter(Ev.timestamp >= start)
+    if bbox:
+        try:
+            parts = [p.strip() for p in bbox.split(',')]
+            if len(parts) == 4:
+                min_lat, min_lon, max_lat, max_lon = map(float, parts)
+                qev = qev.filter(Ev.latitude >= min_lat, Ev.latitude <= max_lat, Ev.longitude >= min_lon, Ev.longitude <= max_lon)
+        except Exception:
+            pass
+    events = qev.all()
+    src_counts = {}
+    conf_acc = {}
+    for e in events:
+        src_counts[e.source] = src_counts.get(e.source, 0) + 1
+        if e.confidence is not None:
+            conf_acc.setdefault(e.source, []).append(float(e.confidence))
+    avg_conf = {s: (sum(v)/len(v) if v else 0) for s, v in conf_acc.items()}
+    A = Anomaly
+    qA = db.query(A).filter(A.timestamp >= start)
+    anomalies = qA.all()
+    sev_hist = {}
+    for a in anomalies:
+        sev_hist[a.severity] = sev_hist.get(a.severity, 0) + 1
+    top_sources = sorted(src_counts.items(), key=lambda x: x[1], reverse=True)[:5]
+    return {"top_sources": top_sources, "avg_confidence": avg_conf, "severity_hist": sev_hist, "event_count": len(events), "anomaly_count": len(anomalies)}
