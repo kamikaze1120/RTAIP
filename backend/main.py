@@ -371,7 +371,7 @@ def ai_analyst(req: AnalystQuery, db: Session = Depends(get_db)):
         anoms = [a for a in anoms if (a.severity or 0) >= min_sev]
     if min_conf is not None:
         ev_by_id = {e.id: e for e in evs}
-        anoms = [a for a in anoms if (ev_by_id.get(a.event_id).confidence or 0.0) >= min_conf if ev_by_id.get(a.event_id) else False]
+        anoms = [a for a in anoms if (ev_by_id.get(a.event_id) and ((ev_by_id.get(a.event_id).confidence or 0.0) >= min_conf))]
     def ser_e(e: DataEvent):
         return {"id": e.id, "source": e.source, "timestamp": e.timestamp.isoformat() if e.timestamp else None, "latitude": e.latitude, "longitude": e.longitude}
     def ser_a(a: Anomaly):
