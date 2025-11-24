@@ -25,6 +25,7 @@ from datetime import timedelta
 import os
 import smtplib
 from email.mime.text import MIMEText
+from fastapi.encoders import jsonable_encoder
 
 app = FastAPI()
 
@@ -84,7 +85,7 @@ def serialize_event(ev: DataEvent):
         "timestamp": ev.timestamp.isoformat() if ev.timestamp else None,
         "latitude": ev.latitude,
         "longitude": ev.longitude,
-        "data": ev.data,
+        "data": jsonable_encoder(ev.data),
         "confidence": ev.confidence,
     }
 
