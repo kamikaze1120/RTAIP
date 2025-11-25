@@ -235,7 +235,7 @@ const MapComponent = ({ events, anomalies, focusEventId, onSelect, basemapStyle,
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       <div ref={mapRef} style={{ position: 'absolute', inset: 0 }} />
-      <div style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 6, padding: '6px 8px', fontSize: 12 }}>
+      <div style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 6, padding: '6px 8px', fontSize: 12, pointerEvents: 'none' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <span style={{ width: 10, height: 10, display: 'inline-block', borderRadius: '50%', background: 'rgba(0,255,198,0.85)' }}></span>
           Events

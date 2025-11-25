@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Routes, Route, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import MapComponent from './components/MapComponent';
 import EventFeed from './components/EventFeed';
@@ -128,14 +128,14 @@ function App() {
   const baseStyles = ['light','dark','terrain','satellite','osm'];
    // API base configurable via environment; defaults to 8000
    const API = (() => { try { const o = localStorage.getItem('rtaip_api'); if (o) return o; } catch {} return process.env.REACT_APP_API_URL || 'https://rtaip-production.up.railway.app'; })();
-  const sourceCardDefs = [
+  const sourceCardDefs = useMemo(() => ([
     { key: 'adsb', title: 'ADSB', desc: 'Aircraft transponder signals; flight positions and headings.' },
     { key: 'ais', title: 'AIS', desc: 'Maritime vessel positions and identifiers.' },
     { key: 'usgs_seismic', title: 'USGS', desc: 'Seismic event feeds reported by USGS.' },
     { key: 'noaa_weather', title: 'NOAA', desc: 'Weather alerts and anomalies from NOAA.' },
     { key: 'nasa_eonet', title: 'EONET', desc: 'NASA curated natural events (fires, storms, volcanoes).' },
     { key: 'gdacs_disasters', title: 'GDACS', desc: 'Global disaster alerts and coordination system events.' }
-  ];
+  ]), []);
 
   useEffect(() => {
     try {

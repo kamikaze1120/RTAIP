@@ -57,10 +57,13 @@ const ChatPanel = ({ apiBase }) => {
     setMessages(prev => [...prev, userMsg]);
     setStreaming(true);
   try {
+      const ctl = new AbortController();
+      const to = setTimeout(() => { try { ctl.abort(); } catch {} }, 12000);
       const res = await fetch(`${apiBase}/api/ai-analyst`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: q, sessionId })
+        body: JSON.stringify({ query: q, sessionId }), signal: ctl.signal
       });
+      clearTimeout(to);
       const data = await res.json();
       const full = String(data?.output || 'No analysis available.');
       try {
@@ -85,7 +88,8 @@ const ChatPanel = ({ apiBase }) => {
         });
       }
     } catch (e) {
-      setMessages(prev => [...prev, { role: 'assistant', text: 'Error contacting analyst API.', ts: new Date().toLocaleString() }]);
+      const msg = (e && e.name === 'AbortError') ? 'Analyst request timed out. Please try again.' : 'Error contacting analyst API.';
+      setMessages(prev => [...prev, { role: 'assistant', text: msg, ts: new Date().toLocaleString() }]);
     } finally {
       setStreaming(false);
       setMessages(prev => {
