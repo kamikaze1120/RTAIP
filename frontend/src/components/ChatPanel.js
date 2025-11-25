@@ -97,6 +97,15 @@ const ChatPanel = ({ apiBase }) => {
     }
   };
 
+  useEffect(() => {
+    const h = (e) => {
+      const q = (e && e.detail) || '';
+      if (q) send(q);
+    };
+    window.addEventListener('rtaip_query', h);
+    return () => window.removeEventListener('rtaip_query', h);
+  }, []);
+
   return (
     <div className="tactical-panel" style={{ height: '100%' }}>
       <div className="panel-header" style={{ justifyContent: 'space-between' }}>

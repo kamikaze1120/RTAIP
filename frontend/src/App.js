@@ -123,6 +123,7 @@ function App() {
   const [alertForm, setAlertForm] = useState({ name: '', source: '', severity_threshold: 5, min_confidence: 0.5, min_lat: '', min_lon: '', max_lat: '', max_lon: '', email_to: '' });
   const [metrics, setMetrics] = useState([]);
   const [apiInput, setApiInput] = useState(() => { try { return localStorage.getItem('rtaip_api') || ''; } catch { return ''; } });
+  const [showAbout, setShowAbout] = useState(false);
   
   const baseStyles = ['light','dark','terrain','satellite','osm'];
    // API base configurable via environment; defaults to 8000
@@ -135,6 +136,15 @@ function App() {
     { key: 'nasa_eonet', title: 'EONET', desc: 'NASA curated natural events (fires, storms, volcanoes).' },
     { key: 'gdacs_disasters', title: 'GDACS', desc: 'Global disaster alerts and coordination system events.' }
   ];
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('rtaip_selected_sources');
+      if ((!saved || JSON.parse(saved).length === 0) && selectedSources.length === 0) {
+        setSelectedSources(sourceCardDefs.map(s => s.key));
+      }
+    } catch {}
+  }, [sourceCardDefs, selectedSources]);
 
   useEffect(() => {
     const t = setTimeout(() => setShowSplash(false), 2200);
@@ -498,15 +508,15 @@ function App() {
         <div className="tactical-panel" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px' }}>
           <div style={{ color: 'var(--accent)', fontWeight: 600 }}>RTAIP</div>
           <div style={{ display: 'flex', gap: 12 }}>
-            <NavLink to="/database" className={({ isActive }) => `button-tactical ${isActive ? 'active' : ''}`}>Database</NavLink>
+            <NavLink to="/database" className={({ isActive }) => `button-tactical ${isActive ? 'active' : ''}`}>Sources</NavLink>
             <NavLink to="/" end className={({ isActive }) => `button-tactical ${isActive ? 'active' : ''}`}>Dashboard</NavLink>
             <NavLink to="/map" className={({ isActive }) => `button-tactical ${isActive ? 'active' : ''}`}>Map</NavLink>
-            <NavLink to="/replay" className={({ isActive }) => `button-tactical ${isActive ? 'active' : ''}`}>Replay</NavLink>
+            <NavLink to="/replay" className={({ isActive }) => `button-tactical ${isActive ? 'active' : ''}`}>Timeline</NavLink>
             <NavLink to="/settings" className={({ isActive }) => `button-tactical ${isActive ? 'active' : ''}`}>Settings</NavLink>
           </div>
         </div>
 
-      <div className="p-2">
+      <div className="p-2" style={{ opacity: 0.6, fontSize: 11 }}>
         <div className={`health-badge ${backendOnline ? '' : 'offline'}`}>
           <span style={{ width: 8, height: 8, borderRadius: 4, background: backendOnline ? 'var(--accent)' : 'var(--danger)' }} />
           Backend: {backendOnline ? 'Online' : 'Offline'}
@@ -572,10 +582,22 @@ function App() {
                   </div>
                   <div className="tactical-panel">
                     <div className="p-3" style={{ textAlign: 'center' }}>
-                      <div style={{ fontSize: 12, opacity: 0.8 }}>Sources</div>
-                      <div style={{ fontSize: 28, letterSpacing: 1, color: 'var(--accent)' }}>{Object.keys(sourceCounts).length}</div>
-                      <div style={{ fontSize: 12, opacity: 0.7 }}>Filter from the left</div>
+                      <div style={{ fontSize: 12, opacity: 0.8 }}>Threat Level</div>
+                      <div style={{ fontSize: 28, letterSpacing: 1, color: threatScore.level === 'High' ? 'var(--danger)' : 'var(--accent)' }}>{threatScore.level}</div>
+                      <div style={{ fontSize: 12, opacity: 0.7 }}>Score {threatScore.score} • density {Math.round(threatScore.components.anomalyDensity*100)}%</div>
                     </div>
+                  </div>
+                </div>
+              </div>
+              <div className="tactical-panel" style={{ margin: '12px 16px' }}>
+                <div className="p-3" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <div style={{ fontSize: 16, color: 'var(--accent)' }}>RTAIP converts multi‑source signals into anomaly intelligence</div>
+                    <div style={{ fontSize: 13, opacity: 0.85 }}>See current anomalies, predicted hotspots by city, and set alerts for your area.</div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button className="button-tactical" onClick={() => { try { window.dispatchEvent(new CustomEvent('rtaip_query', { detail: 'Summary for last 24 hours' })); } catch {} }}>Start Briefing</button>
+                    <button className="button-tactical" onClick={() => setShowAbout(true)}>About Sources</button>
                   </div>
                 </div>
               </div>
@@ -652,8 +674,17 @@ function App() {
                     <div style={{ marginTop: 12 }}>
                       <NavLink to="/map" className="button-tactical">Open Full Map</NavLink>
                     </div>
-          </div>
-        </div>
+                    <div className="tactical-panel" style={{ marginTop: 12 }}>
+                      <div className="panel-header"><div style={{ color: 'var(--accent)' }}>Playbooks</div></div>
+                      <div className="p-2" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 8 }}>
+                        <button className="button-tactical" onClick={() => { try { window.dispatchEvent(new CustomEvent('rtaip_query', { detail: 'Summary for last 24 hours' })); } catch {} }}>Daily Brief</button>
+                        <button className="button-tactical" onClick={() => { try { window.dispatchEvent(new CustomEvent('rtaip_query', { detail: 'Predict future anomalies' })); } catch {} }}>Predict Hotspots</button>
+                        <button className="button-tactical" onClick={() => { try { window.dispatchEvent(new CustomEvent('rtaip_query', { detail: 'List anomalies severity >= 7' })); } catch {} }}>High‑Severity Watch</button>
+                        <button className="button-tactical" onClick={() => { try { window.dispatchEvent(new CustomEvent('rtaip_query', { detail: 'Maritime risk last 72 hours' })); } catch {} }}>Maritime Risk</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
 
         <div className="tactical-panel" style={{ marginTop: 12 }}>
           <div className="panel-header">
@@ -1253,7 +1284,8 @@ function App() {
             </div>
           )}
         />
-        </Routes>
+          </Routes>
+
       )}
 
       <Routes>
@@ -1308,6 +1340,24 @@ function App() {
           </div>
         )} />
       </Routes>
+      {showAbout && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}>
+          <div className="tactical-panel" style={{ width: 'min(720px, 92vw)' }}>
+            <div className="panel-header" style={{ justifyContent: 'space-between' }}>
+              <div style={{ color: 'var(--accent)' }}>About Data Sources</div>
+              <button className="button-tactical" onClick={() => setShowAbout(false)}>Close</button>
+            </div>
+            <div className="p-3" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 8 }}>
+              <div className="tactical-panel"><div className="p-2">ADSB • Aircraft transponder signals; flight positions and headings.</div></div>
+              <div className="tactical-panel"><div className="p-2">AIS • Maritime vessel positions and identifiers.</div></div>
+              <div className="tactical-panel"><div className="p-2">USGS • Seismic events reported by USGS.</div></div>
+              <div className="tactical-panel"><div className="p-2">NOAA • Weather alerts and anomalies from NOAA.</div></div>
+              <div className="tactical-panel"><div className="p-2">NASA EONET • Curated natural events (fires, storms, volcanoes).</div></div>
+              <div className="tactical-panel"><div className="p-2">GDACS • Global disaster alerts and coordination system events.</div></div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
