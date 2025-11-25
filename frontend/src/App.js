@@ -124,6 +124,22 @@ function App() {
   const [metrics, setMetrics] = useState([]);
   const [apiInput, setApiInput] = useState(() => { try { return localStorage.getItem('rtaip_api') || ''; } catch { return ''; } });
   const [showAbout, setShowAbout] = useState(false);
+
+  const runAnalyst = async (q) => {
+    try {
+      const res = await fetch(`${API}/api/ai-analyst`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: q }) });
+      const data = await res.json();
+      setBriefingOutput(String(data?.output || 'No analysis available.'));
+      try {
+        const preds = data?.predictions_points || [];
+        if (Array.isArray(preds) && preds.length > 0) {
+          window.dispatchEvent(new CustomEvent('rtaip_predictions', { detail: preds }));
+        }
+      } catch {}
+    } catch (e) {
+      setBriefingOutput('Error contacting analyst API.');
+    }
+  };
   
   const baseStyles = ['light','dark','terrain','satellite','osm'];
    // API base configurable via environment; defaults to 8000
@@ -172,6 +188,11 @@ function App() {
         const anUrl = `${API}/anomalies${filters.bbox ? `?bbox=${encodeURIComponent(filters.bbox)}` : ''}`;
         const anomaliesRes = await fetch(anUrl);
         const anomaliesData = await anomaliesRes.json();
+        const anomalies7 = Array.isArray(anomaliesData) ? anomaliesData.filter(a => {
+          const ts = new Date(a.timestamp).getTime();
+          const now = Date.now();
+          return isFinite(ts) && (now - ts) <= (7 * 24 * 3600 * 1000);
+        }) : [];
 
         const filteredEvents = eventsData.filter(event => {
           const src = (event.source || '').toLowerCase();
@@ -203,7 +224,7 @@ function App() {
 
         if (!cancelled) {
           setEvents(filteredEvents);
-          setAnomalies(anomaliesData);
+          setAnomalies(anomalies7);
         }
 
         // Auto-seed if backend is online and DB appears empty
@@ -213,6 +234,11 @@ function App() {
           const eventsData2 = await eventsRes2.json();
           const anomaliesRes2 = await fetch(anUrl);
           const anomaliesData2 = await anomaliesRes2.json();
+          const anomalies72 = Array.isArray(anomaliesData2) ? anomaliesData2.filter(a => {
+            const ts = new Date(a.timestamp).getTime();
+            const now = Date.now();
+            return isFinite(ts) && (now - ts) <= (7 * 24 * 3600 * 1000);
+          }) : [];
 
           const filteredEvents2 = eventsData2.filter(event => {
             const src = (event.source || '').toLowerCase();
@@ -244,7 +270,7 @@ function App() {
 
           if (!cancelled) {
             setEvents(filteredEvents2);
-            setAnomalies(anomaliesData2);
+          setAnomalies(anomalies72);
           }
         }
       } catch (err) {
@@ -596,7 +622,7 @@ function App() {
                     <div style={{ fontSize: 13, opacity: 0.85 }}>See current anomalies, predicted hotspots by city, and set alerts for your area.</div>
                   </div>
                   <div style={{ display: 'flex', gap: 8 }}>
-                    <button className="button-tactical" onClick={() => { try { window.dispatchEvent(new CustomEvent('rtaip_query', { detail: 'Summary for last 24 hours' })); } catch {} }}>Start Briefing</button>
+                    <button className="button-tactical" onClick={() => runAnalyst('Summary for last 24 hours')}>Start Briefing</button>
                     <button className="button-tactical" onClick={() => setShowAbout(true)}>About Sources</button>
                   </div>
                 </div>
@@ -677,10 +703,10 @@ function App() {
                     <div className="tactical-panel" style={{ marginTop: 12 }}>
                       <div className="panel-header"><div style={{ color: 'var(--accent)' }}>Playbooks</div></div>
                       <div className="p-2" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 8 }}>
-                        <button className="button-tactical" onClick={() => { try { window.dispatchEvent(new CustomEvent('rtaip_query', { detail: 'Summary for last 24 hours' })); } catch {} }}>Daily Brief</button>
-                        <button className="button-tactical" onClick={() => { try { window.dispatchEvent(new CustomEvent('rtaip_query', { detail: 'Predict future anomalies' })); } catch {} }}>Predict Hotspots</button>
-                        <button className="button-tactical" onClick={() => { try { window.dispatchEvent(new CustomEvent('rtaip_query', { detail: 'List anomalies severity >= 7' })); } catch {} }}>High‑Severity Watch</button>
-                        <button className="button-tactical" onClick={() => { try { window.dispatchEvent(new CustomEvent('rtaip_query', { detail: 'Maritime risk last 72 hours' })); } catch {} }}>Maritime Risk</button>
+                        <button className="button-tactical" onClick={() => runAnalyst('Summary for last 24 hours')}>Daily Brief</button>
+                        <button className="button-tactical" onClick={() => runAnalyst('Predict future anomalies')}>Predict Hotspots</button>
+                        <button className="button-tactical" onClick={() => runAnalyst('List anomalies severity >= 7 last 7 days')}>High‑Severity Watch</button>
+                        <button className="button-tactical" onClick={() => runAnalyst('AIS GDACS disasters last 72 hours')}>Maritime Risk</button>
                       </div>
                     </div>
                   </div>
