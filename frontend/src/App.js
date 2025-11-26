@@ -164,6 +164,20 @@ function App() {
       return [];
     }
   };
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('https://restcountries.com/v3.1/all');
+        const data = await res.json();
+        const list = Array.isArray(data) ? data.map(c => ({ name: (c?.name?.common || '').trim(), value: c?.name?.common })).filter(x => x.name) : [];
+        list.sort((a,b)=>a.name.localeCompare(b.name));
+        if (!cancelled) setLocCountryOpts([{ name: 'All Countries', value: null }, ...list]);
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, []);
   
   const baseStyles = ['light','dark','terrain','satellite','osm'];
    // API base configurable via environment; defaults to 8000
@@ -618,37 +632,41 @@ function App() {
                 </div>
                 <div className="p-3" style={{ display: 'grid', gridTemplateColumns: (typeof window !== 'undefined' && window.innerWidth < 768) ? '1fr' : 'repeat(3, minmax(0, 1fr))', gap: 8 }}>
                   <div>
-                    <input className="button-tactical" placeholder="Search Country" value={locCountry} onChange={(e)=>setLocCountry(e.target.value)} />
-                    <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
-                      <button className="button-tactical" onClick={async()=>{ const opts = await geocodeSearch(locCountry || ''); setLocCountryOpts([{ name: 'All Countries', value: null }, ...opts.map(o=>({ name: o.name, value: o }))]); }}>Find</button>
-                      <select className="button-tactical" onChange={(e)=>{ const idx = e.target.selectedIndex; const val = idx>0 ? locCountryOpts[idx].value : null; setLocSelected(val); }}>
-                        {locCountryOpts.map((o,i)=>(<option key={i}>{o.name}</option>))}
-                      </select>
-                    </div>
+                    <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 4 }}>Country</div>
+                    <select className="button-tactical" value={locCountry} onChange={async (e)=>{
+                      const name = e.target.value; setLocCountry(name);
+                      if (!name) { setLocSelected(null); return; }
+                      const results = await geocodeSearch(name);
+                      const best = results[0] || null;
+                      setLocSelected(best);
+                      setLocStateOpts([{ name: 'All States', value: null }]);
+                      setLocCityOpts([{ name: 'All Cities', value: null }]);
+                    }}>
+                      {locCountryOpts.map((o,i)=>(<option key={i} value={o.value || ''}>{o.name}</option>))}
+                    </select>
                   </div>
                   <div>
-                    <input className="button-tactical" placeholder="Search State" value={locState} onChange={(e)=>setLocState(e.target.value)} />
-                    <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
-                      <button className="button-tactical" onClick={async()=>{ const opts = await geocodeSearch(`${locState} ${locCountry}`.trim()); setLocStateOpts([{ name: 'All States', value: null }, ...opts.map(o=>({ name: o.name, value: o }))]); }}>Find</button>
-                      <select className="button-tactical" onChange={(e)=>{ const idx = e.target.selectedIndex; const val = idx>0 ? locStateOpts[idx].value : null; setLocSelected(val || locSelected); }}>
-                        {locStateOpts.map((o,i)=>(<option key={i}>{o.name}</option>))}
-                      </select>
+                    <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 4 }}>State/Region</div>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <input className="button-tactical" placeholder="Search State/Region" value={locState} onChange={(e)=>setLocState(e.target.value)} />
+                      <button className="button-tactical" disabled={!locCountry} onClick={async()=>{ const q = `${locState} ${locCountry}`.trim(); const opts = await geocodeSearch(q); setLocStateOpts([{ name: 'All States', value: null }, ...opts.map(o=>({ name: o.name, value: o }))]); }}>Find</button>
                     </div>
+                    <select className="button-tactical" disabled={locStateOpts.length===0} onChange={(e)=>{ const idx = e.target.selectedIndex; const val = idx>0 ? locStateOpts[idx].value : null; setLocSelected(val || locSelected); }}>
+                      {locStateOpts.map((o,i)=>(<option key={i}>{o.name}</option>))}
+                    </select>
                   </div>
                   <div>
-                    <input className="button-tactical" placeholder="Search City" value={locCity} onChange={(e)=>setLocCity(e.target.value)} />
-                    <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
-                      <button className="button-tactical" onClick={async()=>{ const opts = await geocodeSearch(`${locCity} ${locState} ${locCountry}`.trim()); setLocCityOpts([{ name: 'All Cities', value: null }, ...opts.map(o=>({ name: o.name, value: o }))]); }}>Find</button>
-                      <select className="button-tactical" onChange={(e)=>{ const idx = e.target.selectedIndex; const val = idx>0 ? locCityOpts[idx].value : null; setLocSelected(val || locSelected); }}>
-                        {locCityOpts.map((o,i)=>(<option key={i}>{o.name}</option>))}
-                      </select>
+                    <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 4 }}>City</div>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <input className="button-tactical" placeholder="Search City" value={locCity} onChange={(e)=>setLocCity(e.target.value)} />
+                      <button className="button-tactical" disabled={!locCountry} onClick={async()=>{ const q = `${locCity} ${locState} ${locCountry}`.trim(); const opts = await geocodeSearch(q); setLocCityOpts([{ name: 'All Cities', value: null }, ...opts.map(o=>({ name: o.name, value: o }))]); }}>Find</button>
                     </div>
+                    <select className="button-tactical" disabled={locCityOpts.length===0} onChange={(e)=>{ const idx = e.target.selectedIndex; const val = idx>0 ? locCityOpts[idx].value : null; setLocSelected(val || locSelected); }}>
+                      {locCityOpts.map((o,i)=>(<option key={i}>{o.name}</option>))}
+                    </select>
                   </div>
                 </div>
-                <div className="p-3" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <div style={{ fontSize: 12, opacity: 0.8 }}>Radius (km) for prediction focus</div>
-                  <input className="button-tactical" type="number" value={locRadiusKm} onChange={(e)=>setLocRadiusKm(Number(e.target.value)||50)} style={{ width: 120 }} />
-                </div>
+                {/* Radius removed per request; using default internally */}
                 <div className="p-3" style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                   <button className="button-tactical" onClick={() => navigate('/database')}>Back</button>
                   <button className="button-tactical" onClick={() => {
