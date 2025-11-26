@@ -232,6 +232,19 @@ const MapComponent = ({ events, anomalies, focusEventId, onSelect, basemapStyle,
     return () => { window.removeEventListener('rtaip_predictions', handler); };
   }, []);
 
+  useEffect(() => {
+    const handler = (e) => {
+      const map = mapInstanceRef.current;
+      if (!map) return;
+      const d = (e && e.detail) || {};
+      const lon = d.lon, lat = d.lat; const zoom = d.zoom || 6;
+      if (lon == null || lat == null) return;
+      map.getView().animate({ center: fromLonLat([lon, lat]), zoom, duration: 500 });
+    };
+    window.addEventListener('rtaip_focus', handler);
+    return () => { window.removeEventListener('rtaip_focus', handler); };
+  }, []);
+
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       <div ref={mapRef} style={{ position: 'absolute', inset: 0 }} />
