@@ -601,12 +601,76 @@ function App() {
                   <div style={{ width: `${Math.round((selectedSources.length / sourceCardDefs.length) * 100)}%`, height: '100%', background: 'var(--accent)', transition: 'width 300ms ease' }} />
                 </div>
               </div>
-              <button className="button-tactical" disabled={selectedSources.length === 0} onClick={() => { setShowSourceSelect(false); navigate('/'); }}>Continue</button>
+              <button className="button-tactical" disabled={selectedSources.length === 0} onClick={() => { setShowSourceSelect(false); navigate('/location'); }}>Continue</button>
             </div>
           </div>
         </div>
       ) : (
         <Routes>
+        <Route
+          path="/location"
+          element={(
+            <div className="p-4">
+              <div className="tactical-panel" style={{ margin: '12px 0' }}>
+                <div className="panel-header" style={{ justifyContent: 'space-between' }}>
+                  <div style={{ color: 'var(--accent)' }}>Choose Location</div>
+                  <div style={{ fontSize: 12, opacity: 0.8 }}>Select Country, State, City or choose All</div>
+                </div>
+                <div className="p-3" style={{ display: 'grid', gridTemplateColumns: (typeof window !== 'undefined' && window.innerWidth < 768) ? '1fr' : 'repeat(3, minmax(0, 1fr))', gap: 8 }}>
+                  <div>
+                    <input className="button-tactical" placeholder="Search Country" value={locCountry} onChange={(e)=>setLocCountry(e.target.value)} />
+                    <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                      <button className="button-tactical" onClick={async()=>{ const opts = await geocodeSearch(locCountry || ''); setLocCountryOpts([{ name: 'All Countries', value: null }, ...opts.map(o=>({ name: o.name, value: o }))]); }}>Find</button>
+                      <select className="button-tactical" onChange={(e)=>{ const idx = e.target.selectedIndex; const val = idx>0 ? locCountryOpts[idx].value : null; setLocSelected(val); }}>
+                        {locCountryOpts.map((o,i)=>(<option key={i}>{o.name}</option>))}
+                      </select>
+                    </div>
+                  </div>
+                  <div>
+                    <input className="button-tactical" placeholder="Search State" value={locState} onChange={(e)=>setLocState(e.target.value)} />
+                    <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                      <button className="button-tactical" onClick={async()=>{ const opts = await geocodeSearch(`${locState} ${locCountry}`.trim()); setLocStateOpts([{ name: 'All States', value: null }, ...opts.map(o=>({ name: o.name, value: o }))]); }}>Find</button>
+                      <select className="button-tactical" onChange={(e)=>{ const idx = e.target.selectedIndex; const val = idx>0 ? locStateOpts[idx].value : null; setLocSelected(val || locSelected); }}>
+                        {locStateOpts.map((o,i)=>(<option key={i}>{o.name}</option>))}
+                      </select>
+                    </div>
+                  </div>
+                  <div>
+                    <input className="button-tactical" placeholder="Search City" value={locCity} onChange={(e)=>setLocCity(e.target.value)} />
+                    <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                      <button className="button-tactical" onClick={async()=>{ const opts = await geocodeSearch(`${locCity} ${locState} ${locCountry}`.trim()); setLocCityOpts([{ name: 'All Cities', value: null }, ...opts.map(o=>({ name: o.name, value: o }))]); }}>Find</button>
+                      <select className="button-tactical" onChange={(e)=>{ const idx = e.target.selectedIndex; const val = idx>0 ? locCityOpts[idx].value : null; setLocSelected(val || locSelected); }}>
+                        {locCityOpts.map((o,i)=>(<option key={i}>{o.name}</option>))}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+                <div className="p-3" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <div style={{ fontSize: 12, opacity: 0.8 }}>Radius (km) for prediction focus</div>
+                  <input className="button-tactical" type="number" value={locRadiusKm} onChange={(e)=>setLocRadiusKm(Number(e.target.value)||50)} style={{ width: 120 }} />
+                </div>
+                <div className="p-3" style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                  <button className="button-tactical" onClick={() => navigate('/database')}>Back</button>
+                  <button className="button-tactical" onClick={() => {
+                    try {
+                      const loc = locSelected;
+                      if (loc && loc.bbox) {
+                        const bbox = `${loc.bbox[0]},${loc.bbox[2]},${loc.bbox[1]},${loc.bbox[3]}`;
+                        setFilters(f => ({ ...f, bbox }));
+                        const center = [loc.lon, loc.lat];
+                        window.dispatchEvent(new CustomEvent('rtaip_focus', { detail: { lon: center[0], lat: center[1], zoom: 6 } }));
+                        runAnalyst(`Predict future anomalies near:${loc.lat},${loc.lon} radius:${Math.round(locRadiusKm)}km last 7 days`);
+                      } else {
+                        setFilters(f => ({ ...f, bbox: undefined }));
+                      }
+                    } catch {}
+                    navigate('/');
+                  }}>Apply</button>
+                </div>
+              </div>
+            </div>
+          )}
+        />
         <Route
           path="/"
           element={(
@@ -728,7 +792,13 @@ function App() {
                       <div className="panel-header"><div style={{ color: 'var(--accent)' }}>Playbooks</div></div>
                       <div className="p-2" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 8 }}>
                         <button className="button-tactical" onClick={() => runAnalyst('Summary for last 24 hours')}>Daily Brief</button>
-                        <button className="button-tactical" onClick={() => runAnalyst('Predict future anomalies')}>Predict Hotspots</button>
+                        <button className="button-tactical" onClick={() => {
+                          if (locSelected && locSelected.lat != null && locSelected.lon != null) {
+                            runAnalyst(`Predict future anomalies near:${locSelected.lat},${locSelected.lon} radius:${Math.round(locRadiusKm)}km last 7 days`);
+                          } else {
+                            runAnalyst('Predict future anomalies');
+                          }
+                        }}>Predict Hotspots</button>
                         <button className="button-tactical" onClick={() => runAnalyst('List anomalies severity >= 7 last 7 days')}>High‑Severity Watch</button>
                         <button className="button-tactical" onClick={() => runAnalyst('AIS GDACS disasters last 72 hours')}>Maritime Risk</button>
                       </div>
