@@ -1,15 +1,17 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 const suggestions = [
+  'Explain current dashboard',
+  'Operational recommendations for current situation',
   'Summary for last 24 hours',
   'How many anomalies by source in last 7 days',
-  'List anomalies severity >= 6 in bbox:33,-120,40,-100',
   'Hotspots for anomalies last 24 hours',
   'Trend of anomalies over time',
   'Predict future anomalies',
+  'Warroom readiness checklist',
 ];
 
-const ChatPanel = ({ apiBase }) => {
+const ChatPanel = ({ apiBase, events = [], anomalies = [], filters = {}, sourceCounts = {}, threatScore = null, intelSummary = [] }) => {
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState(() => {
     try { const raw = sessionStorage.getItem('rtaip_chat'); return raw ? JSON.parse(raw) : []; } catch { return []; }
@@ -18,6 +20,16 @@ const ChatPanel = ({ apiBase }) => {
   const [sessionId] = useState(() => Math.random().toString(36).slice(2));
   const listRef = useRef(null);
   const [showLatestOnly, setShowLatestOnly] = useState(true);
+  const ctx = useMemo(() => {
+    const srcs = Object.entries(sourceCounts).map(([k,v]) => ({ source: k, count: v }));
+    return {
+      filters,
+      counts: { events: events.length, anomalies: anomalies.length },
+      sources: srcs,
+      threat: threatScore,
+      intel: intelSummary,
+    };
+  }, [events, anomalies, filters, sourceCounts, threatScore, intelSummary]);
 
   useEffect(() => {
     try { sessionStorage.setItem('rtaip_chat', JSON.stringify(messages)); } catch {}
@@ -61,7 +73,7 @@ const ChatPanel = ({ apiBase }) => {
       const to = setTimeout(() => { try { ctl.abort(); } catch {} }, 12000);
       const res = await fetch(`${apiBase}/api/ai-analyst`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: q, sessionId }), signal: ctl.signal
+        body: JSON.stringify({ query: q, sessionId, context: ctx }), signal: ctl.signal
       });
       clearTimeout(to);
       const data = await res.json();
