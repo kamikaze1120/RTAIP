@@ -12,6 +12,19 @@ import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Tooltip, Legend } from 'chart.js';
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Tooltip, Legend);
 
+function getCache(key, ttlMs) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const obj = JSON.parse(raw);
+    if (!obj || !obj.ts || (Date.now() - obj.ts) > ttlMs) return null;
+    return obj.data;
+  } catch { return null; }
+}
+
+function setCache(key, data) {
+  try { localStorage.setItem(key, JSON.stringify({ ts: Date.now(), data })); } catch {}
+}
 // helper to parse anomaly description to extract model metadata early
 const parseAnomalyMeta = (anom) => {
   const desc = (anom?.description || '');
@@ -125,6 +138,7 @@ function App() {
   const [macroData, setMacroData] = useState({ gdpGrowth: [], inflation: [], unemployment: [] });
   const [apiInput, setApiInput] = useState(() => { try { return localStorage.getItem('rtaip_api') || ''; } catch { return ''; } });
   const [showAbout, setShowAbout] = useState(false);
+  const [activeTab, setActiveTab] = useState('overview');
   
 
   const runAnalyst = async (q) => {
@@ -187,11 +201,16 @@ function App() {
         const startStr = `${twoYearsAgo.getFullYear()}-${String(twoYearsAgo.getMonth()+1).padStart(2,'0')}-${String(twoYearsAgo.getDate()).padStart(2,'0')}`;
         const endStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
 
-        const eonetOpenRes = await fetch(`https://eonet.gsfc.nasa.gov/api/v3/events?status=open&start=${startStr}&end=${endStr}`);
-        const eonetClosedRes = await fetch(`https://eonet.gsfc.nasa.gov/api/v3/events?status=closed&start=${startStr}&end=${endStr}`);
-        const eonetOpen = await eonetOpenRes.json();
-        const eonetClosed = await eonetClosedRes.json();
-        const eonetEvents = [ ...(Array.isArray(eonetOpen?.events)?eonetOpen.events:[]), ...(Array.isArray(eonetClosed?.events)?eonetClosed.events:[]) ];
+        const eonetKey = `cache_eonet_${startStr}_${endStr}`;
+        let eonetEvents = getCache(eonetKey, 30 * 60 * 1000);
+        if (!Array.isArray(eonetEvents)) {
+          const eonetOpenRes = await fetch(`https://eonet.gsfc.nasa.gov/api/v3/events?status=open&start=${startStr}&end=${endStr}`);
+          const eonetClosedRes = await fetch(`https://eonet.gsfc.nasa.gov/api/v3/events?status=closed&start=${startStr}&end=${endStr}`);
+          const eonetOpen = await eonetOpenRes.json();
+          const eonetClosed = await eonetClosedRes.json();
+          eonetEvents = [ ...(Array.isArray(eonetOpen?.events)?eonetOpen.events:[]), ...(Array.isArray(eonetClosed?.events)?eonetClosed.events:[]) ];
+          setCache(eonetKey, eonetEvents);
+        }
         const nasaEvents = eonetEvents.map((ev, idx) => {
           const g = Array.isArray(ev.geometry) && ev.geometry.length > 0 ? ev.geometry[0] : null;
           const coords = g && Array.isArray(g.coordinates) ? g.coordinates : null;
@@ -239,11 +258,15 @@ function App() {
         const wbFetch = async (country, indicator) => {
           const startYear = twoYearsAgo.getFullYear();
           const endYear = now.getFullYear();
-          const url = `https://api.worldbank.org/v2/country/${country}/indicator/${indicator}?date=${startYear}:${endYear}&format=json&per_page=1000`;
-          const r = await fetch(url);
-          const j = await r.json();
-          const arr = Array.isArray(j) && Array.isArray(j[1]) ? j[1] : [];
-          let pts = arr.map(d => ({ date: d.date, value: d.value, country })).filter(p => p.value != null);
+          const key = `cache_wb_${country}_${indicator}_${startYear}_${endYear}`;
+          let pts = getCache(key, 24 * 3600 * 1000);
+          if (!Array.isArray(pts)) {
+            const url = `https://api.worldbank.org/v2/country/${country}/indicator/${indicator}?date=${startYear}:${endYear}&format=json&per_page=1000`;
+            const r = await fetch(url);
+            const j = await r.json();
+            const arr = Array.isArray(j) && Array.isArray(j[1]) ? j[1] : [];
+            pts = arr.map(d => ({ date: d.date, value: d.value, country })).filter(p => p.value != null);
+          }
           if (pts.filter(p => Number(p.date) >= startYear).length < 2) {
             const fallback = `https://api.worldbank.org/v2/country/${country}/indicator/${indicator}?date=${startYear-5}:${endYear}&format=json&per_page=1000`;
             const r2 = await fetch(fallback);
@@ -251,7 +274,9 @@ function App() {
             const arr2 = Array.isArray(j2) && Array.isArray(j2[1]) ? j2[1] : [];
             pts = arr2.map(d => ({ date: d.date, value: d.value, country })).filter(p => p.value != null);
           }
-          return pts.sort((a,b)=>Number(a.date)-Number(b.date));
+          pts = pts.sort((a,b)=>Number(a.date)-Number(b.date));
+          setCache(key, pts);
+          return pts;
         };
         const gdpWld = await wbFetch('WLD','NY.GDP.MKTP.KD.ZG');
         const gdpUsa = await wbFetch('USA','NY.GDP.MKTP.KD.ZG');
@@ -617,7 +642,18 @@ function App() {
                   </div>
                 </div>
               </div>
-              <div className="flex flex-1" style={{ minHeight: 'calc(100vh - 60px)' }}>
+              <div className="tactical-panel" style={{ marginBottom: 12 }}>
+                <div className="panel-header" style={{ justifyContent: 'space-between' }}>
+                  <div style={{ color: 'var(--accent)' }}>Workspace</div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <div className={`button-tactical ${activeTab==='overview'?'active':''}`} onClick={()=>setActiveTab('overview')}>Overview</div>
+                    <div className={`button-tactical ${activeTab==='map'?'active':''}`} onClick={()=>setActiveTab('map')}>Map</div>
+                    <div className={`button-tactical ${activeTab==='timeline'?'active':''}`} onClick={()=>setActiveTab('timeline')}>Timeline</div>
+                    <div className={`button-tactical ${activeTab==='analyst'?'active':''}`} onClick={()=>setActiveTab('analyst')}>Analyst</div>
+                  </div>
+                </div>
+              </div>
+              <div className="flex flex-1" style={{ minHeight: 'calc(100vh - 60px)', display: activeTab==='overview'?'flex':'none' }}>
               <div className="w-1/4 p-4">
                 <div className="tactical-panel">
                   <div className="panel-header">
@@ -1079,6 +1115,48 @@ function App() {
                     </div>
                   </div>
                 </div>
+              </div>
+              <div style={{ display: activeTab==='map'?'block':'none', width: '100%' }} className="p-4">
+                <div className="tactical-panel" style={{ marginBottom: 12 }}>
+                  <div className="panel-header" style={{ justifyContent: 'space-between' }}>
+                    <div style={{ color: 'var(--accent)' }}>Map Controls</div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <select className="button-tactical" value={filters.window || 'last 24 hours'} onChange={(e)=>setFilters(f=>({ ...f, window: e.target.value }))}>
+                        <option>last hour</option>
+                        <option>last 24 hours</option>
+                        <option>last 7 days</option>
+                      </select>
+                      <div className="button-tactical" onClick={()=>setFilters(f=>({ ...f, source: 'nasa_eonet' }))}>NASA EONET</div>
+                      <div className="button-tactical" onClick={()=>setFilters(f=>({ ...f, source: undefined }))}>All</div>
+                      <div className="button-tactical" onClick={()=>setFilters(f=>({ ...f, anomaliesOnly: !f.anomaliesOnly }))}>{filters.anomaliesOnly ? 'Anomalies: ON' : 'Anomalies: OFF'}</div>
+                      <div className="button-tactical" onClick={()=>setFilters(f=>({ ...f, bbox: '' }))}>Clear bbox</div>
+                    </div>
+                  </div>
+                </div>
+                <div className="tactical-panel" style={{ height: 'calc(100vh - 180px)' }}>
+                  <MapComponent events={events} selectedEventId={selectedEventId} onSelect={handleSelectEvent} useWebGL={useWebGL} />
+                </div>
+              </div>
+              <div style={{ display: activeTab==='timeline'?'block':'none', width: '100%' }} className="p-4">
+                <div className="tactical-panel" style={{ marginBottom: 12 }}>
+                  <div className="panel-header" style={{ justifyContent: 'space-between' }}>
+                    <div style={{ color: 'var(--accent)' }}>Timeline</div>
+                    <div className="button-tactical" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>Top</div>
+                  </div>
+                </div>
+                <div className="tactical-panel" style={{ marginBottom: 12 }}>
+                  <div className="p-2">
+                    <ReplayTimeline events={events} onTimeChange={handleTimeChange} />
+                  </div>
+                </div>
+                <div className="tactical-panel">
+                  <div className="p-2">
+                    <EventFeed events={visibleEvents} anomalies={visibleAnomalies} onSelect={handleSelectEvent} selectedEventId={selectedEventId} />
+                  </div>
+                </div>
+              </div>
+              <div style={{ display: activeTab==='analyst'?'block':'none', width: '100%' }} className="p-4">
+                <ChatPanel apiBase={API} events={visibleEvents} anomalies={visibleAnomalies} filters={filters} sourceCounts={sourceCounts} threatScore={threatScore} intelSummary={intelSummary} />
               </div>
               </div>
             </>
