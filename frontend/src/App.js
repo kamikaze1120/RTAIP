@@ -234,7 +234,7 @@ function App() {
 
         // Auto-seed if backend is online and DB appears empty
         if (healthRes.ok && eventsData.length === 0) {
-          await fetch(`${API}/seed`);
+          try { await fetch(`${API}/perf/seed_many?count=1000`, { method: 'POST' }); } catch {}
           const eventsRes2 = await fetch(evUrl);
           const eventsData2 = await eventsRes2.json();
           const anomaliesRes2 = await fetch(anUrl);
