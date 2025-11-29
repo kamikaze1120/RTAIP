@@ -182,10 +182,17 @@ function App() {
       try {
         const healthRes = await fetch(`${API}/health`).catch(()=>({ ok: false }));
         if (!cancelled) setBackendOnline(!!(healthRes && healthRes.ok));
+        const now = new Date();
+        const twoYearsAgo = new Date(now.getFullYear() - 2, now.getMonth(), now.getDate());
+        const startStr = `${twoYearsAgo.getFullYear()}-${String(twoYearsAgo.getMonth()+1).padStart(2,'0')}-${String(twoYearsAgo.getDate()).padStart(2,'0')}`;
+        const endStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
 
-        const eonetRes = await fetch('https://eonet.gsfc.nasa.gov/api/v3/events?status=open');
-        const eonetData = await eonetRes.json();
-        const nasaEvents = Array.isArray(eonetData?.events) ? eonetData.events.map((ev, idx) => {
+        const eonetOpenRes = await fetch(`https://eonet.gsfc.nasa.gov/api/v3/events?status=open&start=${startStr}&end=${endStr}`);
+        const eonetClosedRes = await fetch(`https://eonet.gsfc.nasa.gov/api/v3/events?status=closed&start=${startStr}&end=${endStr}`);
+        const eonetOpen = await eonetOpenRes.json();
+        const eonetClosed = await eonetClosedRes.json();
+        const eonetEvents = [ ...(Array.isArray(eonetOpen?.events)?eonetOpen.events:[]), ...(Array.isArray(eonetClosed?.events)?eonetClosed.events:[]) ];
+        const nasaEvents = eonetEvents.map((ev, idx) => {
           const g = Array.isArray(ev.geometry) && ev.geometry.length > 0 ? ev.geometry[0] : null;
           const coords = g && Array.isArray(g.coordinates) ? g.coordinates : null;
           const lon = coords && typeof coords[0] === 'number' ? coords[0] : null;
@@ -199,7 +206,7 @@ function App() {
             confidence: 1,
             data: { title: ev.title, categories: ev.categories }
           };
-        }) : [];
+        });
 
         const filteredEvents = nasaEvents.filter(event => {
           const src = (event.source || '').toLowerCase();
@@ -230,11 +237,21 @@ function App() {
         }
 
         const wbFetch = async (country, indicator) => {
-          const url = `https://api.worldbank.org/v2/country/${country}/indicator/${indicator}?date=2000:2024&format=json`;
+          const startYear = twoYearsAgo.getFullYear();
+          const endYear = now.getFullYear();
+          const url = `https://api.worldbank.org/v2/country/${country}/indicator/${indicator}?date=${startYear}:${endYear}&format=json&per_page=1000`;
           const r = await fetch(url);
           const j = await r.json();
           const arr = Array.isArray(j) && Array.isArray(j[1]) ? j[1] : [];
-          return arr.map(d => ({ date: d.date, value: d.value, country }));
+          let pts = arr.map(d => ({ date: d.date, value: d.value, country })).filter(p => p.value != null);
+          if (pts.filter(p => Number(p.date) >= startYear).length < 2) {
+            const fallback = `https://api.worldbank.org/v2/country/${country}/indicator/${indicator}?date=${startYear-5}:${endYear}&format=json&per_page=1000`;
+            const r2 = await fetch(fallback);
+            const j2 = await r2.json();
+            const arr2 = Array.isArray(j2) && Array.isArray(j2[1]) ? j2[1] : [];
+            pts = arr2.map(d => ({ date: d.date, value: d.value, country })).filter(p => p.value != null);
+          }
+          return pts.sort((a,b)=>Number(a.date)-Number(b.date));
         };
         const gdpWld = await wbFetch('WLD','NY.GDP.MKTP.KD.ZG');
         const gdpUsa = await wbFetch('USA','NY.GDP.MKTP.KD.ZG');
