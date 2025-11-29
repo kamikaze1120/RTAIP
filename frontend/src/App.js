@@ -122,6 +122,7 @@ function App() {
   const [alertRules, setAlertRules] = useState([]);
   const [alertForm, setAlertForm] = useState({ name: '', source: '', severity_threshold: 5, min_confidence: 0.5, min_lat: '', min_lon: '', max_lat: '', max_lon: '', email_to: '' });
   const [metrics, setMetrics] = useState([]);
+  const [macroData, setMacroData] = useState({ gdpGrowth: [], inflation: [], unemployment: [] });
   const [apiInput, setApiInput] = useState(() => { try { return localStorage.getItem('rtaip_api') || ''; } catch { return ''; } });
   const [showAbout, setShowAbout] = useState(false);
   
@@ -150,12 +151,8 @@ function App() {
    // API base configurable via environment; defaults to 8000
    const API = (() => { try { const o = localStorage.getItem('rtaip_api'); if (o) return o; } catch {} return process.env.REACT_APP_API_URL || 'https://rtaip-production.up.railway.app'; })();
   const sourceCardDefs = useMemo(() => ([
-    { key: 'adsb', title: 'ADSB', desc: 'Aircraft transponder signals; flight positions and headings.' },
-    { key: 'ais', title: 'AIS', desc: 'Maritime vessel positions and identifiers.' },
-    { key: 'usgs_seismic', title: 'USGS', desc: 'Seismic event feeds reported by USGS.' },
-    { key: 'noaa_weather', title: 'NOAA', desc: 'Weather alerts and anomalies from NOAA.' },
-    { key: 'nasa_eonet', title: 'EONET', desc: 'NASA curated natural events (fires, storms, volcanoes).' },
-    { key: 'gdacs_disasters', title: 'GDACS', desc: 'Global disaster alerts and coordination system events.' }
+    { key: 'worldbank', title: 'World Bank', desc: 'Global macroeconomic indicators (GDP, Inflation, Unemployment).' },
+    { key: 'nasa_eonet', title: 'NASA EONET', desc: 'Natural event intelligence (fires, storms, volcanoes).' }
   ]), []);
 
   useEffect(() => {
@@ -183,31 +180,31 @@ function App() {
     let cancelled = false;
     const fetchData = async () => {
       try {
-        const healthRes = await fetch(`${API}/health`);
-        if (!cancelled) setBackendOnline(healthRes.ok);
+        const healthRes = await fetch(`${API}/health`).catch(()=>({ ok: false }));
+        if (!cancelled) setBackendOnline(!!(healthRes && healthRes.ok));
 
-        const evUrl = `${API}/events${filters.bbox ? `?bbox=${encodeURIComponent(filters.bbox)}` : ''}`;
-        const eventsRes = await fetch(evUrl);
-        const eventsData = await eventsRes.json();
-
-        const anUrl = `${API}/anomalies${filters.bbox ? `?bbox=${encodeURIComponent(filters.bbox)}` : ''}`;
-        const anomaliesRes = await fetch(anUrl);
-        const anomaliesData = await anomaliesRes.json();
-        const anomalies7 = Array.isArray(anomaliesData) ? anomaliesData.filter(a => {
-          const ts = new Date(a.timestamp).getTime();
-          const now = Date.now();
-          return isFinite(ts) && (now - ts) <= (7 * 24 * 3600 * 1000);
+        const eonetRes = await fetch('https://eonet.gsfc.nasa.gov/api/v3/events?status=open');
+        const eonetData = await eonetRes.json();
+        const nasaEvents = Array.isArray(eonetData?.events) ? eonetData.events.map((ev, idx) => {
+          const g = Array.isArray(ev.geometry) && ev.geometry.length > 0 ? ev.geometry[0] : null;
+          const coords = g && Array.isArray(g.coordinates) ? g.coordinates : null;
+          const lon = coords && typeof coords[0] === 'number' ? coords[0] : null;
+          const lat = coords && typeof coords[1] === 'number' ? coords[1] : null;
+          return {
+            id: ev.id || `${ev.title}-${idx}`,
+            timestamp: g?.date || ev?.closed || new Date().toISOString(),
+            source: 'nasa_eonet',
+            latitude: lat,
+            longitude: lon,
+            confidence: 1,
+            data: { title: ev.title, categories: ev.categories }
+          };
         }) : [];
 
-        const filteredEvents = eventsData.filter(event => {
+        const filteredEvents = nasaEvents.filter(event => {
           const src = (event.source || '').toLowerCase();
           if (Array.isArray(selectedSources) && selectedSources.length > 0 && !selectedSources.includes(src)) return false;
           if (filters.source && src !== filters.source) return false;
-          const hasAnom = anomaliesData.some(a => a.event_id === event.id);
-          if (filters.anomaliesOnly && !hasAnom) return false;
-          const confOk = typeof event.confidence === 'number' ? event.confidence >= (filters.minConf || 0) : true;
-          if (!confOk) return false;
-          if ((filters.minSev || 0) > 0 && !anomaliesData.some(a => a.event_id === event.id && (a.severity || 0) >= (filters.minSev || 0))) return false;
           if (filters.window) {
             const now = Date.now();
             const ts = new Date(event.timestamp).getTime();
@@ -229,57 +226,30 @@ function App() {
 
         if (!cancelled) {
           setEvents(filteredEvents);
-          setAnomalies(anomalies7);
+          setAnomalies([]);
         }
 
-        // Auto-seed if backend is online and DB appears empty
-        if (healthRes.ok && eventsData.length === 0) {
-          try { await fetch(`${API}/perf/seed_many?count=1000`, { method: 'POST' }); } catch {}
-          const eventsRes2 = await fetch(evUrl);
-          const eventsData2 = await eventsRes2.json();
-          const anomaliesRes2 = await fetch(anUrl);
-          const anomaliesData2 = await anomaliesRes2.json();
-          const anomalies72 = Array.isArray(anomaliesData2) ? anomaliesData2.filter(a => {
-            const ts = new Date(a.timestamp).getTime();
-            const now = Date.now();
-            return isFinite(ts) && (now - ts) <= (7 * 24 * 3600 * 1000);
-          }) : [];
-
-          const filteredEvents2 = eventsData2.filter(event => {
-            const src = (event.source || '').toLowerCase();
-            if (Array.isArray(selectedSources) && selectedSources.length > 0 && !selectedSources.includes(src)) return false;
-            if (filters.source && src !== filters.source) return false;
-            const hasAnom2 = anomaliesData2.some(a => a.event_id === event.id);
-            if (filters.anomaliesOnly && !hasAnom2) return false;
-            const confOk2 = typeof event.confidence === 'number' ? event.confidence >= (filters.minConf || 0) : true;
-            if (!confOk2) return false;
-            if ((filters.minSev || 0) > 0 && !anomaliesData2.some(a => a.event_id === event.id && (a.severity || 0) >= (filters.minSev || 0))) return false;
-            if (filters.window) {
-              const now = Date.now();
-              const ts = new Date(event.timestamp).getTime();
-              const w = (filters.window || '').toLowerCase();
-              let maxMs = 24 * 3600 * 1000;
-              if (w.includes('hour') && !w.includes('24')) maxMs = 3600 * 1000;
-              if (w.includes('7')) maxMs = 7 * 24 * 3600 * 1000;
-              if (isFinite(ts) && now - ts > maxMs) return false;
-            }
-            if ((filters.search || '').trim()) {
-              const q = (filters.search || '').toLowerCase();
-              const idStr = String(event.id || '').toLowerCase();
-              const srcStr = String(event.source || '').toLowerCase();
-              const dataStr = JSON.stringify(event.data || {}).toLowerCase();
-              if (!(idStr.includes(q) || srcStr.includes(q) || dataStr.includes(q))) return false;
-            }
-            return true;
+        const wbFetch = async (country, indicator) => {
+          const url = `https://api.worldbank.org/v2/country/${country}/indicator/${indicator}?date=2000:2024&format=json`;
+          const r = await fetch(url);
+          const j = await r.json();
+          const arr = Array.isArray(j) && Array.isArray(j[1]) ? j[1] : [];
+          return arr.map(d => ({ date: d.date, value: d.value, country }));
+        };
+        const gdpWld = await wbFetch('WLD','NY.GDP.MKTP.KD.ZG');
+        const gdpUsa = await wbFetch('USA','NY.GDP.MKTP.KD.ZG');
+        const infWld = await wbFetch('WLD','FP.CPI.TOTL.ZG');
+        const infUsa = await wbFetch('USA','FP.CPI.TOTL.ZG');
+        const uemWld = await wbFetch('WLD','SL.UEM.TOTL.ZS');
+        const uemUsa = await wbFetch('USA','SL.UEM.TOTL.ZS');
+        if (!cancelled) {
+          setMacroData({
+            gdpGrowth: [ { label: 'WLD', points: gdpWld }, { label: 'USA', points: gdpUsa } ],
+            inflation: [ { label: 'WLD', points: infWld }, { label: 'USA', points: infUsa } ],
+            unemployment: [ { label: 'WLD', points: uemWld }, { label: 'USA', points: uemUsa } ]
           });
-
-          if (!cancelled) {
-            setEvents(filteredEvents2);
-          setAnomalies(anomalies72);
-          }
         }
       } catch (err) {
-        console.error('Failed to fetch backend data', err);
         if (!cancelled) {
           setBackendOnline(false);
           setEvents([]);
@@ -290,10 +260,7 @@ function App() {
 
     fetchData();
     const interval = setInterval(fetchData, refreshInterval);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
+    return () => { cancelled = true; clearInterval(interval); };
   }, [filters, refreshInterval, API, selectedSources]);
 
   useEffect(() => {
@@ -1261,6 +1228,33 @@ function App() {
                       <div className="button-tactical" onClick={()=>setFilters(f=>({ ...f, bbox: '' }))}>Clear bbox</div>
                       <div className="button-tactical" onClick={()=>setFilters(f=>({ ...f, search: '' }))}>Clear search</div>
                     </div>
+                  </div>
+                </div>
+                <div className="tactical-panel" style={{ marginBottom: 12 }}>
+                  <div className="panel-header" style={{ justifyContent: 'space-between' }}>
+                    <div style={{ color: 'var(--accent)' }}>Macro Dashboard</div>
+                  </div>
+                  <div className="p-2" style={{ display: 'grid', gridTemplateColumns: (typeof window !== 'undefined' && window.innerWidth < 768) ? '1fr' : 'repeat(3, minmax(0, 1fr))', gap: 12 }}>
+                    {(() => {
+                      const mkData = (series) => {
+                        const labels = Array.from(new Set(series.flatMap(s => s.points.map(p => p.date)))).sort();
+                        const datasets = series.map(s => ({ label: s.label, data: labels.map(l => {
+                          const p = s.points.find(pp => pp.date === l);
+                          return p && typeof p.value === 'number' ? p.value : null;
+                        }), borderColor: s.label === 'WLD' ? '#00ffc6' : '#6f42c1', backgroundColor: 'rgba(0,255,198,0.15)' }));
+                        return { labels, datasets };
+                      };
+                      const gdp = mkData(macroData.gdpGrowth || []);
+                      const inf = mkData(macroData.inflation || []);
+                      const uem = mkData(macroData.unemployment || []);
+                      return (
+                        <>
+                          <div className="tactical-panel"><div className="p-2"><div style={{ marginBottom: 6, color: 'var(--accent)' }}>GDP Growth (% YoY)</div><Line data={gdp} options={{ plugins: { legend: { display: true } }, scales: { y: { ticks: { color: '#00ffc6' } }, x: { ticks: { color: '#00ffc6' } } } }} /></div></div>
+                          <div className="tactical-panel"><div className="p-2"><div style={{ marginBottom: 6, color: 'var(--accent)' }}>Inflation (% YoY)</div><Line data={inf} options={{ plugins: { legend: { display: true } }, scales: { y: { ticks: { color: '#00ffc6' } }, x: { ticks: { color: '#00ffc6' } } } }} /></div></div>
+                          <div className="tactical-panel"><div className="p-2"><div style={{ marginBottom: 6, color: 'var(--accent)' }}>Unemployment (% of labor)</div><Line data={uem} options={{ plugins: { legend: { display: true } }, scales: { y: { ticks: { color: '#00ffc6' } }, x: { ticks: { color: '#00ffc6' } } } }} /></div></div>
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
                 <ChatPanel apiBase={API} events={visibleEvents} anomalies={visibleAnomalies} filters={filters} sourceCounts={sourceCounts} threatScore={threatScore} intelSummary={intelSummary} />
