@@ -138,6 +138,7 @@ function App() {
   const [macroData, setMacroData] = useState({ gdpGrowth: [], inflation: [], unemployment: [] });
   const [macroStress, setMacroStress] = useState([]);
   const [macroCountries, setMacroCountries] = useState(['WLD','USA']);
+  const [reportSpec, setReportSpec] = useState({ type: 'events', window: 'last 24 hours', countries: ['WLD','USA'], indicators: { gdp: true, inflation: true, unemployment: true } });
   const [apiInput, setApiInput] = useState(() => { try { return localStorage.getItem('rtaip_api') || ''; } catch { return ''; } });
   const [showAbout, setShowAbout] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
@@ -622,10 +623,210 @@ function App() {
     </div>
   );
 
+  const SettingsPage = () => (
+    <div className="flex flex-1" style={{ minHeight: 'calc(100vh - 60px)' }}>
+      <div className="w-1/2 p-4" style={{ margin: '0 auto' }}>
+        <div className="tactical-panel">
+          <div className="panel-header">
+            <div style={{ color: 'var(--accent)' }}>Settings</div>
+          </div>
+          <div className="p-2" style={{ fontSize: 13 }}>
+            <div>Refresh interval (ms): {refreshInterval}</div>
+            <div style={{ marginTop: 8 }}>
+              <button className="button-tactical" onClick={() => setRefreshInterval(60 * 1000)}>1m</button>
+              <button className="button-tactical" onClick={() => setRefreshInterval(5 * 60 * 1000)} style={{ marginLeft: 8 }}>5m</button>
+              <button className="button-tactical" onClick={() => setRefreshInterval(10 * 60 * 1000)} style={{ marginLeft: 8 }}>10m</button>
+            </div>
+            <div style={{ marginTop: 12, opacity: 0.8 }}>API: {API}</div>
+            <div style={{ marginTop: 8 }}>
+              <input className="button-tactical" placeholder="API Base URL (e.g., https://api.yourdomain.com)" value={apiInput} onChange={(e)=>setApiInput(e.target.value)} style={{ width: '100%' }} />
+              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                <button className="button-tactical" onClick={() => { try { localStorage.setItem('rtaip_api', apiInput.trim()); } catch {} window.location.reload(); }}>Apply & Reload</button>
+                <button className="button-tactical" onClick={() => { try { localStorage.removeItem('rtaip_api'); } catch {} window.location.reload(); }}>Clear & Reload</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const DashboardPage = () => (
+    <div className="p-4">
+      <div className="tactical-panel" style={{ marginBottom: 12 }}>
+        <div className="panel-header">
+          <div style={{ color: 'var(--accent)' }}>Operational Overview</div>
+        </div>
+        <div className="p-3" style={{ display: 'grid', gridTemplateColumns: (typeof window !== 'undefined' && window.innerWidth < 768) ? '1fr' : 'repeat(3, minmax(0, 1fr))', gap: 12 }}>
+          <div className="tactical-panel"><div className="p-3" style={{ textAlign: 'center' }}><div style={{ fontSize: 12, opacity: 0.8 }}>Total Events</div><div style={{ fontSize: 28, letterSpacing: 1, color: 'var(--accent)' }}>{events.length}</div></div></div>
+          <div className="tactical-panel"><div className="p-3" style={{ textAlign: 'center' }}><div style={{ fontSize: 12, opacity: 0.8 }}>Anomalies</div><div style={{ fontSize: 28, letterSpacing: 1, color: 'var(--danger)' }}>{anomalies.length}</div></div></div>
+          <div className="tactical-panel"><div className="p-3" style={{ textAlign: 'center' }}><div style={{ fontSize: 12, opacity: 0.8 }}>Threat Level</div><div style={{ fontSize: 28, letterSpacing: 1, color: threatScore.level === 'High' ? 'var(--danger)' : 'var(--accent)' }}>{threatScore.level}</div></div></div>
+        </div>
+      </div>
+      <div className="tactical-panel" style={{ marginBottom: 12 }}>
+        <div className="panel-header" style={{ justifyContent: 'space-between' }}>
+          <div style={{ color: 'var(--accent)' }}>Quick Filters</div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <div className="button-tactical" onClick={()=>setFilters(f=>({ ...f, window: 'last hour' }))}>Last hour</div>
+            <div className="button-tactical" onClick={()=>setFilters(f=>({ ...f, window: 'last 24 hours' }))}>24 hours</div>
+            <div className="button-tactical" onClick={()=>setFilters(f=>({ ...f, window: 'last 7 days' }))}>7 days</div>
+            <div className="button-tactical" onClick={()=>setFilters(f=>({ ...f, anomaliesOnly: !f.anomaliesOnly }))}>{filters.anomaliesOnly ? 'Anomalies: ON' : 'Anomalies: OFF'}</div>
+          </div>
+        </div>
+      </div>
+      <div className="tactical-panel" style={{ marginBottom: 12 }}>
+        <div className="panel-header" style={{ justifyContent: 'space-between' }}>
+          <div style={{ color: 'var(--accent)' }}>Macro Dashboard</div>
+        </div>
+        <div className="p-2" style={{ display: 'grid', gridTemplateColumns: (typeof window !== 'undefined' && window.innerWidth < 768) ? '1fr' : 'repeat(3, minmax(0, 1fr))', gap: 12 }}>
+          {(() => {
+            const mkData = (series) => {
+              const labels = Array.from(new Set(series.flatMap(s => s.points.map(p => p.date)))).sort();
+              const datasets = series.map(s => ({ label: s.label, data: labels.map(l => {
+                const p = s.points.find(pp => pp.date === l);
+                return p && typeof p.value === 'number' ? p.value : null;
+              }), borderColor: s.label === 'WLD' ? '#00ffc6' : '#6f42c1', backgroundColor: 'rgba(0,255,198,0.15)' }));
+              return { labels, datasets };
+            };
+            const gdp = mkData(macroData.gdpGrowth || []);
+            const inf = mkData(macroData.inflation || []);
+            const uem = mkData(macroData.unemployment || []);
+            return (
+              <>
+                <div className="tactical-panel"><div className="p-2"><div style={{ marginBottom: 6, color: 'var(--accent)' }}>GDP Growth (% YoY)</div><Line data={gdp} options={{ plugins: { legend: { display: true } }, scales: { y: { ticks: { color: '#00ffc6' } }, x: { ticks: { color: '#00ffc6' } } } }} /></div></div>
+                <div className="tactical-panel"><div className="p-2"><div style={{ marginBottom: 6, color: 'var(--accent)' }}>Inflation (% YoY)</div><Line data={inf} options={{ plugins: { legend: { display: true } }, scales: { y: { ticks: { color: '#00ffc6' } }, x: { ticks: { color: '#00ffc6' } } } }} /></div></div>
+                <div className="tactical-panel"><div className="p-2"><div style={{ marginBottom: 6, color: 'var(--accent)' }}>Unemployment (% of labor)</div><Line data={uem} options={{ plugins: { legend: { display: true } }, scales: { y: { ticks: { color: '#00ffc6' } }, x: { ticks: { color: '#00ffc6' } } } }} /></div></div>
+              </>
+            );
+          })()}
+        </div>
+        <div className="p-2" style={{ display: 'grid', gridTemplateColumns: (typeof window !== 'undefined' && window.innerWidth < 768) ? '1fr' : '1fr 1fr', gap: 12 }}>
+          <div className="tactical-panel"><div className="p-2" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <div style={{ color: 'var(--accent)' }}>Countries</div>
+            <select className="button-tactical" onChange={(e)=>{ const v = e.target.value; if (v && !macroCountries.includes(v)) setMacroCountries(arr=>[...arr, v]); }}>
+              <option value="">Add country</option>
+              <option value="WLD">WLD</option>
+              <option value="USA">USA</option>
+              <option value="CHN">CHN</option>
+              <option value="IND">IND</option>
+              <option value="EUU">EUU</option>
+              <option value="GBR">GBR</option>
+              <option value="DEU">DEU</option>
+              <option value="JPN">JPN</option>
+            </select>
+            {macroCountries.map(c => (
+              <div key={c} className="button-tactical" onClick={()=>setMacroCountries(arr=>arr.filter(x=>x!==c))}>{c} ✕</div>
+            ))}
+          </div></div>
+          <div className="tactical-panel"><div className="p-2">
+            <div style={{ marginBottom: 6, color: 'var(--accent)' }}>Macro Stress Index</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+              {macroStress.length === 0 ? <div style={{ opacity: 0.8 }}>No data</div> : macroStress.map(s => (
+                <div key={s.label} className="tactical-panel" style={{ padding: 8 }}>
+                  <div style={{ fontSize: 12, opacity: 0.8 }}>{s.label} • {s.year}</div>
+                  <div style={{ fontSize: 22, color: s.score >= 0 ? 'var(--accent)' : 'var(--danger)' }}>{s.score}</div>
+                </div>
+              ))}
+            </div>
+          </div></div>
+        </div>
+      </div>
+      <ChatPanel apiBase={API} events={events} anomalies={anomalies} filters={filters} sourceCounts={sourceCounts} />
+      <div className="tactical-panel" style={{ marginTop: 12 }}>
+        <div className="panel-header" style={{ justifyContent: 'space-between' }}>
+          <div style={{ color: 'var(--accent)' }}>Report Builder</div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <select className="button-tactical" value={reportSpec.type} onChange={(e)=>setReportSpec(s=>({ ...s, type: e.target.value }))}>
+              <option value="events">Events summary</option>
+              <option value="macro_summary">Macro indicators summary</option>
+              <option value="macro_compare">Macro compare (2 countries)</option>
+            </select>
+            <select className="button-tactical" value={reportSpec.window} onChange={(e)=>setReportSpec(s=>({ ...s, window: e.target.value }))}>
+              <option value="last hour">Last hour</option>
+              <option value="last 24 hours">Last 24 hours</option>
+              <option value="last 7 days">Last 7 days</option>
+            </select>
+          </div>
+        </div>
+        <div className="p-2" style={{ display: 'grid', gridTemplateColumns: (typeof window !== 'undefined' && window.innerWidth < 768) ? '1fr' : '1fr 1fr', gap: 12 }}>
+          <div className="tactical-panel"><div className="p-2" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <div style={{ color: 'var(--accent)' }}>Countries</div>
+            <select className="button-tactical" onChange={(e)=>{ const v = e.target.value; if (v && !reportSpec.countries.includes(v)) setReportSpec(s=>({ ...s, countries: [...s.countries, v] })); }}>
+              <option value="">Add country</option>
+              <option value="WLD">WLD</option>
+              <option value="USA">USA</option>
+              <option value="CHN">CHN</option>
+              <option value="IND">IND</option>
+              <option value="EUU">EUU</option>
+              <option value="GBR">GBR</option>
+              <option value="DEU">DEU</option>
+              <option value="JPN">JPN</option>
+            </select>
+            {reportSpec.countries.map(c => (
+              <div key={c} className="button-tactical" onClick={()=>setReportSpec(s=>({ ...s, countries: s.countries.filter(x=>x!==c) }))}>{c} ✕</div>
+            ))}
+          </div></div>
+          <div className="tactical-panel"><div className="p-2" style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+            <label className="button-tactical" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <input type="checkbox" checked={reportSpec.indicators.gdp} onChange={(e)=>setReportSpec(s=>({ ...s, indicators: { ...s.indicators, gdp: e.target.checked } }))} /> GDP Growth
+            </label>
+            <label className="button-tactical" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <input type="checkbox" checked={reportSpec.indicators.inflation} onChange={(e)=>setReportSpec(s=>({ ...s, indicators: { ...s.indicators, inflation: e.target.checked } }))} /> Inflation
+            </label>
+            <label className="button-tactical" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <input type="checkbox" checked={reportSpec.indicators.unemployment} onChange={(e)=>setReportSpec(s=>({ ...s, indicators: { ...s.indicators, unemployment: e.target.checked } }))} /> Unemployment
+            </label>
+          </div></div>
+        </div>
+        <div className="p-2" style={{ fontSize: 13 }}>
+          <button className="button-tactical" onClick={() => {
+            const lines = [];
+            if (reportSpec.type === 'events') {
+              const now = Date.now();
+              const ms = reportSpec.window === 'last hour' ? 3600000 : reportSpec.window === 'last 24 hours' ? 86400000 : 604800000;
+              const cutoff = now - ms;
+              const evs = events.filter(e => { const t = new Date(e.timestamp).getTime(); return !isNaN(t) && t >= cutoff; });
+              const bySrc = {};
+              evs.forEach(e => { const k = (e.source || 'UNKNOWN').toUpperCase(); bySrc[k] = (bySrc[k] || 0) + 1; });
+              lines.push(`Events in ${reportSpec.window}: ${evs.length}`);
+              Object.entries(bySrc).sort((a,b)=>b[1]-a[1]).forEach(([k,v])=>lines.push(`${k}: ${v}`));
+            } else if (reportSpec.type === 'macro_summary') {
+              const add = (lbl, series) => {
+                series.forEach(s => {
+                  if (!reportSpec.countries.includes(s.label)) return;
+                  const last = [...s.points].reverse().find(p => typeof p.value === 'number');
+                  lines.push(`${lbl} ${s.label}: ${last ? last.value : 'NA'}`);
+                });
+              };
+              if (reportSpec.indicators.gdp) add('GDP', macroData.gdpGrowth || []);
+              if (reportSpec.indicators.inflation) add('Inflation', macroData.inflation || []);
+              if (reportSpec.indicators.unemployment) add('Unemployment', macroData.unemployment || []);
+            } else if (reportSpec.type === 'macro_compare') {
+              const cs = reportSpec.countries.slice(0,2);
+              const mk = (series) => {
+                return cs.map(c => {
+                  const s = (series || []).find(x => x.label === c);
+                  const last = s ? [...s.points].reverse().find(p => typeof p.value === 'number') : null;
+                  return { c, v: last ? last.value : null };
+                });
+              };
+              if (reportSpec.indicators.gdp) { const arr = mk(macroData.gdpGrowth); lines.push(`GDP ${arr.map(a=>a.c+': '+(a.v==null?'NA':a.v)).join(' | ')}`); }
+              if (reportSpec.indicators.inflation) { const arr = mk(macroData.inflation); lines.push(`Inflation ${arr.map(a=>a.c+': '+(a.v==null?'NA':a.v)).join(' | ')}`); }
+              if (reportSpec.indicators.unemployment) { const arr = mk(macroData.unemployment); lines.push(`Unemployment ${arr.map(a=>a.c+': '+(a.v==null?'NA':a.v)).join(' | ')}`); }
+            }
+            const blob = new Blob([lines.join('\n')], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href = url; a.download = `rtaip_report_${Date.now()}.txt`; a.click(); URL.revokeObjectURL(url);
+          }}>Generate TXT</button>
+        </div>
+      </div>
+    </div>
+  );
+
+
   return (
     <div className="app-root">
       {showSplash && <SplashScreen />}
-
       {/* Tactical top navbar */}
         <div className="tactical-panel" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px' }}>
           <div style={{ color: 'var(--accent)', fontWeight: 600 }}>RTAIP</div>
@@ -647,684 +848,73 @@ function App() {
       <AlertBar anomalies={visibleAnomalies} />
 
       <Routes>
-        
-        <Route
-          path="/"
-          element={(
-            <div>
-              <div className="tactical-panel" style={{ margin: '12px 16px 0 16px' }}>
-                <div className="panel-header">
-                  <div style={{ color: 'var(--accent)' }}>Operational Overview</div>
-                </div>
-                <div className="p-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12 }}>
-                  <div className="tactical-panel">
-                    <div className="p-3" style={{ textAlign: 'center' }}>
-                      <div style={{ fontSize: 12, opacity: 0.8 }}>Total Events</div>
-                      <div style={{ fontSize: 28, letterSpacing: 1, color: 'var(--accent)' }}>{totalEvents}</div>
-                      <div style={{ fontSize: 12, opacity: 0.7 }}>Last update: {lastUpdate}</div>
-                    </div>
-                  </div>
-                  <div className="tactical-panel">
-                    <div className="p-3" style={{ textAlign: 'center' }}>
-                      <div style={{ fontSize: 12, opacity: 0.8 }}>Anomalies</div>
-                      <div style={{ fontSize: 28, letterSpacing: 1, color: 'var(--danger)' }}>{totalAnomalies}</div>
-                      <div style={{ fontSize: 12, opacity: 0.7 }}>Severity varies by type</div>
-                    </div>
-                  </div>
-                  <div className="tactical-panel">
-                    <div className="p-3" style={{ textAlign: 'center' }}>
-                      <div style={{ fontSize: 12, opacity: 0.8 }}>Threat Level</div>
-                      <div style={{ fontSize: 28, letterSpacing: 1, color: threatScore.level === 'High' ? 'var(--danger)' : 'var(--accent)' }}>{threatScore.level}</div>
-                      <div style={{ fontSize: 12, opacity: 0.7 }}>Score {threatScore.score} • density {Math.round(threatScore.components.anomalyDensity*100)}%</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="tactical-panel" style={{ margin: '12px 16px' }}>
-                <div className="p-3" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <div style={{ fontSize: 16, color: 'var(--accent)' }}>RTAIP converts multi‑source signals into anomaly intelligence</div>
-                    <div style={{ fontSize: 13, opacity: 0.85 }}>See current anomalies, predicted hotspots by city, and set alerts for your area.</div>
-                  </div>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button className="button-tactical" onClick={() => runAnalyst('Summary for last 24 hours')}>Start Briefing</button>
-                    <button className="button-tactical" onClick={() => setShowAbout(true)}>About Sources</button>
-                  </div>
-                </div>
-              </div>
-              <div className="tactical-panel" style={{ marginBottom: 12 }}>
-                <div className="panel-header" style={{ justifyContent: 'space-between' }}>
-                  <div style={{ color: 'var(--accent)' }}>Workspace</div>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <div className={`button-tactical ${activeTab==='overview'?'active':''}`} onClick={()=>setActiveTab('overview')}>Overview</div>
-                    <div className={`button-tactical ${activeTab==='map'?'active':''}`} onClick={()=>setActiveTab('map')}>Map</div>
-                    <div className={`button-tactical ${activeTab==='timeline'?'active':''}`} onClick={()=>setActiveTab('timeline')}>Timeline</div>
-                    <div className={`button-tactical ${activeTab==='analyst'?'active':''}`} onClick={()=>setActiveTab('analyst')}>Analyst</div>
-                  </div>
-                </div>
-              </div>
-              <div className="flex flex-1" style={{ minHeight: 'calc(100vh - 60px)', display: activeTab==='overview'?'flex':'none' }}>
-              <div className="w-1/4 p-4">
-                <div className="tactical-panel">
-                  <div className="panel-header">
-                    <div style={{ color: 'var(--accent)' }}>Data Sources</div>
-                    <div className="button-tactical" onClick={() => setFilters({})}>Clear</div>
-                  </div>
-                  <div className="p-2" style={{ fontSize: 13 }}>
-                    <div style={{ marginBottom: 6 }}>Total Events: <span style={{ color: 'var(--accent)' }}>{totalEvents}</span></div>
-                    <div style={{ marginBottom: 6 }}>Anomalies: <span style={{ color: 'var(--danger)' }}>{totalAnomalies}</span></div>
-                    <div style={{ marginBottom: 10, opacity: 0.8 }}>Last Update: {lastUpdate}</div>
-
-                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                      <button className={`button-tactical ${!filters.source ? 'active' : ''}`} onClick={() => setFilters(f => ({ ...f, source: undefined }))}>All</button>
-                      {Object.entries(sourceCounts).map(([src, cnt]) => (
-                        <button key={src} className={`button-tactical ${filters.source === src ? 'active' : ''}`} onClick={() => setFilters(f => ({ ...f, source: src }))}>
-                          {(src || 'UNKNOWN').toUpperCase()} <span style={{ color: 'var(--accent-muted)', marginLeft: 6 }}>{cnt}</span>
-                        </button>
+        <Route path="/" element={<DashboardPage />} />
+        <Route path="/map" element={(
+          <div className="p-4">
+            <div className="tactical-panel" style={{ height: '70vh' }}>
+              <div className="panel-header" style={{ justifyContent: 'space-between' }}>
+                <div style={{ color: 'var(--accent)' }}>Operational Map</div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  {selectedSources.length > 0 && (
+                    <select className="button-tactical" value={filters.source || ''} onChange={(e) => setFilters(f => ({ ...f, source: e.target.value || undefined }))}>
+                      <option value="">All</option>
+                      {selectedSources.map(s => (
+                        <option key={s} value={s}>{(s || 'UNKNOWN').toUpperCase()}</option>
                       ))}
-                    </div>
-
-                    <div style={{ marginTop: 10 }}>
-                      <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <input type="checkbox" checked={!!filters.anomaliesOnly} onChange={(e) => setFilters(f => ({ ...f, anomaliesOnly: e.target.checked }))} />
-                        Show anomalies only
-                      </label>
-                    </div>
-
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 10 }}>
-                      <input className="button-tactical" placeholder="Search" value={filters.search || ''} onChange={(e)=>setFilters(f=>({ ...f, search: e.target.value }))} />
-                      <input className="button-tactical" placeholder="bbox minLat,minLon,maxLat,maxLon" value={filters.bbox || ''} onChange={(e)=>setFilters(f=>({ ...f, bbox: e.target.value }))} />
-                      <input className="button-tactical" placeholder="Min Confidence" type="number" step="0.1" value={filters.minConf || 0} onChange={(e)=>setFilters(f=>({ ...f, minConf: Number(e.target.value)||0 }))} />
-                      <input className="button-tactical" placeholder="Min Severity" type="number" value={filters.minSev || 0} onChange={(e)=>setFilters(f=>({ ...f, minSev: Number(e.target.value)||0 }))} />
-                      <select className="button-tactical" value={filters.window || 'last 24 hours'} onChange={(e)=>setFilters(f=>({ ...f, window: e.target.value }))}>
-                        <option>last hour</option>
-                        <option>last 24 hours</option>
-                        <option>last 7 days</option>
-                      </select>
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <button className="button-tactical" onClick={() => {
-                          const rows = events.map(ev => ({
-                            id: ev.id,
-                            source: ev.source,
-                            timestamp: ev.timestamp,
-                            latitude: ev.latitude,
-                            longitude: ev.longitude,
-                            confidence: ev.confidence
-                          }));
-                          const header = Object.keys(rows[0] || {}).join(',');
-                          const body = rows.map(r => Object.values(r).map(v => String(v ?? '')).join(',')).join('\n');
-                          const blob = new Blob([header + '\n' + body], { type: 'text/csv' });
-                          const url = URL.createObjectURL(blob);
-                          const a = document.createElement('a'); a.href = url; a.download = `events_${Date.now()}.csv`; a.click(); URL.revokeObjectURL(url);
-                        }}>Export CSV</button>
-                        <button className="button-tactical" onClick={() => {
-                          const geo = {
-                            type: 'FeatureCollection',
-                            features: events.filter(ev => ev.latitude != null && ev.longitude != null).map(ev => ({
-                              type: 'Feature',
-                              geometry: { type: 'Point', coordinates: [ev.longitude, ev.latitude] },
-                              properties: { id: ev.id, source: ev.source, timestamp: ev.timestamp, confidence: ev.confidence }
-                            }))
-                          };
-                          const blob = new Blob([JSON.stringify(geo)], { type: 'application/geo+json' });
-                          const url = URL.createObjectURL(blob);
-                          const a = document.createElement('a'); a.href = url; a.download = `events_${Date.now()}.geojson`; a.click(); URL.revokeObjectURL(url);
-                        }}>Export GeoJSON</button>
-                      </div>
-                    </div>
-
-                    <div style={{ marginTop: 12 }}>
-                      <NavLink to="/map" className="button-tactical">Open Full Map</NavLink>
-                    </div>
-                    <div className="tactical-panel" style={{ marginTop: 12 }}>
-                      <div className="panel-header"><div style={{ color: 'var(--accent)' }}>Playbooks</div></div>
-                      <div className="p-2" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 8 }}>
-                        <button className="button-tactical" onClick={() => runAnalyst('Summary for last 24 hours')}>Daily Brief</button>
-                        <button className="button-tactical" onClick={() => runAnalyst('Predict future anomalies')}>Predict Hotspots</button>
-                        <button className="button-tactical" onClick={() => runAnalyst('List anomalies severity >= 7 last 7 days')}>High‑Severity Watch</button>
-                        <button className="button-tactical" onClick={() => runAnalyst('AIS GDACS disasters last 72 hours')}>Maritime Risk</button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-        
-        
-        
-        
-            
-
-            
-              <div className="w-3/4 p-4">
-                <div className="tactical-panel" style={{ height: '100%' }}>
-                  <div className="panel-header">
-                    <div style={{ color: 'var(--accent)' }}>Operational Insights</div>
-                    <div className="button-tactical" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>Top</div>
-                  </div>
-                  <div className="p-3" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                    <div className="tactical-panel">
-                      <div className="panel-header">
-                        <div style={{ color: 'var(--accent)' }}>Event Volume (Hourly)</div>
-                      </div>
-                      <div className="p-2">
-                        <Line data={{ labels: hourlyLabels, datasets: [{ label: 'Events', data: hourlyCounts, borderColor: '#00ffc6', backgroundColor: 'rgba(0,255,198,0.15)', tension: 0.3 }] }} options={{ plugins: { legend: { display: true, labels: { color: '#e6f8f4' } } }, scales: { x: { ticks: { color: '#e6f8f4' } }, y: { ticks: { color: '#e6f8f4' } } } }} />
-                        <div className="mt-2" style={{ fontSize: 12, opacity: 0.8 }}>Observed hourly event counts across all sources.</div>
-                      </div>
-                    </div>
-                    <div className="tactical-panel">
-                      <div className="panel-header">
-                        <div style={{ color: 'var(--accent)' }}>Source Distribution</div>
-                      </div>
-                      <div className="p-2">
-                        <Doughnut data={{ labels: sourceLabels, datasets: [{ label: 'Sources', data: sourceValues, backgroundColor: ['#1e90ff','#32cd32','#ff8c00','#8a2be2','#ff4500','#999'] }] }} options={{ plugins: { legend: { position: 'bottom', labels: { color: '#e6f8f4' } } } }} />
-                        <div className="mt-2" style={{ fontSize: 12, opacity: 0.8 }}>Share of events by source.</div>
-                      </div>
-                    </div>
-                    <div className="tactical-panel">
-                      <div className="panel-header">
-                        <div style={{ color: 'var(--accent)' }}>Anomaly Volume (Hourly)</div>
-                      </div>
-                      <div className="p-2">
-                        <Bar data={{ labels: hourlyLabels, datasets: [{ label: 'Anomalies', data: anomalyHourlyCounts, backgroundColor: 'rgba(220,53,69,0.6)', borderColor: '#dc3545' }] }} options={{ plugins: { legend: { display: true, labels: { color: '#e6f8f4' } } }, scales: { x: { ticks: { color: '#e6f8f4' } }, y: { ticks: { color: '#e6f8f4' } } } }} />
-                        <div className="mt-2" style={{ fontSize: 12, opacity: 0.8 }}>Observed hourly anomaly counts (detections from IsolationForest + rule-based checks).</div>
-                      </div>
-                    </div>
-                    <div className="tactical-panel">
-                      <div className="panel-header">
-                        <div style={{ color: 'var(--accent)' }}>Anomaly Severity</div>
-                      </div>
-                      <div className="p-2">
-                        <Bar data={{ labels: severityLabels, datasets: [{ label: 'Count', data: severityValues, backgroundColor: '#ff3b3b' }] }} options={{ plugins: { legend: { display: false } }, scales: { x: { ticks: { color: '#e6f8f4' } }, y: { ticks: { color: '#e6f8f4' } } } }} />
-                        <div className="mt-2" style={{ fontSize: 12, opacity: 0.8 }}>Anomaly severity distribution (numeric severity bucketed into Low/Medium/High/Critical).</div>
-                      </div>
-                    </div>
-                    <div className="tactical-panel">
-                      <div className="panel-header">
-                        <div style={{ color: 'var(--accent)' }}>Last 60-Minute Events (5-min buckets)</div>
-                      </div>
-                      <div className="p-2">
-                        <Line data={{ labels: bucketLabels, datasets: [
-                          { label: 'Events', data: bucketsEvents, borderColor: '#00ffc6', backgroundColor: 'rgba(0,255,198,0.15)', tension: 0.3 },
-                          { label: 'Anomalies', data: bucketsAnoms, borderColor: '#dc3545', backgroundColor: 'rgba(220,53,69,0.2)', borderDash: [6,4], tension: 0.3 }
-                        ] }} options={{ plugins: { legend: { display: true, labels: { color: '#e6f8f4' } } }, scales: { x: { ticks: { color: '#e6f8f4' } }, y: { ticks: { color: '#e6f8f4' } } } }} />
-                        <div className="mt-2" style={{ fontSize: 12, opacity: 0.8 }}>Quick view of recent activity, grouped by 5-minute intervals.</div>
-                      </div>
-                    </div>
-                    <div className="tactical-panel">
-                      <div className="panel-header">
-                        <div style={{ color: 'var(--accent)' }}>Predictive Outlook (Next 6h)</div>
-                      </div>
-                      <div className="p-2">
-                        <Line data={{ labels: [...hourlyLabels, ...(() => { const last = hourlyLabels.length>0 ? new Date(hourlyLabels[hourlyLabels.length-1].replace(' ', 'T')) : new Date(); return Array.from({length:6},(_,i)=>{ const d = new Date(last.getTime()+(i+1)*3600*1000); return `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')} ${String(d.getUTCHours()).padStart(2,'0')}:00`; }); })()], datasets: [
-                          { label: 'Observed', data: hourlyCounts, borderColor: '#00ffc6', backgroundColor: 'rgba(0,255,198,0.15)', tension: 0.3 },
-                          { label: 'Forecast', data: [...Array(hourlyCounts.length).fill(null), ...(() => { const values = hourlyCounts; const n=values.length; if(n===0) return Array(6).fill(0); if(n===1) return Array(6).fill(values[0]); let sumX=0,sumY=0,sumXY=0,sumXX=0; for(let i=0;i<n;i++){sumX+=i;sumY+=values[i];sumXY+=i*values[i];sumXX+=i*i;} const denom=(n*sumXX - sumX*sumX); const m = denom!==0 ? (n*sumXY - sumX*sumY)/denom : 0; const b=(sumY - m*sumX)/n; const arr=[]; for(let k=0;k<6;k++){const x=n+k; arr.push(Math.max(0, Math.round(m*x + b)));} return arr; })()], borderColor: '#ffaa00', backgroundColor: 'rgba(255,170,0,0.15)', borderDash: [6,4], tension: 0.3 }
-                        ] }} options={{ plugins: { legend: { display: true, labels: { color: '#e6f8f4' } } }, scales: { x: { ticks: { color: '#e6f8f4' } }, y: { ticks: { color: '#e6f8f4' } } } }} />
-                        <div className="mt-2" style={{ fontSize: 12, opacity: 0.8 }}>Forecasted hourly event counts for the next 6 hours using a simple linear regression over observed event volume. The dashed line shows the forecast. This predicts overall event rate, not anomaly probability.</div>
-                      </div>
-                    </div>
-                    <div className="tactical-panel">
-                      <div className="panel-header">
-                        <div style={{ color: 'var(--accent)' }}>Pattern Deviation (Recent vs Baseline)</div>
-                      </div>
-                      <div className="p-2">
-                        {(() => { const baselineCounts = events.reduce((acc,e)=>{ const k=(e.source||'unknown').toLowerCase(); acc[k]=(acc[k]||0)+1; return acc; },{}); const recentWindow = events.slice(Math.max(0, events.length - Math.min(20, events.length))); const recentCounts = recentWindow.reduce((acc,e)=>{ const k=(e.source||'unknown').toLowerCase(); acc[k]=(acc[k]||0)+1; return acc; },{}); const allSources = Array.from(new Set(Object.keys(baselineCounts).concat(Object.keys(recentCounts)))); const deviationLabels = allSources.map(s => (s||'UNKNOWN').toUpperCase()); const baselineTotal = events.length || 1; const recentTotal = recentWindow.length || 1; const deviationValues = allSources.map(s => { const basePct=(baselineCounts[s]||0)/baselineTotal; const recentPct=(recentCounts[s]||0)/recentTotal; return Number(((recentPct - basePct) * 100).toFixed(1)); }); return (
-                          <Bar data={{ labels: deviationLabels, datasets: [{ label: 'Deviation (%)', data: deviationValues, backgroundColor: deviationValues.map(v => v >= 0 ? 'rgba(0,255,198,0.5)' : 'rgba(220,53,69,0.6)') }] }} options={{ plugins: { legend: { display: true, labels: { color: '#e6f8f4' } } }, scales: { x: { ticks: { color: '#e6f8f4' } }, y: { ticks: { color: '#e6f8f4' } } } }} />
-                        ); })()}
-                        <div className="mt-2" style={{ fontSize: 12, opacity: 0.8 }}>Recent vs baseline source mix: compares the last 20 events to the overall distribution and plots percent deviation by source. Green = above baseline, Red = below baseline.</div>
-                      </div>
-                    </div>
-
-                    {/* Operational Threat Index */}
-                    <div className="tactical-panel">
-                      <div className="panel-header">
-                        <div style={{ color: 'var(--accent)' }}>Operational Threat Index</div>
-                      </div>
-                      <div className="p-2" style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                        <div style={{ fontSize: 28, fontWeight: 700 }}>
-                          {threatScore.score} <span style={{ fontSize: 14, opacity: 0.8 }}>/ 10 ({threatScore.level})</span>
-                        </div>
-                        <div style={{ fontSize: 12, opacity: 0.8 }}>
-                          <div>Anomaly Density: {(threatScore.components.anomalyDensity*100).toFixed(1)}%</div>
-                          <div>Event Velocity: {(threatScore.components.velocityIndex*100).toFixed(1)}%</div>
-                          <div>Source Volatility: {(threatScore.components.volatility*100).toFixed(1)}%</div>
-                        </div>
-                      </div>
-                      <div className="p-2" style={{ fontSize: 12, opacity: 0.8 }}>Calculated from anomaly density + event velocity + source volatility.</div>
-                    </div>
-
-                    {/* Smart Summary */}
-                    <div className="tactical-panel">
-                      <div className="panel-header">
-                        <div style={{ color: 'var(--accent)' }}>Smart Summary</div>
-                      </div>
-                      <div className="p-2" style={{ fontSize: 13 }}>
-                        {(() => {
-                          const hotClusters = sourcesMeta.flatMap(m => m.topClusters.map(([k,c]) => ({ src: m.src, key: k, count: c, conf: m.confidence })));
-                          const top = hotClusters.sort((a,b)=>b.count - a.count).slice(0,5);
-                          const criticalAnoms = anomalies.filter(a => a.severity >= 7).slice(0,5);
-                          return (
-                            <>
-                              <div style={{ marginBottom: 8 }}>Top Hot Spots:</div>
-                              {top.length === 0 ? <div style={{ opacity: 0.8 }}>No clusters detected.</div> : (
-                                <ul style={{ margin: 0, paddingLeft: 18 }}>
-                                  {top.map((t, i) => (<li key={`${t.src}-${t.key}-${i}`}>{(t.src||'UNK').toUpperCase()} • {t.key} • count={t.count} • conf={t.conf}%</li>))}
-                                </ul>
-                              )}
-                              <div style={{ marginTop: 12, marginBottom: 8 }}>High-Risk Anomalies:</div>
-                              {criticalAnoms.length === 0 ? <div style={{ opacity: 0.8 }}>None</div> : (
-                                <ul style={{ margin: 0, paddingLeft: 18 }}>
-                                  {criticalAnoms.map((a, i) => {
-                                    const ev = events.find(e => e.id === a.event_id);
-                                    return (<li key={`${a.id}-${i}`}>{a.type} • sev={a.severity} • {(ev?.source||'UNK').toUpperCase()} • ({ev?.latitude},{ev?.longitude})</li>);
-                                  })}
-                                </ul>
-                              )}
-                            </>
-                          );
-                        })()}
-                      </div>
-                    </div>
-
-                    {/* Last 60-Minute Intelligence */}
-                    <div className="tactical-panel">
-                      <div className="panel-header">
-                        <div style={{ color: 'var(--accent)' }}>Last 60-Minute Intelligence</div>
-                      </div>
-                      <div className="p-2" style={{ fontSize: 13 }}>
-                        <ul style={{ margin: 0, paddingLeft: 18 }}>
-                          {intelSummary.map((line, idx) => (<li key={idx} style={{ marginBottom: 6 }}>{line}</li>))}
-                        </ul>
-                      </div>
-                    </div>
-
-                    <div className="tactical-panel">
-                      <div className="panel-header">
-                        <div style={{ color: 'var(--accent)' }}>Source Metadata</div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
-                          <span>Cluster Res:</span>
-                          <select value={clusterResDeg} onChange={(e)=>setClusterResDeg(parseFloat(e.target.value))} className="button-tactical" style={{ padding: '4px 6px' }}>
-                            <option value={0.25}>0.25°</option>
-                            <option value={0.5}>0.5°</option>
-                            <option value={1}>1.0°</option>
-                          </select>
-                        </div>
-                      </div>
-                      <div className="p-2" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 8 }}>
-                        {sourcesMeta.map(meta => (
-                          <div key={meta.src} className="tactical-panel" style={{ background: 'rgba(0,0,0,0.2)' }}>
-                            <div className="panel-header" style={{ justifyContent: 'space-between' }}>
-                              <div style={{ color: 'var(--accent)' }}>{(meta.src||'UNKNOWN').toUpperCase()}</div>
-                              <div style={{ display: 'flex', gap: 12, alignItems: 'center', fontSize: 12, opacity: 0.8 }}>
-                                <span>Anomaly Rate: {(meta.anomalyRate*100).toFixed(1)}%</span>
-                                <span>Confidence: {meta.confidence}%</span>
-                              </div>
-                            </div>
-                            <div className="p-2" style={{ fontSize: 12 }}>
-                              <div style={{ marginBottom: 6 }}>Top Clusters: {meta.topClusters.length>0 ? meta.topClusters.map(([k,c]) => (<span key={k} style={{ marginRight: 8, color: 'var(--accent-muted)' }}>{k} ({c})</span>)) : '—'}</div>
-                              <div style={{ maxHeight: 180, overflowY: 'auto', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 6 }}>
-                                {meta.last10.map(ev => (
-                                  (() => {
-                                    const anom = anomaliesByEvent[ev.id];
-                                    const desc = anom ? (anom.description || '') : '';
-                                    const m = desc.match(/score=([\-0-9\.]+)/);
-                                    let prob = anom ? 0.5 : meta.anomalyRate;
-                                    if (anom && typeof anom.severity === 'number') prob = Math.min(1, Math.max(0, anom.severity / 10));
-                                    else if (anom && m) { const s = parseFloat(m[1]); if (!isNaN(s)) prob = Math.min(1, Math.max(0, -s)); }
-                                    const sev = anom ? (typeof anom.severity === 'number' ? anom.severity : 0) : 0;
-                                    return (
-                                      <div key={ev.id} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                                        <div>
-                                          <span style={{ color: 'var(--accent-muted)' }}>{new Date(ev.timestamp).toLocaleTimeString()}</span>
-                                          <span style={{ marginLeft: 8 }}>ID: {ev.id}</span>
-                                        </div>
-                                        <div>
-                                          <span style={{ marginRight: 8 }}>Prob: {(prob*100).toFixed(0)}%</span>
-                                          <span>Severity: {sev}</span>
-                                        </div>
-                                      </div>
-                                    );
-                                  })()
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              {/* Map/Timeline/Analyst moved to dedicated routes below for clarity */}
-            </div>
-            )}
-          />
-
-        <Route
-          path="/map"
-          element={(
-            <div className="flex flex-1" style={{ minHeight: 'calc(100vh - 60px)' }}>
-              <div className="w-2/3 p-4">
-                <div className="tactical-panel" style={{ height: '80vh', position: 'relative' }}>
-                  <div className="panel-header">
-                    <div style={{ color: 'var(--accent)' }}>Operational Map</div>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <button className="button-tactical" onClick={() => setShowHelp(s => !s)}>Help</button>
-                      {selectedSources.length > 0 && (
-                        <select className="button-tactical" value={filters.source || ''} onChange={(e) => setFilters(f => ({ ...f, source: e.target.value || undefined }))}>
-                          <option value="">All</option>
-                          {selectedSources.map(s => (
-                            <option key={s} value={s}>{(s || 'UNKNOWN').toUpperCase()}</option>
-                          ))}
-                        </select>
-                      )}
-                      <button className="button-tactical" onClick={() => setBasemapStyle(s => baseStyles[(baseStyles.indexOf(s)+1)%baseStyles.length])}>{basemapStyle.toUpperCase()}</button>
-                      <label className="button-tactical" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <input type="checkbox" checked={useWebGL} onChange={(e)=>setUseWebGL(e.target.checked)} /> WebGL
-                      </label>
-                    </div>
-                  </div>
-                  <div style={{ height: 'calc(100% - 42px)' }}>
-                    <MapComponent events={visibleEvents} anomalies={visibleAnomalies} focusEventId={focusEventId} onSelect={handleSelectEvent} basemapStyle={basemapStyle} useWebGL={useWebGL} onPerfUpdate={handlePerfUpdate} />
-                  </div>
-                  {showHelp && (
-                    <div style={{ position: 'absolute', top: 50, right: 20, background: 'rgba(0,0,0,0.75)', border: '1px solid rgba(0,255,198,0.2)', borderRadius: 8, padding: 12, maxWidth: 320 }}>
-                      <div style={{ color: 'var(--accent)', marginBottom: 6 }}>What am I seeing?</div>
-                      <div style={{ fontSize: 13 }}>
-                        <div>Heat layer shows density and hotspots.</div>
-                        <div>Red markers indicate anomalies.</div>
-                        <div>Ask the Analyst for a briefing.</div>
-                      </div>
-                      <div className="button-tactical" style={{ marginTop: 8 }} onClick={() => setShowHelp(false)}>Close</div>
-                    </div>
+                    </select>
                   )}
+                  <button className="button-tactical" onClick={() => setBasemapStyle(s => ['light','dark','terrain','satellite','osm'][(['light','dark','terrain','satellite','osm'].indexOf(s)+1)%5])}>{basemapStyle.toUpperCase()}</button>
+                  <label className="button-tactical" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <input type="checkbox" checked={useWebGL} onChange={(e)=>setUseWebGL(e.target.checked)} /> WebGL
+                  </label>
                 </div>
-                {selectedEventId && (() => {
-                  const ev = events.find(e => e.id === selectedEventId);
-                  const anom = anomalies.find(a => a.event_id === selectedEventId);
-                  return (
-                    <div className="tactical-panel" style={{ marginTop: 12 }}>
-                      <div className="panel-header">
-                        <div style={{ color: 'var(--accent)' }}>Event Details</div>
-                        <div className="button-tactical" onClick={() => setSelectedEventId(null)}>Close</div>
-                      </div>
-                      <div className="p-2" style={{ fontSize: 13 }}>
-                        <div>Source: <span style={{ color: 'var(--accent-muted)' }}>{(ev?.source || 'UNKNOWN').toUpperCase()}</span></div>
-                        <div>Timestamp: {ev?.timestamp ? new Date(ev.timestamp).toLocaleString() : '—'}</div>
-                        <div>Latitude: {ev?.latitude ?? '—'} | Longitude: {ev?.longitude ?? '—'}</div>
-                        <div>ID: {ev?.id ?? '—'}</div>
-                        <div style={{ marginTop: 6, color: anom ? 'var(--danger)' : 'var(--accent-muted)' }}>
-                          {anom ? 'Anomaly detected for this event' : 'Status: normal'}
-                        </div>
-                        {anom && (
-                          <div style={{ marginTop: 8 }}>
-                            <div>Type: <span style={{ color: 'var(--accent-muted)' }}>{anom.type}</span></div>
-                            <div>Severity: <span style={{ color: 'var(--accent)' }}>{anom.severity}</span></div>
-                            <div>Description: <span style={{ opacity: 0.9 }}>{anom.description}</span></div>
-                            {(() => { const meta = parseAnomalyMeta(anom); return (
-                              <>
-                                {meta.algorithm && <div>Algorithm: <span style={{ color: 'var(--accent-muted)' }}>{meta.algorithm}</span></div>}
-                                {typeof meta.score === 'number' && <div>Model score: <span style={{ color: 'var(--accent)' }}>{meta.score.toFixed(4)}</span></div>}
-                                {meta.rule && <div>Rule: <span style={{ color: 'var(--accent-muted)' }}>{meta.rule}</span></div>}
-                                {typeof meta.magnitude === 'number' && <div>Magnitude: <span style={{ color: 'var(--accent)' }}>{meta.magnitude}</span></div>}
-                              </>
-                            ); })()}
-                            <div>Detected: {anom.timestamp ? new Date(anom.timestamp).toLocaleString() : '—'}</div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })()}
               </div>
-              <div className="w-1/3 p-4">
-                <div className="tactical-panel" style={{ marginBottom: 12 }}>
-                  <div className="panel-header">
-                    <div style={{ color: 'var(--accent)' }}>Performance</div>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <button className="button-tactical" onClick={async ()=>{
-                        try {
-                          const res = await fetch(`${API}/perf/metrics`);
-                          const data = await res.json();
-                          setBenchData(Array.isArray(data) ? data : []);
-                        } catch {}
-                      }}>Load Metrics</button>
-                      <button className="button-tactical" onClick={async ()=>{
-                        const device = navigator.userAgent;
-                        const view = document.querySelector('.ol-viewport');
-                        const mapZooms = [2,4,6,8,10,12];
-                        const results = [];
-                        for (let z of mapZooms) {
-                          try {
-                            const e = new Event('setZoom');
-                            window.dispatchEvent(e);
-                            results.push({ ts: new Date().toISOString(), fps: perfInfo.fps, events: perfInfo.events, anomalies: perfInfo.anomalies, zoom: z, device });
-                            await fetch(`${API}/perf/report`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fps: perfInfo.fps, events: perfInfo.events, anomalies: perfInfo.anomalies, zoom: z, device }) });
-                          } catch {}
-                        }
-                        setBenchData(results);
-                      }}>Run Benchmark</button>
-                      <button className="button-tactical" onClick={()=>{
-                        const rows = [['ts','fps','events','anomalies','zoom','device'], ...benchData.map(r=>[r.ts, r.fps, r.events, r.anomalies, r.zoom, r.device])];
-                        const csv = rows.map(row => row.join(',')).join('\n');
-                        const blob = new Blob([csv], { type: 'text/csv' });
-                        const url = URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = url; a.download = 'perf_metrics.csv'; a.click();
-                        URL.revokeObjectURL(url);
-                      }}>Export CSV</button>
-                    </div>
-                  </div>
-                  <div className="p-2" style={{ fontSize: 13 }}>
-                    <div>FPS: <span style={{ color: 'var(--accent)' }}>{perfInfo.fps}</span></div>
-                    <div>Events: <span style={{ color: 'var(--accent-muted)' }}>{perfInfo.events}</span></div>
-                    <div>Anomalies: <span style={{ color: 'var(--danger)' }}>{perfInfo.anomalies}</span></div>
-                    {benchData.length > 0 && (
-                      <div style={{ marginTop: 8 }}>
-                        <div style={{ fontSize: 12, opacity: 0.8 }}>Recent Metrics</div>
-                        <ul style={{ margin: 0, paddingLeft: 18 }}>
-                          {benchData.slice(0,6).map((r, i) => (
-                            <li key={i}>{r.ts} • zoom={r.zoom} • fps={r.fps} • events={r.events} • anomalies={r.anomalies}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
-                </div>
-                {mapOnboard && (
-                  <div className="tactical-panel" style={{ marginBottom: 12 }}>
-                    <div className="panel-header">
-                      <div style={{ color: 'var(--accent)' }}>Quick Start</div>
-                      <div className="button-tactical" onClick={() => { setMapOnboard(false); try { localStorage.setItem('rtaip_onboard_map_done', '1'); } catch {} }}>Got it</div>
-                    </div>
-                    <div className="p-2" style={{ fontSize: 13 }}>
-                      <div>1) Choose a source.</div>
-                      <div>2) Use the heat layer to find hotspots.</div>
-                      <div>3) Ask the Analyst for a summary.</div>
-                      <div>4) Click markers to see details.</div>
-                    </div>
-                  </div>
-                )}
-                <div className="tactical-panel" style={{ marginBottom: 12 }}>
-                  <div className="panel-header" style={{ justifyContent: 'space-between' }}>
-                    <div style={{ color: 'var(--accent)' }}>Quick Filters</div>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <div className="button-tactical" onClick={()=>setFilters(f=>({ ...f, window: 'last hour' }))}>Last hour</div>
-                      <div className="button-tactical" onClick={()=>setFilters(f=>({ ...f, window: 'last 24 hours' }))}>24 hours</div>
-                      <div className="button-tactical" onClick={()=>setFilters(f=>({ ...f, window: 'last 7 days' }))}>7 days</div>
-                      <div className="button-tactical" onClick={()=>setFilters(f=>({ ...f, anomaliesOnly: !f.anomaliesOnly }))}>{filters.anomaliesOnly ? 'Anomalies: ON' : 'Anomalies: OFF'}</div>
-                      <div className="button-tactical" onClick={()=>{
-                        const top = Object.entries(sourceCounts).sort((a,b)=>b[1]-a[1])[0]?.[0];
-                        setFilters(f=>({ ...f, source: top }));
-                      }}>Top source</div>
-                      <div className="button-tactical" onClick={()=>setFilters(f=>({ ...f, bbox: '' }))}>Clear bbox</div>
-                      <div className="button-tactical" onClick={()=>setFilters(f=>({ ...f, search: '' }))}>Clear search</div>
-                    </div>
-                  </div>
-                </div>
-                <div className="tactical-panel" style={{ marginBottom: 12 }}>
-                  <div className="panel-header" style={{ justifyContent: 'space-between' }}>
-                    <div style={{ color: 'var(--accent)' }}>Macro Dashboard</div>
-                  </div>
-                  <div className="p-2" style={{ display: 'grid', gridTemplateColumns: (typeof window !== 'undefined' && window.innerWidth < 768) ? '1fr' : 'repeat(3, minmax(0, 1fr))', gap: 12 }}>
-                    {(() => {
-                      const mkData = (series) => {
-                        const labels = Array.from(new Set(series.flatMap(s => s.points.map(p => p.date)))).sort();
-                        const datasets = series.map(s => ({ label: s.label, data: labels.map(l => {
-                          const p = s.points.find(pp => pp.date === l);
-                          return p && typeof p.value === 'number' ? p.value : null;
-                        }), borderColor: s.label === 'WLD' ? '#00ffc6' : '#6f42c1', backgroundColor: 'rgba(0,255,198,0.15)' }));
-                        return { labels, datasets };
-                      };
-                      const gdp = mkData(macroData.gdpGrowth || []);
-                      const inf = mkData(macroData.inflation || []);
-                      const uem = mkData(macroData.unemployment || []);
-                      return (
-                        <>
-                          <div className="tactical-panel"><div className="p-2"><div style={{ marginBottom: 6, color: 'var(--accent)' }}>GDP Growth (% YoY)</div><Line data={gdp} options={{ plugins: { legend: { display: true } }, scales: { y: { ticks: { color: '#00ffc6' } }, x: { ticks: { color: '#00ffc6' } } } }} /></div></div>
-                          <div className="tactical-panel"><div className="p-2"><div style={{ marginBottom: 6, color: 'var(--accent)' }}>Inflation (% YoY)</div><Line data={inf} options={{ plugins: { legend: { display: true } }, scales: { y: { ticks: { color: '#00ffc6' } }, x: { ticks: { color: '#00ffc6' } } } }} /></div></div>
-                          <div className="tactical-panel"><div className="p-2"><div style={{ marginBottom: 6, color: 'var(--accent)' }}>Unemployment (% of labor)</div><Line data={uem} options={{ plugins: { legend: { display: true } }, scales: { y: { ticks: { color: '#00ffc6' } }, x: { ticks: { color: '#00ffc6' } } } }} /></div></div>
-                        </>
-                      );
-                    })()}
-                  </div>
-                  <div className="p-2" style={{ display: 'grid', gridTemplateColumns: (typeof window !== 'undefined' && window.innerWidth < 768) ? '1fr' : '1fr 1fr', gap: 12 }}>
-                    <div className="tactical-panel"><div className="p-2" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                      <div style={{ color: 'var(--accent)' }}>Countries</div>
-                      <select className="button-tactical" onChange={(e)=>{ const v = e.target.value; if (v && !macroCountries.includes(v)) setMacroCountries(arr=>[...arr, v]); }}>
-                        <option value="">Add country</option>
-                        <option value="WLD">WLD</option>
-                        <option value="USA">USA</option>
-                        <option value="CHN">CHN</option>
-                        <option value="IND">IND</option>
-                        <option value="EUU">EUU</option>
-                        <option value="GBR">GBR</option>
-                        <option value="DEU">DEU</option>
-                        <option value="JPN">JPN</option>
-                      </select>
-                      {macroCountries.map(c => (
-                        <div key={c} className="button-tactical" onClick={()=>setMacroCountries(arr=>arr.filter(x=>x!==c))}>{c} ✕</div>
-                      ))}
-                    </div></div>
-                    <div className="tactical-panel"><div className="p-2">
-                      <div style={{ marginBottom: 6, color: 'var(--accent)' }}>Macro Stress Index</div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
-                        {macroStress.length === 0 ? <div style={{ opacity: 0.8 }}>No data</div> : macroStress.map(s => (
-                          <div key={s.label} className="tactical-panel" style={{ padding: 8 }}>
-                            <div style={{ fontSize: 12, opacity: 0.8 }}>{s.label} • {s.year}</div>
-                            <div style={{ fontSize: 22, color: s.score >= 0 ? 'var(--accent)' : 'var(--danger)' }}>{s.score}</div>
-                          </div>
-                        ))}
-                      </div>
-                    </div></div>
-                </div>
-                <ChatPanel apiBase={API} events={visibleEvents} anomalies={visibleAnomalies} filters={filters} sourceCounts={sourceCounts} threatScore={threatScore} intelSummary={intelSummary} />
-                
+              <div style={{ height: 'calc(100% - 42px)' }}>
+                <MapComponent events={events} anomalies={anomalies} focusEventId={focusEventId} onSelect={(id)=>setSelectedEventId(id)} basemapStyle={basemapStyle} useWebGL={useWebGL} onPerfUpdate={handlePerfUpdate} />
+              </div>
+            </div>
+            {selectedEventId && (() => {
+              const ev = events.find(e => e.id === selectedEventId);
+              const anom = anomalies.find(a => a.event_id === selectedEventId);
+              return (
                 <div className="tactical-panel" style={{ marginTop: 12 }}>
-                  <div className="panel-header">
-                    <div style={{ color: 'var(--accent)' }}>Export Briefing</div>
+                  <div className="panel-header" style={{ justifyContent: 'space-between' }}>
+                    <div style={{ color: 'var(--accent)' }}>Event Details</div>
+                    <div className="button-tactical" onClick={() => setSelectedEventId(null)}>Close</div>
                   </div>
                   <div className="p-2" style={{ fontSize: 13 }}>
-                    <button className="button-tactical" onClick={() => {
-                      const lines = [];
-                      lines.push(`Operational Threat Index: ${threatScore.score}/10 (${threatScore.level})`);
-                      intelSummary.forEach(l => lines.push(l));
-                      lines.push('Source counts:');
-                      Object.entries(sourceCounts).forEach(([k,v]) => lines.push(`- ${(k||'UNKNOWN').toUpperCase()}: ${v}`));
-                      const blob = new Blob([lines.join('\n')], { type: 'text/plain' });
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement('a'); a.href = url; a.download = `rtaip_briefing_${Date.now()}.txt`; a.click(); URL.revokeObjectURL(url);
-                    }}>Export TXT</button>
-                    <button className="button-tactical" style={{ marginLeft: 8 }} onClick={() => {
-                      const html = `<!doctype html><html><head><meta charset="utf-8"><title>RTAIP Briefing</title><style>body{font-family:sans-serif;padding:24px;background:#0b1b18;color:#e6f8f4}h1{color:#00ffc6}hr{border:0;border-top:1px solid rgba(0,255,198,0.2)}.muted{opacity:.8}</style></head><body><h1>RTAIP Briefing</h1><div class="muted">${new Date().toLocaleString()}</div><hr/><div>Operational Threat Index: ${threatScore.score}/10 (${threatScore.level})</div><div>${intelSummary.map(l=>`<div>${l}</div>`).join('')}</div><div><div class="muted">Source counts</div>${Object.entries(sourceCounts).map(([k,v])=>`<div>${(k||'UNKNOWN').toUpperCase()}: ${v}</div>`).join('')}</div></body></html>`;
-                      const w = window.open('', '_blank');
-                      if (w) { w.document.write(html); w.document.close(); w.focus(); w.print(); }
-                    }}>Export PDF</button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        />
-
-        <Route
-          path="/replay"
-          element={(
-            <div className="flex flex-1" style={{ minHeight: 'calc(100vh - 60px)' }}>
-              <div className="w-1/4 p-4">
-                <div className="tactical-panel">
-                  <div className="panel-header">
-                    <div style={{ color: 'var(--accent)' }}>Replay Controls</div>
-                  </div>
-                  <div className="p-3">
-                    <ReplayTimeline events={events} onTimeChange={handleTimeChange} />
-                  </div>
-                </div>
-              </div>
-              <div className="w-3/4 p-4">
-                <div className="tactical-panel" style={{ height: '100%' }}>
-                  <div className="panel-header">
-                    <div style={{ color: 'var(--accent)' }}>Operational Map</div>
-                  </div>
-                  <div style={{ height: 'calc(100% - 42px)' }}>
-                    <MapComponent events={visibleEvents} anomalies={visibleAnomalies} focusEventId={focusEventId} onSelect={handleSelectEvent} />
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        />
-        <Route
-          path="/settings"
-          element={(
-            <div className="flex flex-1" style={{ minHeight: 'calc(100vh - 60px)' }}>
-              <div className="w-1/2 p-4" style={{ margin: '0 auto' }}>
-                <div className="tactical-panel">
-                  <div className="panel-header">
-                    <div style={{ color: 'var(--accent)' }}>Settings</div>
-                  </div>
-                  <div className="p-2" style={{ fontSize: 13 }}>
-                    <div>Refresh interval (ms): {refreshInterval}</div>
-                    <div style={{ marginTop: 8 }}>
-                      <button className="button-tactical" onClick={() => setRefreshInterval(60 * 1000)}>1m</button>
-                      <button className="button-tactical" onClick={() => setRefreshInterval(5 * 60 * 1000)} style={{ marginLeft: 8 }}>5m</button>
-                      <button className="button-tactical" onClick={() => setRefreshInterval(10 * 60 * 1000)} style={{ marginLeft: 8 }}>10m</button>
-                    </div>
-                    <div style={{ marginTop: 12, opacity: 0.8 }}>API: {API}</div>
-                    <div style={{ marginTop: 8 }}>
-                      <input className="button-tactical" placeholder="API Base URL (e.g., https://api.yourdomain.com)" value={apiInput} onChange={(e)=>setApiInput(e.target.value)} style={{ width: '100%' }} />
-                      <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                        <button className="button-tactical" onClick={() => { try { localStorage.setItem('rtaip_api', apiInput.trim()); } catch {} window.location.reload(); }}>Apply & Reload</button>
-                        <button className="button-tactical" onClick={() => { try { localStorage.removeItem('rtaip_api'); } catch {} window.location.reload(); }}>Clear & Reload</button>
-                      </div>
+                    <div>Source: <span style={{ color: 'var(--accent-muted)' }}>{(ev?.source || 'UNKNOWN').toUpperCase()}</span></div>
+                    <div>Timestamp: {ev?.timestamp ? new Date(ev.timestamp).toLocaleString() : '—'}</div>
+                    <div>Latitude: {ev?.latitude ?? '—'} | Longitude: {ev?.longitude ?? '—'}</div>
+                    <div>ID: {ev?.id ?? '—'}</div>
+                    <div style={{ marginTop: 6, color: anom ? 'var(--danger)' : 'var(--accent-muted)' }}>
+                      {anom ? 'Anomaly detected for this event' : 'Status: normal'}
                     </div>
                   </div>
                 </div>
+              );
+            })()}
+          </div>
+        )} />
+        <Route path="/replay" element={(
+          <div className="p-4">
+            <div className="tactical-panel">
+              <div className="panel-header"><div style={{ color: 'var(--accent)' }}>Event Replay</div></div>
+              <div className="p-2"><ReplayTimeline events={events} onTimeChange={(i)=>{ setReplayIndex(i); const ev = events[i]; if (ev) setFocusEventId(ev.id); }} /></div>
+            </div>
+            <div className="tactical-panel" style={{ height: '60vh', marginTop: 12 }}>
+              <div className="panel-header"><div style={{ color: 'var(--accent)' }}>Operational Map</div></div>
+              <div style={{ height: 'calc(100% - 42px)' }}>
+                <MapComponent events={events.slice(0, replayIndex == null ? events.length : Math.min(events.length, Number(replayIndex)+1))} anomalies={anomalies.filter(a => events.slice(0, replayIndex == null ? events.length : Math.min(events.length, Number(replayIndex)+1)).some(e => e.id === a.event_id))} focusEventId={focusEventId} onSelect={(id)=>setSelectedEventId(id)} />
               </div>
-            </div>
-          )}
-       />
-        <Route path="/database" element={<DatabasePage />} />
-      </Routes>
-      {showAbout && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}>
-          <div className="tactical-panel" style={{ width: 'min(720px, 92vw)' }}>
-            <div className="panel-header" style={{ justifyContent: 'space-between' }}>
-              <div style={{ color: 'var(--accent)' }}>About Data Sources</div>
-              <button className="button-tactical" onClick={() => setShowAbout(false)}>Close</button>
-            </div>
-            <div className="p-3" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 8 }}>
-              <div className="tactical-panel"><div className="p-2">ADSB • Aircraft transponder signals; flight positions and headings.</div></div>
-              <div className="tactical-panel"><div className="p-2">AIS • Maritime vessel positions and identifiers.</div></div>
-              <div className="tactical-panel"><div className="p-2">USGS • Seismic events reported by USGS.</div></div>
-              <div className="tactical-panel"><div className="p-2">NOAA • Weather alerts and anomalies from NOAA.</div></div>
-              <div className="tactical-panel"><div className="p-2">NASA EONET • Curated natural events (fires, storms, volcanoes).</div></div>
-              <div className="tactical-panel"><div className="p-2">GDACS • Global disaster alerts and coordination system events.</div></div>
             </div>
           </div>
-        </div>
-      )}
+        )} />
+        <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/database" element={<DatabasePage />} />
+      </Routes>
+      {showAbout && null}
     </div>
   );
 }
-
 export default App;

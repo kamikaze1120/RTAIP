@@ -1,14 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 const suggestions = [
-  'Explain current dashboard',
-  'Operational recommendations for current situation',
-  'Summary for last 24 hours',
-  'How many anomalies by source in last 7 days',
-  'Hotspots for anomalies last 24 hours',
-  'Trend of anomalies over time',
-  'Predict future anomalies',
-  'Warroom readiness checklist',
+  'Explain the dashboard metrics using current data',
+  'Summarize NASA EONET events by category (last 24 hours)',
+  'Count events per source (last 7 days)',
+  'List top countries by Macro Stress Index',
+  'Compare GDP growth: USA vs CHN (last 2 years)',
+  'Inflation trend for WLD and USA (last 5 years)',
+  'Unemployment overview for selected countries',
+  'Describe data sources and update cadence',
 ];
 
 const ChatPanel = ({ apiBase, events = [], anomalies = [], filters = {}, sourceCounts = {}, threatScore = null, intelSummary = [] }) => {
