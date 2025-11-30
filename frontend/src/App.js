@@ -136,6 +136,8 @@ function App() {
   const [alertForm, setAlertForm] = useState({ name: '', source: '', severity_threshold: 5, min_confidence: 0.5, min_lat: '', min_lon: '', max_lat: '', max_lon: '', email_to: '' });
   const [metrics, setMetrics] = useState([]);
   const [macroData, setMacroData] = useState({ gdpGrowth: [], inflation: [], unemployment: [] });
+  const [macroStress, setMacroStress] = useState([]);
+  const [macroCountries, setMacroCountries] = useState(['WLD','USA']);
   const [apiInput, setApiInput] = useState(() => { try { return localStorage.getItem('rtaip_api') || ''; } catch { return ''; } });
   const [showAbout, setShowAbout] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
@@ -231,6 +233,10 @@ function App() {
           const src = (event.source || '').toLowerCase();
           if (Array.isArray(selectedSources) && selectedSources.length > 0 && !selectedSources.includes(src)) return false;
           if (filters.source && src !== filters.source) return false;
+          if ((filters.category || '').trim()) {
+            const cats = Array.isArray(event.data?.categories) ? event.data.categories.map(c => (c?.title || '').toLowerCase()) : [];
+            if (!cats.includes((filters.category || '').toLowerCase())) return false;
+          }
           if (filters.window) {
             const now = Date.now();
             const ts = new Date(event.timestamp).getTime();
@@ -278,18 +284,40 @@ function App() {
           setCache(key, pts);
           return pts;
         };
-        const gdpWld = await wbFetch('WLD','NY.GDP.MKTP.KD.ZG');
-        const gdpUsa = await wbFetch('USA','NY.GDP.MKTP.KD.ZG');
-        const infWld = await wbFetch('WLD','FP.CPI.TOTL.ZG');
-        const infUsa = await wbFetch('USA','FP.CPI.TOTL.ZG');
-        const uemWld = await wbFetch('WLD','SL.UEM.TOTL.ZS');
-        const uemUsa = await wbFetch('USA','SL.UEM.TOTL.ZS');
+        const countries = macroCountries;
+        const gdpSeries = [];
+        const infSeries = [];
+        const uemSeries = [];
+        for (let i = 0; i < countries.length; i++) {
+          const c = countries[i];
+          gdpSeries.push({ label: c, points: await wbFetch(c,'NY.GDP.MKTP.KD.ZG') });
+          infSeries.push({ label: c, points: await wbFetch(c,'FP.CPI.TOTL.ZG') });
+          uemSeries.push({ label: c, points: await wbFetch(c,'SL.UEM.TOTL.ZS') });
+        }
         if (!cancelled) {
-          setMacroData({
-            gdpGrowth: [ { label: 'WLD', points: gdpWld }, { label: 'USA', points: gdpUsa } ],
-            inflation: [ { label: 'WLD', points: infWld }, { label: 'USA', points: infUsa } ],
-            unemployment: [ { label: 'WLD', points: uemWld }, { label: 'USA', points: uemUsa } ]
-          });
+          setMacroData({ gdpGrowth: gdpSeries, inflation: infSeries, unemployment: uemSeries });
+          const latestYear = Math.max(...[...new Set([ ...gdpSeries.flatMap(s=>s.points.map(p=>Number(p.date))), ...infSeries.flatMap(s=>s.points.map(p=>Number(p.date))), ...uemSeries.flatMap(s=>s.points.map(p=>Number(p.date))) ])].filter(n=>isFinite(n)));
+          const vals = countries.map(c => {
+            const g = gdpSeries.find(s=>s.label===c)?.points.find(p=>Number(p.date)===latestYear)?.value;
+            const i = infSeries.find(s=>s.label===c)?.points.find(p=>Number(p.date)===latestYear)?.value;
+            const u = uemSeries.find(s=>s.label===c)?.points.find(p=>Number(p.date)===latestYear)?.value;
+            return { c, g, i, u };
+          }).filter(v=>v.g!=null && v.i!=null && v.u!=null);
+          if (vals.length > 0) {
+            const mean = (arr) => arr.reduce((a,b)=>a+b,0)/arr.length;
+            const std = (arr) => { const m = mean(arr); return Math.sqrt(arr.reduce((a,b)=>a+(b-m)*(b-m),0)/(arr.length||1)); };
+            const gz = std(vals.map(v=>v.g)) ? vals.map(v=>({ c:v.c, z:(v.g-mean(vals.map(x=>x.g)))/std(vals.map(x=>x.g)) })) : vals.map(v=>({ c:v.c, z:0 }));
+            const iz = std(vals.map(v=>v.i)) ? vals.map(v=>({ c:v.c, z:(v.i-mean(vals.map(x=>x.i)))/std(vals.map(x=>x.i)) })) : vals.map(v=>({ c:v.c, z:0 }));
+            const uz = std(vals.map(v=>v.u)) ? vals.map(v=>({ c:v.c, z:(v.u-mean(vals.map(x=>x.u)))/std(vals.map(x=>x.u)) })) : vals.map(v=>({ c:v.c, z:0 }));
+            const stress = countries.map(c => {
+              const g = gz.find(x=>x.c===c)?.z || 0;
+              const i = iz.find(x=>x.c===c)?.z || 0;
+              const u = uz.find(x=>x.c===c)?.z || 0;
+              const score = Number((g - i - u).toFixed(2));
+              return { label: c, score, year: latestYear };
+            });
+            setMacroStress(stress);
+          } else setMacroStress([]);
         }
       } catch (err) {
         if (!cancelled) {
@@ -540,6 +568,60 @@ function App() {
 
   const confidenceBySrc = Object.fromEntries(sourcesMeta.map(m => [m.src, m.confidence]));
 
+  const DatabasePage = () => (
+    <div className="p-4">
+      <div className="tactical-panel" style={{ margin: '12px 0', paddingBottom: 12 }}>
+        <div className="panel-header" style={{ justifyContent: 'space-between' }}>
+          <div style={{ color: 'var(--accent)' }}>Select Data Sources</div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="button-tactical" onClick={() => setSelectedSources(sourceCardDefs.map(s => s.key))}>Select All</button>
+            <button className="button-tactical" onClick={() => setSelectedSources([])}>Clear</button>
+            <button className="button-tactical" onClick={() => setSelectedSources(prev => {
+              const all = sourceCardDefs.map(s => s.key);
+              return all.filter(k => !prev.includes(k));
+            })}>Invert</button>
+          </div>
+        </div>
+        <div className="p-3" style={{ display: 'grid', gridTemplateColumns: (typeof window !== 'undefined' && window.innerWidth < 768) ? '1fr' : 'repeat(4, minmax(0, 1fr))', gap: 12 }}>
+          {sourceCardDefs.map(card => (
+            <div
+              key={card.key}
+              className="tactical-panel"
+              style={{ cursor: 'pointer', background: 'rgba(0,0,0,0.25)', transition: 'transform 180ms ease, box-shadow 180ms ease', border: selectedSources.includes(card.key) ? '1px solid rgba(0,255,198,0.35)' : '1px solid rgba(255,255,255,0.08)' }}
+              onClick={() => setSelectedSources(prev => prev.includes(card.key) ? prev.filter(s => s !== card.key) : [...prev, card.key])}
+              onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.02)'; e.currentTarget.style.boxShadow = '0 6px 16px rgba(0,0,0,0.35)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}
+            >
+              <div className="panel-header" style={{ justifyContent: 'space-between' }}>
+                <div style={{ color: 'var(--accent)' }}>{card.title}</div>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+                  <input type="checkbox" checked={selectedSources.includes(card.key)} onChange={() => setSelectedSources(prev => prev.includes(card.key) ? prev.filter(s => s !== card.key) : [...prev, card.key])} />
+                  Include
+                </label>
+              </div>
+              <div className="p-2" style={{ fontSize: 13, opacity: 0.9 }}>{card.desc}</div>
+              <div className="p-2" style={{ fontSize: 12, opacity: 0.8 }}>
+                <span style={{ color: 'var(--accent-muted)' }}>Current events:</span> {sourceCounts[card.key] || 0}
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="p-3" style={{ display: 'grid', gridTemplateColumns: '1fr auto', alignItems: 'center', gap: 8 }}>
+          <div>
+            <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 4 }}>Selected: {selectedSources.map(s => (s||'UNKNOWN').toUpperCase()).join(', ') || 'None'} ({selectedSources.length}/{sourceCardDefs.length})</div>
+            <div style={{ width: '100%', height: 6, borderRadius: 3, background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
+              <div style={{ width: `${Math.round((selectedSources.length / sourceCardDefs.length) * 100)}%`, height: '100%', background: 'var(--accent)' }} />
+            </div>
+          </div>
+          <button className="button-tactical" disabled={selectedSources.length === 0} onClick={() => {
+            setShowSourceSelect(false);
+            navigate('/');
+          }}>Continue</button>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <div className="app-root">
       {showSplash && <SplashScreen />}
@@ -564,44 +646,12 @@ function App() {
       </div>
       <AlertBar anomalies={visibleAnomalies} />
 
-      {/* Source selection gate */}
-      {showSourceSelect && location.pathname !== '/database' ? (
-        <div className="p-4">
-          <div className="tactical-panel" style={{ margin: '12px 0', paddingBottom: 12 }}>
-            <div className="panel-header" style={{ justifyContent: 'space-between' }}>
-              <div style={{ color: 'var(--accent)' }}>Select Data Sources</div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button className="button-tactical" onClick={() => setSelectedSources(sourceCardDefs.map(s => s.key))}>Select All</button>
-                <button className="button-tactical" onClick={() => setSelectedSources([])}>Clear</button>
-                <button className="button-tactical" onClick={() => setSelectedSources(prev => {
-                  const all = sourceCardDefs.map(s => s.key);
-                  return all.filter(k => !prev.includes(k));
-                })}>Invert</button>
-              </div>
-            </div>
-            <div className="p-3" style={{ display: 'grid', gridTemplateColumns: (typeof window !== 'undefined' && window.innerWidth < 768) ? '1fr' : 'repeat(4, minmax(0, 1fr))', gap: 12 }}>
-              {sourceCardDefs.map(card => (
-                <SourceCard key={card.key} card={card} selectedSources={selectedSources} setSelectedSources={setSelectedSources} count={sourceCounts[card.key] || 0} conf={confidenceBySrc[card.key] || 0} />
-              ))}
-            </div>
-            <div className="p-3" style={{ display: 'grid', gridTemplateColumns: '1fr auto', alignItems: 'center', gap: 8 }}>
-              <div>
-                <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 4 }}>Selected: {selectedSources.map(s => (s||'UNKNOWN').toUpperCase()).join(', ') || 'None'} ({selectedSources.length}/{sourceCardDefs.length})</div>
-                <div style={{ width: '100%', height: 6, borderRadius: 3, background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
-                  <div style={{ width: `${Math.round((selectedSources.length / sourceCardDefs.length) * 100)}%`, height: '100%', background: 'var(--accent)', transition: 'width 300ms ease' }} />
-                </div>
-              </div>
-              <button className="button-tactical" disabled={selectedSources.length === 0} onClick={() => { setShowSourceSelect(false); navigate('/'); }}>Continue</button>
-            </div>
-          </div>
-        </div>
-      ) : (
-        <Routes>
+      <Routes>
         
         <Route
           path="/"
           element={(
-            <>
+            <div>
               <div className="tactical-panel" style={{ margin: '12px 16px 0 16px' }}>
                 <div className="panel-header">
                   <div style={{ color: 'var(--accent)' }}>Operational Overview</div>
@@ -738,185 +788,13 @@ function App() {
                   </div>
                 </div>
 
-        <div className="tactical-panel" style={{ marginTop: 12 }}>
-          <div className="panel-header">
-            <div style={{ color: 'var(--accent)' }}>Timeline & Feed</div>
-            <div className="button-tactical" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>Top</div>
-          </div>
-          <div className="p-2">
-                    <div className="mt-3">
-                      <ReplayTimeline events={events} onTimeChange={handleTimeChange} />
-        </div>
-        <div className="tactical-panel" style={{ marginTop: 12 }}>
-          <div className="panel-header" style={{ justifyContent: 'space-between' }}>
-            <div style={{ color: 'var(--accent)' }}>Ingestion Health</div>
-            <div className="button-tactical" onClick={async ()=>{ try { const r = await fetch(`${API}/perf/metrics`); const d = await r.json(); setMetrics(Array.isArray(d)?d:[]); } catch {} }}>Refresh Health</div>
-          </div>
-          <div className="p-2" style={{ fontSize: 13 }}>
-            {metrics.length === 0 ? <div style={{ opacity: 0.8 }}>No metrics.</div> : (
-              <ul style={{ margin: 0, paddingLeft: 18 }}>
-                {metrics.slice(0,10).map((m, idx) => (
-                  <li key={idx}>FPS {m.fps} • events {m.events} • anomalies {m.anomalies} • zoom {m.zoom} • {m.device || 'unknown'}</li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </div>
-        <div className="tactical-panel" style={{ marginTop: 12 }}>
-          <div className="panel-header" style={{ justifyContent: 'space-between' }}>
-            <div style={{ color: 'var(--accent)' }}>Briefing Mode</div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <select className="button-tactical" value={briefingTime} onChange={(e)=>setBriefingTime(e.target.value)}>
-                  <option>last hour</option>
-                  <option>last 24 hours</option>
-                </select>
-                <select className="button-tactical" value={briefingSource} onChange={(e)=>setBriefingSource(e.target.value)}>
-                  <option value="">ALL</option>
-                  {Object.keys(sourceCounts).map(s => (<option key={s} value={s}>{(s||'UNKNOWN').toUpperCase()}</option>))}
-                </select>
-          </div>
-        </div>
-        <div className="tactical-panel" style={{ marginTop: 12 }}>
-          <div className="panel-header" style={{ justifyContent: 'space-between' }}>
-            <div style={{ color: 'var(--accent)' }}>Alert Rules</div>
-            <div className="button-tactical" onClick={async ()=>{
-              try {
-                const res = await fetch(`${API}/alert-rules`);
-                const data = await res.json();
-                setAlertRules(Array.isArray(data) ? data : []);
-              } catch {}
-            }}>Refresh</div>
-          </div>
-          <div className="p-2" style={{ fontSize: 13 }}>
-            <div style={{ marginBottom: 8 }}>
-              {alertRules.length === 0 ? <div style={{ opacity: 0.8 }}>No rules.</div> : (
-                <ul style={{ margin: 0, paddingLeft: 18 }}>
-                  {alertRules.map(r => (
-                    <li key={r.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <span>{r.name} • {(r.source||'ALL').toUpperCase()} • sev≥{r.severity_threshold} • conf≥{Math.round((r.min_confidence||0)*100)}%</span>
-                      <button className="button-tactical" onClick={async ()=>{ try { await fetch(`${API}/alert-rules/${r.id}`, { method: 'DELETE' }); const res = await fetch(`${API}/alert-rules`); const data = await res.json(); setAlertRules(Array.isArray(data)?data:[]); } catch {} }}>Delete</button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-              <input className="button-tactical" placeholder="Name" value={alertForm.name} onChange={(e)=>setAlertForm(f=>({ ...f, name: e.target.value }))} />
-              <select className="button-tactical" value={alertForm.source} onChange={(e)=>setAlertForm(f=>({ ...f, source: e.target.value }))}>
-                <option value="">ALL</option>
-                {Object.keys(sourceCounts).map(s => (<option key={s} value={s}>{(s||'UNKNOWN').toUpperCase()}</option>))}
-              </select>
-              <input className="button-tactical" placeholder="Severity ≥" type="number" value={alertForm.severity_threshold} onChange={(e)=>setAlertForm(f=>({ ...f, severity_threshold: Number(e.target.value)||0 }))} />
-              <input className="button-tactical" placeholder="Confidence ≥" type="number" step="0.1" value={alertForm.min_confidence} onChange={(e)=>setAlertForm(f=>({ ...f, min_confidence: Number(e.target.value)||0 }))} />
-              <input className="button-tactical" placeholder="min_lat" value={alertForm.min_lat} onChange={(e)=>setAlertForm(f=>({ ...f, min_lat: e.target.value }))} />
-              <input className="button-tactical" placeholder="min_lon" value={alertForm.min_lon} onChange={(e)=>setAlertForm(f=>({ ...f, min_lon: e.target.value }))} />
-              <input className="button-tactical" placeholder="max_lat" value={alertForm.max_lat} onChange={(e)=>setAlertForm(f=>({ ...f, max_lat: e.target.value }))} />
-              <input className="button-tactical" placeholder="max_lon" value={alertForm.max_lon} onChange={(e)=>setAlertForm(f=>({ ...f, max_lon: e.target.value }))} />
-              <input className="button-tactical" placeholder="email_to" value={alertForm.email_to} onChange={(e)=>setAlertForm(f=>({ ...f, email_to: e.target.value }))} />
-            </div>
-            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-              <button className="button-tactical" onClick={()=>{
-                const bb = (filters.bbox || '').split(',').map(x=>x.trim());
-                if (bb.length===4) {
-                  setAlertForm(f=>({ ...f, min_lat: bb[0], min_lon: bb[1], max_lat: bb[2], max_lon: bb[3] }));
-                }
-              }}>Use current bbox</button>
-              <button className="button-tactical" onClick={()=>{
-                const ev = events.find(e=>e.id===focusEventId);
-                if (ev && typeof ev.latitude==='number' && typeof ev.longitude==='number') {
-                  const lat = ev.latitude; const lon = ev.longitude;
-                  const d = 1;
-                  setAlertForm(f=>({ ...f, min_lat: String(lat - d), min_lon: String(lon - d), max_lat: String(lat + d), max_lon: String(lon + d) }));
-                }
-              }}>Use focused event ±1°</button>
-            </div>
-            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-              <button className="button-tactical" onClick={async ()=>{
-                try {
-                  const payload = { ...alertForm };
-                  ['min_lat','min_lon','max_lat','max_lon'].forEach(k=>{ if(payload[k]==='') payload[k]=null; else payload[k]=Number(payload[k]); });
-                  if (payload.source==='') payload.source = null;
-                  const res = await fetch(`${API}/alert-rules`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-                  await res.json();
-                  const r = await fetch(`${API}/alert-rules`);
-                  const data = await r.json();
-                  setAlertRules(Array.isArray(data)?data:[]);
-                } catch {}
-              }}>Create Rule</button>
-              <button className="button-tactical" onClick={()=>setAlertForm({ name: '', source: '', severity_threshold: 5, min_confidence: 0.5, min_lat: '', min_lon: '', max_lat: '', max_lon: '', email_to: '' })}>Clear</button>
-            </div>
-          </div>
-        </div>
-            <div className="p-2" style={{ fontSize: 13 }}>
-              <div style={{ marginBottom: 8 }}>
-                <input value={briefingBbox} onChange={(e)=>setBriefingBbox(e.target.value)} className="button-tactical" placeholder="bbox minLat,minLon,maxLat,maxLon (optional)" style={{ width: '100%' }} />
-              </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button className="button-tactical" onClick={async ()=>{
-                  const parts = [];
-                  parts.push('brief summary');
-                  parts.push(briefingTime);
-                  if (briefingSource) parts.push(briefingSource);
-                  if (briefingBbox) parts.push(`bbox:${briefingBbox}`);
-                  try {
-                    const res = await fetch(`${API}/api/ai-analyst`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: parts.join(' ') }) });
-                    const data = await res.json();
-                    setBriefingOutput(String(data?.output || 'No analysis available.'));
-                  } catch {
-                    setBriefingOutput('Error contacting analyst API.');
-                  }
-                }}>Generate</button>
-                <button className="button-tactical" onClick={()=>setBriefingOutput('')}>Clear</button>
-              </div>
-              <div style={{ marginTop: 8, whiteSpace: 'pre-wrap', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 8, minHeight: 80 }}>{briefingOutput || 'Briefing output will appear here.'}</div>
-            </div>
-          </div>
-                    <div className="mt-3">
-                      <EventFeed events={visibleEvents} anomalies={visibleAnomalies} onSelect={handleSelectEvent} selectedEventId={selectedEventId} />
-                    </div>
-                  </div>
+        
+        
+        
+        
+            
 
-                        {selectedEventId && (() => {
-                          const ev = events.find(e => e.id === selectedEventId);
-                          const anom = anomalies.find(a => a.event_id === selectedEventId);
-                          return (
-                            <div className="tactical-panel" style={{ marginTop: 12 }}>
-                        <div className="panel-header">
-                          <div style={{ color: 'var(--accent)' }}>Event Details</div>
-                          <div className="button-tactical" onClick={() => setSelectedEventId(null)}>Close</div>
-                        </div>
-                        <div className="p-2" style={{ fontSize: 13 }}>
-                          <div>Source: <span style={{ color: 'var(--accent-muted)' }}>{(ev?.source || 'UNKNOWN').toUpperCase()}</span></div>
-                          <div>Timestamp: {ev?.timestamp ? new Date(ev.timestamp).toLocaleString() : '—'}</div>
-                              <div>Latitude: {ev?.latitude ?? '—'} | Longitude: {ev?.longitude ?? '—'}</div>
-                              <div>ID: {ev?.id ?? '—'}</div>
-                              <div>Confidence: {typeof ev?.confidence === 'number' ? Math.round(ev.confidence * 100) : (typeof ev?.confidence === 'string' ? Math.round(Number(ev.confidence) * 100) : '—')}%</div>
-                              <div style={{ marginTop: 6, color: anom ? 'var(--danger)' : 'var(--accent-muted)' }}>
-                                {anom ? 'Anomaly detected for this event' : 'Status: normal'}
-                              </div>
-                          {anom && (
-                            <div style={{ marginTop: 8 }}>
-                              <div>Type: <span style={{ color: 'var(--accent-muted)' }}>{anom.type}</span></div>
-                              <div>Severity: <span style={{ color: 'var(--accent)' }}>{anom.severity}</span></div>
-                              <div>Description: <span style={{ opacity: 0.9 }}>{anom.description}</span></div>
-                                  {(() => { const meta = parseAnomalyMeta(anom); return (
-                                    <>
-                                      {meta.algorithm && <div>Algorithm: <span style={{ color: 'var(--accent-muted)' }}>{meta.algorithm}</span></div>}
-                                      {typeof meta.score === 'number' && <div>Model score: <span style={{ color: 'var(--accent)' }}>{meta.score.toFixed(4)}</span></div>}
-                                      {meta.rule && <div>Rule: <span style={{ color: 'var(--accent-muted)' }}>{meta.rule}</span></div>}
-                                      {typeof meta.magnitude === 'number' && <div>Magnitude: <span style={{ color: 'var(--accent)' }}>{meta.magnitude}</span></div>}
-                                      {typeof ev?.confidence === 'number' && <div>Confidence: <span style={{ color: 'var(--accent)' }}>{Math.round(ev.confidence * 100)}%</span></div>}
-                                    </>
-                                  ); })()}
-                              <div>Detected: {anom.timestamp ? new Date(anom.timestamp).toLocaleString() : '—'}</div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
-              </div>
+            
               <div className="w-3/4 p-4">
                 <div className="tactical-panel" style={{ height: '100%' }}>
                   <div className="panel-header">
@@ -1116,52 +994,10 @@ function App() {
                   </div>
                 </div>
               </div>
-              <div style={{ display: activeTab==='map'?'block':'none', width: '100%' }} className="p-4">
-                <div className="tactical-panel" style={{ marginBottom: 12 }}>
-                  <div className="panel-header" style={{ justifyContent: 'space-between' }}>
-                    <div style={{ color: 'var(--accent)' }}>Map Controls</div>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <select className="button-tactical" value={filters.window || 'last 24 hours'} onChange={(e)=>setFilters(f=>({ ...f, window: e.target.value }))}>
-                        <option>last hour</option>
-                        <option>last 24 hours</option>
-                        <option>last 7 days</option>
-                      </select>
-                      <div className="button-tactical" onClick={()=>setFilters(f=>({ ...f, source: 'nasa_eonet' }))}>NASA EONET</div>
-                      <div className="button-tactical" onClick={()=>setFilters(f=>({ ...f, source: undefined }))}>All</div>
-                      <div className="button-tactical" onClick={()=>setFilters(f=>({ ...f, anomaliesOnly: !f.anomaliesOnly }))}>{filters.anomaliesOnly ? 'Anomalies: ON' : 'Anomalies: OFF'}</div>
-                      <div className="button-tactical" onClick={()=>setFilters(f=>({ ...f, bbox: '' }))}>Clear bbox</div>
-                    </div>
-                  </div>
-                </div>
-                <div className="tactical-panel" style={{ height: 'calc(100vh - 180px)' }}>
-                  <MapComponent events={events} selectedEventId={selectedEventId} onSelect={handleSelectEvent} useWebGL={useWebGL} />
-                </div>
-              </div>
-              <div style={{ display: activeTab==='timeline'?'block':'none', width: '100%' }} className="p-4">
-                <div className="tactical-panel" style={{ marginBottom: 12 }}>
-                  <div className="panel-header" style={{ justifyContent: 'space-between' }}>
-                    <div style={{ color: 'var(--accent)' }}>Timeline</div>
-                    <div className="button-tactical" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>Top</div>
-                  </div>
-                </div>
-                <div className="tactical-panel" style={{ marginBottom: 12 }}>
-                  <div className="p-2">
-                    <ReplayTimeline events={events} onTimeChange={handleTimeChange} />
-                  </div>
-                </div>
-                <div className="tactical-panel">
-                  <div className="p-2">
-                    <EventFeed events={visibleEvents} anomalies={visibleAnomalies} onSelect={handleSelectEvent} selectedEventId={selectedEventId} />
-                  </div>
-                </div>
-              </div>
-              <div style={{ display: activeTab==='analyst'?'block':'none', width: '100%' }} className="p-4">
-                <ChatPanel apiBase={API} events={visibleEvents} anomalies={visibleAnomalies} filters={filters} sourceCounts={sourceCounts} threatScore={threatScore} intelSummary={intelSummary} />
-              </div>
-              </div>
-            </>
-          )}
-        />
+              {/* Map/Timeline/Analyst moved to dedicated routes below for clarity */}
+            </div>
+            )}
+          />
 
         <Route
           path="/map"
@@ -1351,6 +1187,35 @@ function App() {
                       );
                     })()}
                   </div>
+                  <div className="p-2" style={{ display: 'grid', gridTemplateColumns: (typeof window !== 'undefined' && window.innerWidth < 768) ? '1fr' : '1fr 1fr', gap: 12 }}>
+                    <div className="tactical-panel"><div className="p-2" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                      <div style={{ color: 'var(--accent)' }}>Countries</div>
+                      <select className="button-tactical" onChange={(e)=>{ const v = e.target.value; if (v && !macroCountries.includes(v)) setMacroCountries(arr=>[...arr, v]); }}>
+                        <option value="">Add country</option>
+                        <option value="WLD">WLD</option>
+                        <option value="USA">USA</option>
+                        <option value="CHN">CHN</option>
+                        <option value="IND">IND</option>
+                        <option value="EUU">EUU</option>
+                        <option value="GBR">GBR</option>
+                        <option value="DEU">DEU</option>
+                        <option value="JPN">JPN</option>
+                      </select>
+                      {macroCountries.map(c => (
+                        <div key={c} className="button-tactical" onClick={()=>setMacroCountries(arr=>arr.filter(x=>x!==c))}>{c} ✕</div>
+                      ))}
+                    </div></div>
+                    <div className="tactical-panel"><div className="p-2">
+                      <div style={{ marginBottom: 6, color: 'var(--accent)' }}>Macro Stress Index</div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                        {macroStress.length === 0 ? <div style={{ opacity: 0.8 }}>No data</div> : macroStress.map(s => (
+                          <div key={s.label} className="tactical-panel" style={{ padding: 8 }}>
+                            <div style={{ fontSize: 12, opacity: 0.8 }}>{s.label} • {s.year}</div>
+                            <div style={{ fontSize: 22, color: s.score >= 0 ? 'var(--accent)' : 'var(--danger)' }}>{s.score}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div></div>
                 </div>
                 <ChatPanel apiBase={API} events={visibleEvents} anomalies={visibleAnomalies} filters={filters} sourceCounts={sourceCounts} threatScore={threatScore} intelSummary={intelSummary} />
                 
@@ -1437,65 +1302,8 @@ function App() {
               </div>
             </div>
           )}
-        />
-          </Routes>
-
-      )}
-
-      <Routes>
-        <Route path="/database" element={(
-          <div className="p-4">
-            <div className="tactical-panel" style={{ margin: '12px 0', paddingBottom: 12 }}>
-              <div className="panel-header" style={{ justifyContent: 'space-between' }}>
-                <div style={{ color: 'var(--accent)' }}>Select Data Sources</div>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button className="button-tactical" onClick={() => setSelectedSources(sourceCardDefs.map(s => s.key))}>Select All</button>
-                  <button className="button-tactical" onClick={() => setSelectedSources([])}>Clear</button>
-                  <button className="button-tactical" onClick={() => setSelectedSources(prev => {
-                    const all = sourceCardDefs.map(s => s.key);
-                    return all.filter(k => !prev.includes(k));
-                  })}>Invert</button>
-                </div>
-              </div>
-              <div className="p-3" style={{ display: 'grid', gridTemplateColumns: (typeof window !== 'undefined' && window.innerWidth < 768) ? '1fr' : 'repeat(4, minmax(0, 1fr))', gap: 12 }}>
-                {sourceCardDefs.map(card => (
-                  <div
-                    key={card.key}
-                    className="tactical-panel"
-                    style={{ cursor: 'pointer', background: 'rgba(0,0,0,0.25)', transition: 'transform 180ms ease, box-shadow 180ms ease', border: selectedSources.includes(card.key) ? '1px solid rgba(0,255,198,0.35)' : '1px solid rgba(255,255,255,0.08)' }}
-                    onClick={() => setSelectedSources(prev => prev.includes(card.key) ? prev.filter(s => s !== card.key) : [...prev, card.key])}
-                    onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.02)'; e.currentTarget.style.boxShadow = '0 6px 16px rgba(0,0,0,0.35)'; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}
-                  >
-                    <div className="panel-header" style={{ justifyContent: 'space-between' }}>
-                      <div style={{ color: 'var(--accent)' }}>{card.title}</div>
-                      <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
-                        <input type="checkbox" checked={selectedSources.includes(card.key)} onChange={() => setSelectedSources(prev => prev.includes(card.key) ? prev.filter(s => s !== card.key) : [...prev, card.key])} />
-                        Include
-                      </label>
-                    </div>
-                    <div className="p-2" style={{ fontSize: 13, opacity: 0.9 }}>{card.desc}</div>
-                    <div className="p-2" style={{ fontSize: 12, opacity: 0.8 }}>
-                      <span style={{ color: 'var(--accent-muted)' }}>Current events:</span> {sourceCounts[card.key] || 0}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="p-3" style={{ display: 'grid', gridTemplateColumns: '1fr auto', alignItems: 'center', gap: 8 }}>
-                <div>
-                  <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 4 }}>Selected: {selectedSources.map(s => (s||'UNKNOWN').toUpperCase()).join(', ') || 'None'} ({selectedSources.length}/{sourceCardDefs.length})</div>
-                  <div style={{ width: '100%', height: 6, borderRadius: 3, background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
-                    <div style={{ width: `${Math.round((selectedSources.length / sourceCardDefs.length) * 100)}%`, height: '100%', background: 'var(--accent)' }} />
-                  </div>
-                </div>
-              <button className="button-tactical" disabled={selectedSources.length === 0} onClick={() => {
-                setShowSourceSelect(false);
-                navigate('/');
-              }}>Continue</button>
-              </div>
-            </div>
-          </div>
-        )} />
+       />
+        <Route path="/database" element={<DatabasePage />} />
       </Routes>
       {showAbout && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}>
