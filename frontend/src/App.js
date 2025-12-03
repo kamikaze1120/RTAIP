@@ -101,12 +101,8 @@ function App() {
       return { search: '', anomaliesOnly: false, minConf: 0, minSev: 0, window: 'last 24 hours', bbox: '' };
     }
   });
-  const [selectedSources, setSelectedSources] = useState(() => {
-    try { const saved = localStorage.getItem('rtaip_selected_sources'); return saved ? JSON.parse(saved) : []; } catch { return []; }
-  });
-  const [showSourceSelect, setShowSourceSelect] = useState(() => {
-    try { const saved = localStorage.getItem('rtaip_selected_sources'); return !saved || JSON.parse(saved).length === 0; } catch { return true; }
-  });
+  const [selectedSources, setSelectedSources] = useState([]);
+  const [showSourceSelect, setShowSourceSelect] = useState(true);
   const initialRouteRedirectedRef = useRef(false);
   const [backendOnline, setBackendOnline] = useState(false);
   const [replayIndex, setReplayIndex] = useState(null);
@@ -347,9 +343,13 @@ function App() {
           const femaKey = `cache_fema_${startStr}_${endStr}`;
           let femaFeed = getCache(femaKey, 30 * 60 * 1000);
           if (!femaFeed) {
-            const url = `https://gis.fema.gov/ArcGIS/rest/services/IncidentManagement/DisasterDeclarationsSummaries/FeatureServer/0/query?where=1%3D1&outFields=declarationDate,incidentType,declaredCountyArea,declaredState,disasterNumber&returnGeometry=true&f=json`;
-            const r = await fetch(url);
-            femaFeed = await r.json();
+            const url = `https://gis.fema.gov/arcgis/rest/services/IncidentManagement/DisasterDeclarationsSummaries/FeatureServer/0/query?where=1%3D1&outFields=declarationDate,incidentType,declaredCountyArea,declaredState,disasterNumber&returnGeometry=true&outSR=4326&f=json`;
+            try {
+              const r = await fetch(url);
+              femaFeed = r && r.ok ? await r.json() : { features: [] };
+            } catch {
+              femaFeed = { features: [] };
+            }
             setCache(femaKey, femaFeed);
           }
           femaEvents = Array.isArray(femaFeed?.features) ? femaFeed.features.map((f, idx) => {
