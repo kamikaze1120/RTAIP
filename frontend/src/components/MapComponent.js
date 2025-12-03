@@ -46,6 +46,11 @@ const MapComponent = ({ events, anomalies, focusEventId, onSelect, basemapStyle,
   const mapInstanceRef = useRef();
   const eventsSigRef = useRef('');
   const anomsSigRef = useRef('');
+  const onSelectRef = useRef(onSelect);
+  const onPerfUpdateRef = useRef(onPerfUpdate);
+
+  useEffect(() => { onSelectRef.current = onSelect; }, [onSelect]);
+  useEffect(() => { onPerfUpdateRef.current = onPerfUpdate; }, [onPerfUpdate]);
 
   useEffect(() => {
     const cleanupFns = [];
@@ -109,8 +114,9 @@ const MapComponent = ({ events, anomalies, focusEventId, onSelect, basemapStyle,
         if (id) { selectedId = id; return true; }
         return false;
       });
-      if (selectedId && typeof onSelect === 'function') {
-        onSelect(selectedId);
+      const cb = onSelectRef.current;
+      if (selectedId && typeof cb === 'function') {
+        cb(selectedId);
       }
     };
     map.on('click', handleClick);
@@ -124,8 +130,9 @@ const MapComponent = ({ events, anomalies, focusEventId, onSelect, basemapStyle,
         const fps = fpsRef.current.frames;
         fpsRef.current.frames = 0;
         fpsRef.current.last = now;
-        if (typeof onPerfUpdate === 'function') {
-          try { onPerfUpdate({ fps, events: eventSourceRef.current?.getFeatures().length || 0, anomalies: anomalySourceRef.current?.getFeatures().length || 0 }); } catch {}
+        const perfCb = onPerfUpdateRef.current;
+        if (typeof perfCb === 'function') {
+          try { perfCb({ fps, events: eventSourceRef.current?.getFeatures().length || 0, anomalies: anomalySourceRef.current?.getFeatures().length || 0 }); } catch {}
         }
       }
       rafId = requestAnimationFrame(tick);
@@ -138,7 +145,7 @@ const MapComponent = ({ events, anomalies, focusEventId, onSelect, basemapStyle,
       map.setTarget(undefined);
       cleanupFns.forEach(fn => { try { fn(); } catch {} });
     };
-  }, [basemapStyle, useWebGL, onSelect, onPerfUpdate]);
+  }, [basemapStyle, useWebGL]);
 
   useEffect(() => {
     const eventSource = eventSourceRef.current;

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Routes, Route, NavLink, useNavigate, useLocation } from 'react-router-dom';
-import MapComponent from './components/MapComponent';
+import { Suspense, lazy } from 'react';
 import EventFeed from './components/EventFeed';
 // Removed Filters import
 import AlertBar from './components/AlertBar';
@@ -11,6 +11,7 @@ import SplashScreen from './components/SplashScreen';
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Tooltip, Legend } from 'chart.js';
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Tooltip, Legend);
+const MapComponent = lazy(() => import('./components/MapComponent'));
 
 function getCache(key, ttlMs) {
   try {
@@ -126,7 +127,14 @@ function App() {
   const [basemapStyle, setBasemapStyle] = useState('light');
   const [useWebGL, setUseWebGL] = useState(false);
   const [perfInfo, setPerfInfo] = useState({ fps: 0, events: 0, anomalies: 0 });
-  const handlePerfUpdate = useCallback((m) => { setPerfInfo(m); }, []);
+  const perfUpdateTsRef = useRef(0);
+  const handlePerfUpdate = useCallback((m) => {
+    const now = Date.now();
+    if (now - perfUpdateTsRef.current >= 1500) {
+      perfUpdateTsRef.current = now;
+      setPerfInfo(m);
+    }
+  }, []);
   const [benchData, setBenchData] = useState([]);
   const [briefingTime, setBriefingTime] = useState('last 24 hours');
   const [briefingSource, setBriefingSource] = useState('');
@@ -169,7 +177,9 @@ function App() {
    const API = (() => { try { const o = localStorage.getItem('rtaip_api'); if (o) return o; } catch {} return process.env.REACT_APP_API_URL || 'https://rtaip-production.up.railway.app'; })();
   const sourceCardDefs = useMemo(() => ([
     { key: 'worldbank', title: 'World Bank', desc: 'Global macroeconomic indicators (GDP, Inflation, Unemployment).' },
-    { key: 'nasa_eonet', title: 'NASA EONET', desc: 'Natural event intelligence (fires, storms, volcanoes).' }
+    { key: 'nasa_eonet', title: 'NASA EONET', desc: 'Natural event intelligence (fires, storms, volcanoes).' },
+    { key: 'usgs_seismic', title: 'USGS Seismic', desc: 'Earthquake events (magnitude, location, time).'},
+    { key: 'noaa_weather', title: 'NOAA Weather', desc: 'Active weather alerts and polygons.'}
   ]), []);
 
   useEffect(() => {
@@ -230,7 +240,63 @@ function App() {
           };
         });
 
-        const filteredEvents = nasaEvents.filter(event => {
+        const usgsKey = 'cache_usgs_all_day';
+        let usgsFeed = getCache(usgsKey, 15 * 60 * 1000);
+        if (!usgsFeed) {
+          const r = await fetch('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson');
+          usgsFeed = await r.json();
+          setCache(usgsKey, usgsFeed);
+        }
+        const usgsEvents = Array.isArray(usgsFeed?.features) ? usgsFeed.features.map((f, idx) => {
+          const c = Array.isArray(f.geometry?.coordinates) ? f.geometry.coordinates : [];
+          const lon = typeof c[0] === 'number' ? c[0] : null;
+          const lat = typeof c[1] === 'number' ? c[1] : null;
+          const ts = typeof f.properties?.time === 'number' ? new Date(f.properties.time).toISOString() : new Date().toISOString();
+          return {
+            id: String(f.id || `usgs-${idx}`),
+            timestamp: ts,
+            source: 'usgs_seismic',
+            latitude: lat,
+            longitude: lon,
+            confidence: 1,
+            data: { mag: f.properties?.mag, place: f.properties?.place }
+          };
+        }) : [];
+
+        const noaaKey = 'cache_noaa_alerts';
+        let noaaFeed = getCache(noaaKey, 10 * 60 * 1000);
+        if (!noaaFeed) {
+          const r = await fetch('https://api.weather.gov/alerts/active');
+          noaaFeed = await r.json();
+          setCache(noaaKey, noaaFeed);
+        }
+        const noaaEvents = Array.isArray(noaaFeed?.features) ? noaaFeed.features.map((f, idx) => {
+          const geom = f.geometry;
+          let lon = null, lat = null;
+          try {
+            if (geom && geom.type === 'Polygon') {
+              const coords = geom.coordinates?.[0] || [];
+              if (coords.length > 0) {
+                const sum = coords.reduce((acc, p) => { return { lon: acc.lon + (p?.[0]||0), lat: acc.lat + (p?.[1]||0) }; }, { lon: 0, lat: 0 });
+                lon = sum.lon / coords.length; lat = sum.lat / coords.length;
+              }
+            }
+          } catch {}
+          const ts = f.properties?.effective || f.properties?.sent || f.properties?.onset || new Date().toISOString();
+          return {
+            id: String(f.id || `noaa-${idx}`),
+            timestamp: ts,
+            source: 'noaa_weather',
+            latitude: lat,
+            longitude: lon,
+            confidence: 1,
+            data: { headline: f.properties?.headline, event: f.properties?.event }
+          };
+        }) : [];
+
+        const allEvents = [ ...nasaEvents, ...usgsEvents, ...noaaEvents ];
+
+        const filteredEvents = allEvents.filter(event => {
           const src = (event.source || '').toLowerCase();
           if (Array.isArray(selectedSources) && selectedSources.length > 0 && !selectedSources.includes(src)) return false;
           if (filters.source && src !== filters.source) return false;
@@ -870,7 +936,9 @@ function App() {
                 </div>
               </div>
               <div style={{ height: 'calc(100% - 42px)' }}>
-                <MapComponent events={events} anomalies={anomalies} focusEventId={focusEventId} onSelect={(id)=>setSelectedEventId(id)} basemapStyle={basemapStyle} useWebGL={useWebGL} onPerfUpdate={handlePerfUpdate} />
+                <Suspense fallback={<div className="p-3">Loading map…</div>}>
+                  <MapComponent events={events} anomalies={anomalies} focusEventId={focusEventId} onSelect={handleSelectEvent} basemapStyle={basemapStyle} useWebGL={useWebGL} onPerfUpdate={handlePerfUpdate} />
+                </Suspense>
               </div>
             </div>
             {selectedEventId && (() => {
@@ -905,7 +973,9 @@ function App() {
             <div className="tactical-panel" style={{ height: '60vh', marginTop: 12 }}>
               <div className="panel-header"><div style={{ color: 'var(--accent)' }}>Operational Map</div></div>
               <div style={{ height: 'calc(100% - 42px)' }}>
-                <MapComponent events={events.slice(0, replayIndex == null ? events.length : Math.min(events.length, Number(replayIndex)+1))} anomalies={anomalies.filter(a => events.slice(0, replayIndex == null ? events.length : Math.min(events.length, Number(replayIndex)+1)).some(e => e.id === a.event_id))} focusEventId={focusEventId} onSelect={(id)=>setSelectedEventId(id)} />
+                <Suspense fallback={<div className="p-3">Loading map…</div>}>
+                  <MapComponent events={events.slice(0, replayIndex == null ? events.length : Math.min(events.length, Number(replayIndex)+1))} anomalies={anomalies.filter(a => events.slice(0, replayIndex == null ? events.length : Math.min(events.length, Number(replayIndex)+1)).some(e => e.id === a.event_id))} focusEventId={focusEventId} onSelect={handleSelectEvent} />
+                </Suspense>
               </div>
             </div>
           </div>
