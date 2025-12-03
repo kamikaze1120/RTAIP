@@ -23,6 +23,10 @@ const sourceStyles = {
   ais: new Style({ image: new CircleStyle({ radius: 6, fill: new Fill({ color: '#32cd32' }), stroke: new Stroke({ color: '#1a7f1a', width: 2 }) }) }),
   usgs_seismic: new Style({ image: new CircleStyle({ radius: 6, fill: new Fill({ color: '#ff8c00' }), stroke: new Stroke({ color: '#bf6500', width: 2 }) }) }),
   noaa_weather: new Style({ image: new CircleStyle({ radius: 6, fill: new Fill({ color: '#8a2be2' }), stroke: new Stroke({ color: '#5c1c99', width: 2 }) }) }),
+  gdacs_disasters: new Style({ image: new CircleStyle({ radius: 7, fill: new Fill({ color: '#00bcd4' }), stroke: new Stroke({ color: '#008fa1', width: 2 }) }) }),
+  fema_disasters: new Style({ image: new CircleStyle({ radius: 7, fill: new Fill({ color: '#17a2b8' }), stroke: new Stroke({ color: '#0f7280', width: 2 }) }) }),
+  hifld_infra: new Style({ image: new CircleStyle({ radius: 5, fill: new Fill({ color: '#ffc107' }), stroke: new Stroke({ color: '#b58900', width: 2 }) }) }),
+  census_pop: new Style({ image: new CircleStyle({ radius: 5, fill: new Fill({ color: '#20c997' }), stroke: new Stroke({ color: '#158c6d', width: 2 }) }) }),
   default: new Style({ image: new CircleStyle({ radius: 6, fill: new Fill({ color: '#999' }), stroke: new Stroke({ color: '#666', width: 2 }) }) }),
 };
 

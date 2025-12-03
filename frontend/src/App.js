@@ -8,9 +8,7 @@ import ChatPanel from './components/ChatPanel';
 import './App.css';
 import ReplayTimeline from './components/ReplayTimeline';
 import SplashScreen from './components/SplashScreen';
-import { Line, Bar, Doughnut } from 'react-chartjs-2';
-import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Tooltip, Legend } from 'chart.js';
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Tooltip, Legend);
+ 
 const MapComponent = lazy(() => import('./components/MapComponent'));
 
 function getCache(key, ttlMs) {
@@ -143,13 +141,11 @@ function App() {
   const [alertRules, setAlertRules] = useState([]);
   const [alertForm, setAlertForm] = useState({ name: '', source: '', severity_threshold: 5, min_confidence: 0.5, min_lat: '', min_lon: '', max_lat: '', max_lon: '', email_to: '' });
   const [metrics, setMetrics] = useState([]);
-  const [macroData, setMacroData] = useState({ gdpGrowth: [], inflation: [], unemployment: [] });
-  const [macroStress, setMacroStress] = useState([]);
-  const [macroCountries, setMacroCountries] = useState(['WLD','USA']);
-  const [reportSpec, setReportSpec] = useState({ type: 'events', window: 'last 24 hours', countries: ['WLD','USA'], indicators: { gdp: true, inflation: true, unemployment: true } });
+  const [reportSpec, setReportSpec] = useState({ window: 'last 24 hours' });
   const [apiInput, setApiInput] = useState(() => { try { return localStorage.getItem('rtaip_api') || ''; } catch { return ''; } });
   const [showAbout, setShowAbout] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
+  const [layerGroups, setLayerGroups] = useState({ disasters: true, aviation: false, infrastructure: false, population: false });
   
 
   const runAnalyst = async (q) => {
@@ -176,20 +172,16 @@ function App() {
    // API base configurable via environment; defaults to 8000
    const API = (() => { try { const o = localStorage.getItem('rtaip_api'); if (o) return o; } catch {} return process.env.REACT_APP_API_URL || 'https://rtaip-production.up.railway.app'; })();
   const sourceCardDefs = useMemo(() => ([
-    { key: 'worldbank', title: 'World Bank', desc: 'Global macroeconomic indicators (GDP, Inflation, Unemployment).' },
     { key: 'nasa_eonet', title: 'NASA EONET', desc: 'Natural event intelligence (fires, storms, volcanoes).' },
     { key: 'usgs_seismic', title: 'USGS Seismic', desc: 'Earthquake events (magnitude, location, time).'},
-    { key: 'noaa_weather', title: 'NOAA Weather', desc: 'Active weather alerts and polygons.'}
+    { key: 'noaa_weather', title: 'NOAA Weather', desc: 'Active weather alerts and polygons.'},
+    { key: 'gdacs_disasters', title: 'GDACS Disasters', desc: 'Global disaster alerts with geospatial context.' },
+    { key: 'fema_disasters', title: 'FEMA Declarations', desc: 'US disaster declarations and incident metadata.' },
+    { key: 'hifld_infra', title: 'HIFLD Infrastructure', desc: 'Critical infrastructure facilities (e.g., hospitals).'},
+    { key: 'census_pop', title: 'Census Counties', desc: 'County internal points for proximity and population context.' }
   ]), []);
 
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem('rtaip_selected_sources');
-      if ((!saved || JSON.parse(saved).length === 0) && selectedSources.length === 0) {
-        setSelectedSources(sourceCardDefs.map(s => s.key));
-      }
-    } catch {}
-  }, [sourceCardDefs, selectedSources]);
+  
 
   useEffect(() => {
     const t = setTimeout(() => setShowSplash(false), 2200);
@@ -294,8 +286,118 @@ function App() {
           };
         }) : [];
 
-        const allEvents = [ ...nasaEvents, ...usgsEvents, ...noaaEvents ];
+        const gdacsKey = `cache_gdacs_${startStr}_${endStr}`;
+        let gdacsFeed = getCache(gdacsKey, 15 * 60 * 1000);
+        if (!gdacsFeed) {
+          const r = await fetch(`https://www.gdacs.org/gdacsapi/api/events/geteventlist/SEARCH?eventlist=EQ;TC;FL;WF;VO;DR&fromdate=${startStr}&todate=${endStr}`);
+          gdacsFeed = await r.json();
+          setCache(gdacsKey, gdacsFeed);
+        }
+        const gdacsEvents = Array.isArray(gdacsFeed?.features) ? gdacsFeed.features.map((f, idx) => {
+          let lon = null, lat = null;
+          const geom = f.geometry;
+          try {
+            if (geom && geom.type === 'Point' && Array.isArray(geom.coordinates)) {
+              lon = typeof geom.coordinates[0] === 'number' ? geom.coordinates[0] : null;
+              lat = typeof geom.coordinates[1] === 'number' ? geom.coordinates[1] : null;
+            } else if (geom && geom.type === 'Polygon') {
+              const coords = geom.coordinates?.[0] || [];
+              if (coords.length > 0) {
+                const sum = coords.reduce((acc, p) => ({ lon: acc.lon + (p?.[0]||0), lat: acc.lat + (p?.[1]||0) }), { lon: 0, lat: 0 });
+                lon = sum.lon / coords.length; lat = sum.lat / coords.length;
+              }
+            }
+          } catch {}
+          const p = f.properties || {};
+          const ts = p.fromdate || p.todate || new Date().toISOString();
+          const id = p.eventid && p.episodeid ? `${p.eventid}-${p.episodeid}` : String(p.eventid || `gdacs-${idx}`);
+          return {
+            id,
+            timestamp: ts,
+            source: 'gdacs_disasters',
+            latitude: lat,
+            longitude: lon,
+            confidence: 1,
+            data: { title: p.name || p.description || 'GDACS Event', type: p.eventtype, alertlevel: p.alertlevel }
+          };
+        }) : [];
 
+        const femaKey = `cache_fema_${startStr}_${endStr}`;
+        let femaFeed = getCache(femaKey, 30 * 60 * 1000);
+        if (!femaFeed) {
+          const url = `https://gis.fema.gov/ArcGIS/rest/services/IncidentManagement/DisasterDeclarationsSummaries/FeatureServer/0/query?where=1%3D1&outFields=declarationDate,incidentType,declaredCountyArea,declaredState,disasterNumber&returnGeometry=true&f=json`;
+          const r = await fetch(url);
+          femaFeed = await r.json();
+          setCache(femaKey, femaFeed);
+        }
+        const femaEvents = Array.isArray(femaFeed?.features) ? femaFeed.features.map((f, idx) => {
+          const attr = f.attributes || {};
+          const geom = f.geometry || {};
+          const tsNum = typeof attr.declarationDate === 'number' ? attr.declarationDate : null;
+          const ts = tsNum ? new Date(tsNum).toISOString() : new Date().toISOString();
+          const lon = typeof geom.x === 'number' ? geom.x : null;
+          const lat = typeof geom.y === 'number' ? geom.y : null;
+          return {
+            id: String(attr.disasterNumber || `fema-${idx}`),
+            timestamp: ts,
+            source: 'fema_disasters',
+            latitude: lat,
+            longitude: lon,
+            confidence: 1,
+            data: { incidentType: attr.incidentType, county: attr.declaredCountyArea, state: attr.declaredState }
+          };
+        }) : [];
+
+        const hifldKey = 'cache_hifld_hospitals';
+        let hifldFeed = getCache(hifldKey, 24 * 60 * 60 * 1000);
+        if (!hifldFeed) {
+          const url = `https://maps.nccs.nasa.gov/mapping/rest/services/hifld_open/public_health/FeatureServer/0/query?where=1%3D1&outFields=name,type,state&returnGeometry=true&f=json`;
+          const r = await fetch(url);
+          hifldFeed = await r.json();
+          setCache(hifldKey, hifldFeed);
+        }
+        const hifldEvents = Array.isArray(hifldFeed?.features) ? hifldFeed.features.map((f, idx) => {
+          const attr = f.attributes || {};
+          const geom = f.geometry || {};
+          const lon = typeof geom.x === 'number' ? geom.x : null;
+          const lat = typeof geom.y === 'number' ? geom.y : null;
+          return {
+            id: String(attr.id || `hifld-${idx}`),
+            timestamp: new Date().toISOString(),
+            source: 'hifld_infra',
+            latitude: lat,
+            longitude: lon,
+            confidence: 1,
+            data: { name: attr.name, type: attr.type, state: attr.state }
+          };
+        }) : [];
+
+        const censusKey = 'cache_census_counties';
+        let censusFeed = getCache(censusKey, 7 * 24 * 60 * 60 * 1000);
+        if (!censusFeed) {
+          const url = `https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/State_County/MapServer/11/query?where=1%3D1&outFields=NAME,STATE,INTPTLAT,INTPTLON,GEOID&returnGeometry=false&f=json`;
+          const r = await fetch(url);
+          censusFeed = await r.json();
+          setCache(censusKey, censusFeed);
+        }
+        const censusEvents = Array.isArray(censusFeed?.features) ? censusFeed.features.map((f, idx) => {
+          const attr = f.attributes || {};
+          const lat = attr.INTPTLAT != null ? parseFloat(attr.INTPTLAT) : null;
+          const lon = attr.INTPTLON != null ? parseFloat(attr.INTPTLON) : null;
+          return {
+            id: String(attr.GEOID || `census-${idx}`),
+            timestamp: new Date().toISOString(),
+            source: 'census_pop',
+            latitude: isFinite(lat) ? lat : null,
+            longitude: isFinite(lon) ? lon : null,
+            confidence: 1,
+            data: { name: attr.NAME, state: attr.STATE }
+          };
+        }) : [];
+
+        const allEvents = [ ...nasaEvents, ...usgsEvents, ...noaaEvents, ...gdacsEvents, ...femaEvents, ...hifldEvents, ...censusEvents ];
+
+        const staticSources = new Set(['hifld_infra','census_pop']);
         const filteredEvents = allEvents.filter(event => {
           const src = (event.source || '').toLowerCase();
           if (Array.isArray(selectedSources) && selectedSources.length > 0 && !selectedSources.includes(src)) return false;
@@ -304,7 +406,7 @@ function App() {
             const cats = Array.isArray(event.data?.categories) ? event.data.categories.map(c => (c?.title || '').toLowerCase()) : [];
             if (!cats.includes((filters.category || '').toLowerCase())) return false;
           }
-          if (filters.window) {
+          if (filters.window && !staticSources.has(src)) {
             const now = Date.now();
             const ts = new Date(event.timestamp).getTime();
             const w = (filters.window || '').toLowerCase();
@@ -328,64 +430,7 @@ function App() {
           setAnomalies([]);
         }
 
-        const wbFetch = async (country, indicator) => {
-          const startYear = twoYearsAgo.getFullYear();
-          const endYear = now.getFullYear();
-          const key = `cache_wb_${country}_${indicator}_${startYear}_${endYear}`;
-          let pts = getCache(key, 24 * 3600 * 1000);
-          if (!Array.isArray(pts)) {
-            const url = `https://api.worldbank.org/v2/country/${country}/indicator/${indicator}?date=${startYear}:${endYear}&format=json&per_page=1000`;
-            const r = await fetch(url);
-            const j = await r.json();
-            const arr = Array.isArray(j) && Array.isArray(j[1]) ? j[1] : [];
-            pts = arr.map(d => ({ date: d.date, value: d.value, country })).filter(p => p.value != null);
-          }
-          if (pts.filter(p => Number(p.date) >= startYear).length < 2) {
-            const fallback = `https://api.worldbank.org/v2/country/${country}/indicator/${indicator}?date=${startYear-5}:${endYear}&format=json&per_page=1000`;
-            const r2 = await fetch(fallback);
-            const j2 = await r2.json();
-            const arr2 = Array.isArray(j2) && Array.isArray(j2[1]) ? j2[1] : [];
-            pts = arr2.map(d => ({ date: d.date, value: d.value, country })).filter(p => p.value != null);
-          }
-          pts = pts.sort((a,b)=>Number(a.date)-Number(b.date));
-          setCache(key, pts);
-          return pts;
-        };
-        const countries = macroCountries;
-        const gdpSeries = [];
-        const infSeries = [];
-        const uemSeries = [];
-        for (let i = 0; i < countries.length; i++) {
-          const c = countries[i];
-          gdpSeries.push({ label: c, points: await wbFetch(c,'NY.GDP.MKTP.KD.ZG') });
-          infSeries.push({ label: c, points: await wbFetch(c,'FP.CPI.TOTL.ZG') });
-          uemSeries.push({ label: c, points: await wbFetch(c,'SL.UEM.TOTL.ZS') });
-        }
-        if (!cancelled) {
-          setMacroData({ gdpGrowth: gdpSeries, inflation: infSeries, unemployment: uemSeries });
-          const latestYear = Math.max(...[...new Set([ ...gdpSeries.flatMap(s=>s.points.map(p=>Number(p.date))), ...infSeries.flatMap(s=>s.points.map(p=>Number(p.date))), ...uemSeries.flatMap(s=>s.points.map(p=>Number(p.date))) ])].filter(n=>isFinite(n)));
-          const vals = countries.map(c => {
-            const g = gdpSeries.find(s=>s.label===c)?.points.find(p=>Number(p.date)===latestYear)?.value;
-            const i = infSeries.find(s=>s.label===c)?.points.find(p=>Number(p.date)===latestYear)?.value;
-            const u = uemSeries.find(s=>s.label===c)?.points.find(p=>Number(p.date)===latestYear)?.value;
-            return { c, g, i, u };
-          }).filter(v=>v.g!=null && v.i!=null && v.u!=null);
-          if (vals.length > 0) {
-            const mean = (arr) => arr.reduce((a,b)=>a+b,0)/arr.length;
-            const std = (arr) => { const m = mean(arr); return Math.sqrt(arr.reduce((a,b)=>a+(b-m)*(b-m),0)/(arr.length||1)); };
-            const gz = std(vals.map(v=>v.g)) ? vals.map(v=>({ c:v.c, z:(v.g-mean(vals.map(x=>x.g)))/std(vals.map(x=>x.g)) })) : vals.map(v=>({ c:v.c, z:0 }));
-            const iz = std(vals.map(v=>v.i)) ? vals.map(v=>({ c:v.c, z:(v.i-mean(vals.map(x=>x.i)))/std(vals.map(x=>x.i)) })) : vals.map(v=>({ c:v.c, z:0 }));
-            const uz = std(vals.map(v=>v.u)) ? vals.map(v=>({ c:v.c, z:(v.u-mean(vals.map(x=>x.u)))/std(vals.map(x=>x.u)) })) : vals.map(v=>({ c:v.c, z:0 }));
-            const stress = countries.map(c => {
-              const g = gz.find(x=>x.c===c)?.z || 0;
-              const i = iz.find(x=>x.c===c)?.z || 0;
-              const u = uz.find(x=>x.c===c)?.z || 0;
-              const score = Number((g - i - u).toFixed(2));
-              return { label: c, score, year: latestYear };
-            });
-            setMacroStress(stress);
-          } else setMacroStress([]);
-        }
+        
       } catch (err) {
         if (!cancelled) {
           setBackendOnline(false);
@@ -742,59 +787,32 @@ function App() {
       </div>
       <div className="tactical-panel" style={{ marginBottom: 12 }}>
         <div className="panel-header" style={{ justifyContent: 'space-between' }}>
-          <div style={{ color: 'var(--accent)' }}>Macro Dashboard</div>
+          <div style={{ color: 'var(--accent)' }}>Source Metrics</div>
         </div>
         <div className="p-2" style={{ display: 'grid', gridTemplateColumns: (typeof window !== 'undefined' && window.innerWidth < 768) ? '1fr' : 'repeat(3, minmax(0, 1fr))', gap: 12 }}>
-          {(() => {
-            const mkData = (series) => {
-              const labels = Array.from(new Set(series.flatMap(s => s.points.map(p => p.date)))).sort();
-              const datasets = series.map(s => ({ label: s.label, data: labels.map(l => {
-                const p = s.points.find(pp => pp.date === l);
-                return p && typeof p.value === 'number' ? p.value : null;
-              }), borderColor: s.label === 'WLD' ? '#00ffc6' : '#6f42c1', backgroundColor: 'rgba(0,255,198,0.15)' }));
-              return { labels, datasets };
-            };
-            const gdp = mkData(macroData.gdpGrowth || []);
-            const inf = mkData(macroData.inflation || []);
-            const uem = mkData(macroData.unemployment || []);
-            return (
-              <>
-                <div className="tactical-panel"><div className="p-2"><div style={{ marginBottom: 6, color: 'var(--accent)' }}>GDP Growth (% YoY)</div><Line data={gdp} options={{ plugins: { legend: { display: true } }, scales: { y: { ticks: { color: '#00ffc6' } }, x: { ticks: { color: '#00ffc6' } } } }} /></div></div>
-                <div className="tactical-panel"><div className="p-2"><div style={{ marginBottom: 6, color: 'var(--accent)' }}>Inflation (% YoY)</div><Line data={inf} options={{ plugins: { legend: { display: true } }, scales: { y: { ticks: { color: '#00ffc6' } }, x: { ticks: { color: '#00ffc6' } } } }} /></div></div>
-                <div className="tactical-panel"><div className="p-2"><div style={{ marginBottom: 6, color: 'var(--accent)' }}>Unemployment (% of labor)</div><Line data={uem} options={{ plugins: { legend: { display: true } }, scales: { y: { ticks: { color: '#00ffc6' } }, x: { ticks: { color: '#00ffc6' } } } }} /></div></div>
-              </>
-            );
-          })()}
-        </div>
-        <div className="p-2" style={{ display: 'grid', gridTemplateColumns: (typeof window !== 'undefined' && window.innerWidth < 768) ? '1fr' : '1fr 1fr', gap: 12 }}>
-          <div className="tactical-panel"><div className="p-2" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-            <div style={{ color: 'var(--accent)' }}>Countries</div>
-            <select className="button-tactical" onChange={(e)=>{ const v = e.target.value; if (v && !macroCountries.includes(v)) setMacroCountries(arr=>[...arr, v]); }}>
-              <option value="">Add country</option>
-              <option value="WLD">WLD</option>
-              <option value="USA">USA</option>
-              <option value="CHN">CHN</option>
-              <option value="IND">IND</option>
-              <option value="EUU">EUU</option>
-              <option value="GBR">GBR</option>
-              <option value="DEU">DEU</option>
-              <option value="JPN">JPN</option>
-            </select>
-            {macroCountries.map(c => (
-              <div key={c} className="button-tactical" onClick={()=>setMacroCountries(arr=>arr.filter(x=>x!==c))}>{c} ✕</div>
-            ))}
-          </div></div>
-          <div className="tactical-panel"><div className="p-2">
-            <div style={{ marginBottom: 6, color: 'var(--accent)' }}>Macro Stress Index</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
-              {macroStress.length === 0 ? <div style={{ opacity: 0.8 }}>No data</div> : macroStress.map(s => (
-                <div key={s.label} className="tactical-panel" style={{ padding: 8 }}>
-                  <div style={{ fontSize: 12, opacity: 0.8 }}>{s.label} • {s.year}</div>
-                  <div style={{ fontSize: 22, color: s.score >= 0 ? 'var(--accent)' : 'var(--danger)' }}>{s.score}</div>
+          {sourcesMeta.length === 0 ? (
+            <div style={{ opacity: 0.8 }}>No source activity yet.</div>
+          ) : (
+            sourcesMeta.map(m => (
+              <div key={m.src} className="tactical-panel"><div className="p-2">
+                <div style={{ fontSize: 12, opacity: 0.8 }}>{(m.src||'UNKNOWN').toUpperCase()}</div>
+                <div style={{ display: 'flex', gap: 12, marginTop: 6 }}>
+                  <div>Confidence: <span style={{ color: 'var(--accent)' }}>{m.confidence}%</span></div>
+                  <div>Anomaly Rate: <span style={{ color: 'var(--danger)' }}>{Math.round(m.anomalyRate * 100)}%</span></div>
                 </div>
-              ))}
-            </div>
-          </div></div>
+                <div style={{ fontSize: 12, opacity: 0.8, marginTop: 6 }}>Top clusters</div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {m.topClusters.length === 0 ? (
+                    <div style={{ opacity: 0.7 }}>None</div>
+                  ) : (
+                    m.topClusters.map(([k,v]) => (
+                      <div key={k} className="button-tactical">{k} • {v}</div>
+                    ))
+                  )}
+                </div>
+              </div></div>
+            ))
+          )}
         </div>
       </div>
       <ChatPanel apiBase={API} events={events} anomalies={anomalies} filters={filters} sourceCounts={sourceCounts} />
@@ -816,38 +834,18 @@ function App() {
         </div>
         <div className="p-2" style={{ display: 'grid', gridTemplateColumns: (typeof window !== 'undefined' && window.innerWidth < 768) ? '1fr' : '1fr 1fr', gap: 12 }}>
           <div className="tactical-panel"><div className="p-2" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-            <div style={{ color: 'var(--accent)' }}>Countries</div>
-            <select className="button-tactical" onChange={(e)=>{ const v = e.target.value; if (v && !reportSpec.countries.includes(v)) setReportSpec(s=>({ ...s, countries: [...s.countries, v] })); }}>
-              <option value="">Add country</option>
-              <option value="WLD">WLD</option>
-              <option value="USA">USA</option>
-              <option value="CHN">CHN</option>
-              <option value="IND">IND</option>
-              <option value="EUU">EUU</option>
-              <option value="GBR">GBR</option>
-              <option value="DEU">DEU</option>
-              <option value="JPN">JPN</option>
+            <div style={{ color: 'var(--accent)' }}>Window</div>
+            <select className="button-tactical" value={reportSpec.window} onChange={(e)=>setReportSpec(s=>({ ...s, window: e.target.value }))}>
+              <option value="last hour">Last hour</option>
+              <option value="last 24 hours">Last 24 hours</option>
+              <option value="last 7 days">Last 7 days</option>
             </select>
-            {reportSpec.countries.map(c => (
-              <div key={c} className="button-tactical" onClick={()=>setReportSpec(s=>({ ...s, countries: s.countries.filter(x=>x!==c) }))}>{c} ✕</div>
-            ))}
-          </div></div>
-          <div className="tactical-panel"><div className="p-2" style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-            <label className="button-tactical" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <input type="checkbox" checked={reportSpec.indicators.gdp} onChange={(e)=>setReportSpec(s=>({ ...s, indicators: { ...s.indicators, gdp: e.target.checked } }))} /> GDP Growth
-            </label>
-            <label className="button-tactical" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <input type="checkbox" checked={reportSpec.indicators.inflation} onChange={(e)=>setReportSpec(s=>({ ...s, indicators: { ...s.indicators, inflation: e.target.checked } }))} /> Inflation
-            </label>
-            <label className="button-tactical" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <input type="checkbox" checked={reportSpec.indicators.unemployment} onChange={(e)=>setReportSpec(s=>({ ...s, indicators: { ...s.indicators, unemployment: e.target.checked } }))} /> Unemployment
-            </label>
           </div></div>
         </div>
         <div className="p-2" style={{ fontSize: 13 }}>
           <button className="button-tactical" onClick={() => {
             const lines = [];
-            if (reportSpec.type === 'events') {
+            {
               const now = Date.now();
               const ms = reportSpec.window === 'last hour' ? 3600000 : reportSpec.window === 'last 24 hours' ? 86400000 : 604800000;
               const cutoff = now - ms;
@@ -856,29 +854,6 @@ function App() {
               evs.forEach(e => { const k = (e.source || 'UNKNOWN').toUpperCase(); bySrc[k] = (bySrc[k] || 0) + 1; });
               lines.push(`Events in ${reportSpec.window}: ${evs.length}`);
               Object.entries(bySrc).sort((a,b)=>b[1]-a[1]).forEach(([k,v])=>lines.push(`${k}: ${v}`));
-            } else if (reportSpec.type === 'macro_summary') {
-              const add = (lbl, series) => {
-                series.forEach(s => {
-                  if (!reportSpec.countries.includes(s.label)) return;
-                  const last = [...s.points].reverse().find(p => typeof p.value === 'number');
-                  lines.push(`${lbl} ${s.label}: ${last ? last.value : 'NA'}`);
-                });
-              };
-              if (reportSpec.indicators.gdp) add('GDP', macroData.gdpGrowth || []);
-              if (reportSpec.indicators.inflation) add('Inflation', macroData.inflation || []);
-              if (reportSpec.indicators.unemployment) add('Unemployment', macroData.unemployment || []);
-            } else if (reportSpec.type === 'macro_compare') {
-              const cs = reportSpec.countries.slice(0,2);
-              const mk = (series) => {
-                return cs.map(c => {
-                  const s = (series || []).find(x => x.label === c);
-                  const last = s ? [...s.points].reverse().find(p => typeof p.value === 'number') : null;
-                  return { c, v: last ? last.value : null };
-                });
-              };
-              if (reportSpec.indicators.gdp) { const arr = mk(macroData.gdpGrowth); lines.push(`GDP ${arr.map(a=>a.c+': '+(a.v==null?'NA':a.v)).join(' | ')}`); }
-              if (reportSpec.indicators.inflation) { const arr = mk(macroData.inflation); lines.push(`Inflation ${arr.map(a=>a.c+': '+(a.v==null?'NA':a.v)).join(' | ')}`); }
-              if (reportSpec.indicators.unemployment) { const arr = mk(macroData.unemployment); lines.push(`Unemployment ${arr.map(a=>a.c+': '+(a.v==null?'NA':a.v)).join(' | ')}`); }
             }
             const blob = new Blob([lines.join('\n')], { type: 'text/plain' });
             const url = URL.createObjectURL(blob);
@@ -918,27 +893,61 @@ function App() {
         <Route path="/map" element={(
           <div className="p-4">
             <div className="tactical-panel" style={{ height: '70vh' }}>
-              <div className="panel-header" style={{ justifyContent: 'space-between' }}>
-                <div style={{ color: 'var(--accent)' }}>Operational Map</div>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  {selectedSources.length > 0 && (
-                    <select className="button-tactical" value={filters.source || ''} onChange={(e) => setFilters(f => ({ ...f, source: e.target.value || undefined }))}>
-                      <option value="">All</option>
-                      {selectedSources.map(s => (
-                        <option key={s} value={s}>{(s || 'UNKNOWN').toUpperCase()}</option>
-                      ))}
-                    </select>
-                  )}
-                  <button className="button-tactical" onClick={() => setBasemapStyle(s => ['light','dark','terrain','satellite','osm'][(['light','dark','terrain','satellite','osm'].indexOf(s)+1)%5])}>{basemapStyle.toUpperCase()}</button>
-                  <label className="button-tactical" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <input type="checkbox" checked={useWebGL} onChange={(e)=>setUseWebGL(e.target.checked)} /> WebGL
-                  </label>
+              <div style={{ display: 'grid', gridTemplateColumns: (typeof window !== 'undefined' && window.innerWidth < 768) ? '1fr' : '240px 1fr', height: '100%' }}>
+                <div className="p-2" style={{ borderRight: '1px solid rgba(255,255,255,0.08)' }}>
+                  {(() => {
+                    const groupSources = { disasters: ['gdacs_disasters','fema_disasters','nasa_eonet','usgs_seismic','noaa_weather'], aviation: ['faa_tfr'], infrastructure: ['hifld_infra'], population: ['census_pop'] };
+                    const applyGroups = (next) => {
+                      const set = new Set(selectedSources);
+                      Object.keys(groupSources).forEach(g => {
+                        const arr = groupSources[g];
+                        if (next[g]) arr.forEach(k => set.add(k)); else arr.forEach(k => set.delete(k));
+                      });
+                      setSelectedSources(Array.from(set));
+                    };
+                    return (
+                      <div style={{ display: 'grid', gap: 8 }}>
+                        <div style={{ color: 'var(--accent)', marginBottom: 6 }}>Layers</div>
+                        <label className="button-tactical" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <input type="checkbox" checked={layerGroups.disasters} onChange={(e) => { const next = { ...layerGroups, disasters: e.target.checked }; setLayerGroups(next); applyGroups(next); }} /> Disasters
+                        </label>
+                        <label className="button-tactical" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <input type="checkbox" checked={layerGroups.aviation} onChange={(e) => { const next = { ...layerGroups, aviation: e.target.checked }; setLayerGroups(next); applyGroups(next); }} /> Aviation
+                        </label>
+                        <label className="button-tactical" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <input type="checkbox" checked={layerGroups.infrastructure} onChange={(e) => { const next = { ...layerGroups, infrastructure: e.target.checked }; setLayerGroups(next); applyGroups(next); }} /> Infrastructure
+                        </label>
+                        <label className="button-tactical" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <input type="checkbox" checked={layerGroups.population} onChange={(e) => { const next = { ...layerGroups, population: e.target.checked }; setLayerGroups(next); applyGroups(next); }} /> Population
+                        </label>
+                      </div>
+                    );
+                  })()}
                 </div>
-              </div>
-              <div style={{ height: 'calc(100% - 42px)' }}>
-                <Suspense fallback={<div className="p-3">Loading map…</div>}>
-                  <MapComponent events={events} anomalies={anomalies} focusEventId={focusEventId} onSelect={handleSelectEvent} basemapStyle={basemapStyle} useWebGL={useWebGL} onPerfUpdate={handlePerfUpdate} />
-                </Suspense>
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  <div className="panel-header" style={{ justifyContent: 'space-between' }}>
+                    <div style={{ color: 'var(--accent)' }}>Operational Map</div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      {selectedSources.length > 0 && (
+                        <select className="button-tactical" value={filters.source || ''} onChange={(e) => setFilters(f => ({ ...f, source: e.target.value || undefined }))}>
+                          <option value="">All</option>
+                          {selectedSources.map(s => (
+                            <option key={s} value={s}>{(s || 'UNKNOWN').toUpperCase()}</option>
+                          ))}
+                        </select>
+                      )}
+                      <button className="button-tactical" onClick={() => setBasemapStyle(s => ['light','dark','terrain','satellite','osm'][(['light','dark','terrain','satellite','osm'].indexOf(s)+1)%5])}>{basemapStyle.toUpperCase()}</button>
+                      <label className="button-tactical" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <input type="checkbox" checked={useWebGL} onChange={(e)=>setUseWebGL(e.target.checked)} /> WebGL
+                      </label>
+                    </div>
+                  </div>
+                  <div style={{ height: '100%' }}>
+                    <Suspense fallback={<div className="p-3">Loading map…</div>}>
+                      <MapComponent events={events} anomalies={anomalies} focusEventId={focusEventId} onSelect={handleSelectEvent} basemapStyle={basemapStyle} useWebGL={useWebGL} onPerfUpdate={handlePerfUpdate} />
+                    </Suspense>
+                  </div>
+                </div>
               </div>
             </div>
             {selectedEventId && (() => {
