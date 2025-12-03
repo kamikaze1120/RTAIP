@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Routes, Route, NavLink, useNavigate, useLocation } from 'react-router-dom';
+import { Routes, Route, NavLink, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { Suspense, lazy } from 'react';
 import EventFeed from './components/EventFeed';
 // Removed Filters import
@@ -199,6 +199,14 @@ function App() {
     let cancelled = false;
     const fetchData = async () => {
       try {
+        if (Array.isArray(selectedSources) && selectedSources.length === 0) {
+          if (!cancelled) {
+            setBackendOnline(false);
+            setEvents([]);
+            setAnomalies([]);
+          }
+          return;
+        }
         const healthRes = await fetch(`${API}/health`).catch(()=>({ ok: false }));
         if (!cancelled) setBackendOnline(!!(healthRes && healthRes.ok));
         const now = new Date();
@@ -206,194 +214,215 @@ function App() {
         const startStr = `${twoYearsAgo.getFullYear()}-${String(twoYearsAgo.getMonth()+1).padStart(2,'0')}-${String(twoYearsAgo.getDate()).padStart(2,'0')}`;
         const endStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
 
-        const eonetKey = `cache_eonet_${startStr}_${endStr}`;
-        let eonetEvents = getCache(eonetKey, 30 * 60 * 1000);
-        if (!Array.isArray(eonetEvents)) {
-          const eonetOpenRes = await fetch(`https://eonet.gsfc.nasa.gov/api/v3/events?status=open&start=${startStr}&end=${endStr}`);
-          const eonetClosedRes = await fetch(`https://eonet.gsfc.nasa.gov/api/v3/events?status=closed&start=${startStr}&end=${endStr}`);
-          const eonetOpen = await eonetOpenRes.json();
-          const eonetClosed = await eonetClosedRes.json();
-          eonetEvents = [ ...(Array.isArray(eonetOpen?.events)?eonetOpen.events:[]), ...(Array.isArray(eonetClosed?.events)?eonetClosed.events:[]) ];
-          setCache(eonetKey, eonetEvents);
+        let nasaEvents = [];
+        if (selectedSources.includes('nasa_eonet')) {
+          const eonetKey = `cache_eonet_${startStr}_${endStr}`;
+          let eonetEvents = getCache(eonetKey, 10 * 60 * 1000);
+          if (!Array.isArray(eonetEvents)) {
+            const eonetOpenRes = await fetch(`https://eonet.gsfc.nasa.gov/api/v3/events?status=open&start=${startStr}&end=${endStr}`);
+            const eonetClosedRes = await fetch(`https://eonet.gsfc.nasa.gov/api/v3/events?status=closed&start=${startStr}&end=${endStr}`);
+            const eonetOpen = await eonetOpenRes.json();
+            const eonetClosed = await eonetClosedRes.json();
+            eonetEvents = [ ...(Array.isArray(eonetOpen?.events)?eonetOpen.events:[]), ...(Array.isArray(eonetClosed?.events)?eonetClosed.events:[]) ];
+            setCache(eonetKey, eonetEvents);
+          }
+          nasaEvents = eonetEvents.map((ev, idx) => {
+            const g = Array.isArray(ev.geometry) && ev.geometry.length > 0 ? ev.geometry[0] : null;
+            const coords = g && Array.isArray(g.coordinates) ? g.coordinates : null;
+            const lon = coords && typeof coords[0] === 'number' ? coords[0] : null;
+            const lat = coords && typeof coords[1] === 'number' ? coords[1] : null;
+            return {
+              id: ev.id || `${ev.title}-${idx}`,
+              timestamp: g?.date || ev?.closed || new Date().toISOString(),
+              source: 'nasa_eonet',
+              latitude: lat,
+              longitude: lon,
+              confidence: 1,
+              data: { title: ev.title, categories: ev.categories }
+            };
+          });
         }
-        const nasaEvents = eonetEvents.map((ev, idx) => {
-          const g = Array.isArray(ev.geometry) && ev.geometry.length > 0 ? ev.geometry[0] : null;
-          const coords = g && Array.isArray(g.coordinates) ? g.coordinates : null;
-          const lon = coords && typeof coords[0] === 'number' ? coords[0] : null;
-          const lat = coords && typeof coords[1] === 'number' ? coords[1] : null;
-          return {
-            id: ev.id || `${ev.title}-${idx}`,
-            timestamp: g?.date || ev?.closed || new Date().toISOString(),
-            source: 'nasa_eonet',
-            latitude: lat,
-            longitude: lon,
-            confidence: 1,
-            data: { title: ev.title, categories: ev.categories }
-          };
-        });
 
-        const usgsKey = 'cache_usgs_all_day';
-        let usgsFeed = getCache(usgsKey, 15 * 60 * 1000);
-        if (!usgsFeed) {
-          const r = await fetch('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson');
-          usgsFeed = await r.json();
-          setCache(usgsKey, usgsFeed);
+        let usgsEvents = [];
+        if (selectedSources.includes('usgs_seismic')) {
+          const usgsKey = 'cache_usgs_all_day';
+          let usgsFeed = getCache(usgsKey, 10 * 60 * 1000);
+          if (!usgsFeed) {
+            const r = await fetch('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson');
+            usgsFeed = await r.json();
+            setCache(usgsKey, usgsFeed);
+          }
+          usgsEvents = Array.isArray(usgsFeed?.features) ? usgsFeed.features.map((f, idx) => {
+            const c = Array.isArray(f.geometry?.coordinates) ? f.geometry.coordinates : [];
+            const lon = typeof c[0] === 'number' ? c[0] : null;
+            const lat = typeof c[1] === 'number' ? c[1] : null;
+            const ts = typeof f.properties?.time === 'number' ? new Date(f.properties.time).toISOString() : new Date().toISOString();
+            return {
+              id: String(f.id || `usgs-${idx}`),
+              timestamp: ts,
+              source: 'usgs_seismic',
+              latitude: lat,
+              longitude: lon,
+              confidence: 1,
+              data: { mag: f.properties?.mag, place: f.properties?.place }
+            };
+          }) : [];
         }
-        const usgsEvents = Array.isArray(usgsFeed?.features) ? usgsFeed.features.map((f, idx) => {
-          const c = Array.isArray(f.geometry?.coordinates) ? f.geometry.coordinates : [];
-          const lon = typeof c[0] === 'number' ? c[0] : null;
-          const lat = typeof c[1] === 'number' ? c[1] : null;
-          const ts = typeof f.properties?.time === 'number' ? new Date(f.properties.time).toISOString() : new Date().toISOString();
-          return {
-            id: String(f.id || `usgs-${idx}`),
-            timestamp: ts,
-            source: 'usgs_seismic',
-            latitude: lat,
-            longitude: lon,
-            confidence: 1,
-            data: { mag: f.properties?.mag, place: f.properties?.place }
-          };
-        }) : [];
 
-        const noaaKey = 'cache_noaa_alerts';
-        let noaaFeed = getCache(noaaKey, 10 * 60 * 1000);
-        if (!noaaFeed) {
-          const r = await fetch('https://api.weather.gov/alerts/active');
-          noaaFeed = await r.json();
-          setCache(noaaKey, noaaFeed);
-        }
-        const noaaEvents = Array.isArray(noaaFeed?.features) ? noaaFeed.features.map((f, idx) => {
-          const geom = f.geometry;
-          let lon = null, lat = null;
-          try {
-            if (geom && geom.type === 'Polygon') {
-              const coords = geom.coordinates?.[0] || [];
-              if (coords.length > 0) {
-                const sum = coords.reduce((acc, p) => { return { lon: acc.lon + (p?.[0]||0), lat: acc.lat + (p?.[1]||0) }; }, { lon: 0, lat: 0 });
-                lon = sum.lon / coords.length; lat = sum.lat / coords.length;
+        let noaaEvents = [];
+        if (selectedSources.includes('noaa_weather')) {
+          const noaaKey = 'cache_noaa_alerts';
+          let noaaFeed = getCache(noaaKey, 10 * 60 * 1000);
+          if (!noaaFeed) {
+            const r = await fetch('https://api.weather.gov/alerts/active');
+            noaaFeed = await r.json();
+            setCache(noaaKey, noaaFeed);
+          }
+          noaaEvents = Array.isArray(noaaFeed?.features) ? noaaFeed.features.map((f, idx) => {
+            const geom = f.geometry;
+            let lon = null, lat = null;
+            try {
+              if (geom && geom.type === 'Polygon') {
+                const coords = geom.coordinates?.[0] || [];
+                if (coords.length > 0) {
+                  const sum = coords.reduce((acc, p) => { return { lon: acc.lon + (p?.[0]||0), lat: acc.lat + (p?.[1]||0) }; }, { lon: 0, lat: 0 });
+                  lon = sum.lon / coords.length; lat = sum.lat / coords.length;
+                }
               }
-            }
-          } catch {}
-          const ts = f.properties?.effective || f.properties?.sent || f.properties?.onset || new Date().toISOString();
-          return {
-            id: String(f.id || `noaa-${idx}`),
-            timestamp: ts,
-            source: 'noaa_weather',
-            latitude: lat,
-            longitude: lon,
-            confidence: 1,
-            data: { headline: f.properties?.headline, event: f.properties?.event }
-          };
-        }) : [];
-
-        const gdacsKey = `cache_gdacs_${startStr}_${endStr}`;
-        let gdacsFeed = getCache(gdacsKey, 15 * 60 * 1000);
-        if (!gdacsFeed) {
-          const r = await fetch(`https://www.gdacs.org/gdacsapi/api/events/geteventlist/SEARCH?eventlist=EQ;TC;FL;WF;VO;DR&fromdate=${startStr}&todate=${endStr}`);
-          gdacsFeed = await r.json();
-          setCache(gdacsKey, gdacsFeed);
+            } catch {}
+            const ts = f.properties?.effective || f.properties?.sent || f.properties?.onset || new Date().toISOString();
+            return {
+              id: String(f.id || `noaa-${idx}`),
+              timestamp: ts,
+              source: 'noaa_weather',
+              latitude: lat,
+              longitude: lon,
+              confidence: 1,
+              data: { headline: f.properties?.headline, event: f.properties?.event }
+            };
+          }) : [];
         }
-        const gdacsEvents = Array.isArray(gdacsFeed?.features) ? gdacsFeed.features.map((f, idx) => {
-          let lon = null, lat = null;
-          const geom = f.geometry;
-          try {
-            if (geom && geom.type === 'Point' && Array.isArray(geom.coordinates)) {
-              lon = typeof geom.coordinates[0] === 'number' ? geom.coordinates[0] : null;
-              lat = typeof geom.coordinates[1] === 'number' ? geom.coordinates[1] : null;
-            } else if (geom && geom.type === 'Polygon') {
-              const coords = geom.coordinates?.[0] || [];
-              if (coords.length > 0) {
-                const sum = coords.reduce((acc, p) => ({ lon: acc.lon + (p?.[0]||0), lat: acc.lat + (p?.[1]||0) }), { lon: 0, lat: 0 });
-                lon = sum.lon / coords.length; lat = sum.lat / coords.length;
+
+        let gdacsEvents = [];
+        if (selectedSources.includes('gdacs_disasters')) {
+          const gdacsKey = `cache_gdacs_${startStr}_${endStr}`;
+          let gdacsFeed = getCache(gdacsKey, 10 * 60 * 1000);
+          if (!gdacsFeed) {
+            const r = await fetch(`https://www.gdacs.org/gdacsapi/api/events/geteventlist/SEARCH?eventlist=EQ;TC;FL;WF;VO;DR&fromdate=${startStr}&todate=${endStr}`);
+            gdacsFeed = await r.json();
+            setCache(gdacsKey, gdacsFeed);
+          }
+          gdacsEvents = Array.isArray(gdacsFeed?.features) ? gdacsFeed.features.map((f, idx) => {
+            let lon = null, lat = null;
+            const geom = f.geometry;
+            try {
+              if (geom && geom.type === 'Point' && Array.isArray(geom.coordinates)) {
+                lon = typeof geom.coordinates[0] === 'number' ? geom.coordinates[0] : null;
+                lat = typeof geom.coordinates[1] === 'number' ? geom.coordinates[1] : null;
+              } else if (geom && geom.type === 'Polygon') {
+                const coords = geom.coordinates?.[0] || [];
+                if (coords.length > 0) {
+                  const sum = coords.reduce((acc, p) => ({ lon: acc.lon + (p?.[0]||0), lat: acc.lat + (p?.[1]||0) }), { lon: 0, lat: 0 });
+                  lon = sum.lon / coords.length; lat = sum.lat / coords.length;
+                }
               }
-            }
-          } catch {}
-          const p = f.properties || {};
-          const ts = p.fromdate || p.todate || new Date().toISOString();
-          const id = p.eventid && p.episodeid ? `${p.eventid}-${p.episodeid}` : String(p.eventid || `gdacs-${idx}`);
-          return {
-            id,
-            timestamp: ts,
-            source: 'gdacs_disasters',
-            latitude: lat,
-            longitude: lon,
-            confidence: 1,
-            data: { title: p.name || p.description || 'GDACS Event', type: p.eventtype, alertlevel: p.alertlevel }
-          };
-        }) : [];
-
-        const femaKey = `cache_fema_${startStr}_${endStr}`;
-        let femaFeed = getCache(femaKey, 30 * 60 * 1000);
-        if (!femaFeed) {
-          const url = `https://gis.fema.gov/ArcGIS/rest/services/IncidentManagement/DisasterDeclarationsSummaries/FeatureServer/0/query?where=1%3D1&outFields=declarationDate,incidentType,declaredCountyArea,declaredState,disasterNumber&returnGeometry=true&f=json`;
-          const r = await fetch(url);
-          femaFeed = await r.json();
-          setCache(femaKey, femaFeed);
+            } catch {}
+            const p = f.properties || {};
+            const ts = p.fromdate || p.todate || new Date().toISOString();
+            const id = p.eventid && p.episodeid ? `${p.eventid}-${p.episodeid}` : String(p.eventid || `gdacs-${idx}`);
+            return {
+              id,
+              timestamp: ts,
+              source: 'gdacs_disasters',
+              latitude: lat,
+              longitude: lon,
+              confidence: 1,
+              data: { title: p.name || p.description || 'GDACS Event', type: p.eventtype, alertlevel: p.alertlevel }
+            };
+          }) : [];
         }
-        const femaEvents = Array.isArray(femaFeed?.features) ? femaFeed.features.map((f, idx) => {
-          const attr = f.attributes || {};
-          const geom = f.geometry || {};
-          const tsNum = typeof attr.declarationDate === 'number' ? attr.declarationDate : null;
-          const ts = tsNum ? new Date(tsNum).toISOString() : new Date().toISOString();
-          const lon = typeof geom.x === 'number' ? geom.x : null;
-          const lat = typeof geom.y === 'number' ? geom.y : null;
-          return {
-            id: String(attr.disasterNumber || `fema-${idx}`),
-            timestamp: ts,
-            source: 'fema_disasters',
-            latitude: lat,
-            longitude: lon,
-            confidence: 1,
-            data: { incidentType: attr.incidentType, county: attr.declaredCountyArea, state: attr.declaredState }
-          };
-        }) : [];
 
-        const hifldKey = 'cache_hifld_hospitals';
-        let hifldFeed = getCache(hifldKey, 24 * 60 * 60 * 1000);
-        if (!hifldFeed) {
-          const url = `https://maps.nccs.nasa.gov/mapping/rest/services/hifld_open/public_health/FeatureServer/0/query?where=1%3D1&outFields=name,type,state&returnGeometry=true&f=json`;
-          const r = await fetch(url);
-          hifldFeed = await r.json();
-          setCache(hifldKey, hifldFeed);
+        let femaEvents = [];
+        if (selectedSources.includes('fema_disasters')) {
+          const femaKey = `cache_fema_${startStr}_${endStr}`;
+          let femaFeed = getCache(femaKey, 30 * 60 * 1000);
+          if (!femaFeed) {
+            const url = `https://gis.fema.gov/ArcGIS/rest/services/IncidentManagement/DisasterDeclarationsSummaries/FeatureServer/0/query?where=1%3D1&outFields=declarationDate,incidentType,declaredCountyArea,declaredState,disasterNumber&returnGeometry=true&f=json`;
+            const r = await fetch(url);
+            femaFeed = await r.json();
+            setCache(femaKey, femaFeed);
+          }
+          femaEvents = Array.isArray(femaFeed?.features) ? femaFeed.features.map((f, idx) => {
+            const attr = f.attributes || {};
+            const geom = f.geometry || {};
+            const tsNum = typeof attr.declarationDate === 'number' ? attr.declarationDate : null;
+            const ts = tsNum ? new Date(tsNum).toISOString() : new Date().toISOString();
+            const lon = typeof geom.x === 'number' ? geom.x : null;
+            const lat = typeof geom.y === 'number' ? geom.y : null;
+            return {
+              id: String(attr.disasterNumber || `fema-${idx}`),
+              timestamp: ts,
+              source: 'fema_disasters',
+              latitude: lat,
+              longitude: lon,
+              confidence: 1,
+              data: { incidentType: attr.incidentType, county: attr.declaredCountyArea, state: attr.declaredState }
+            };
+          }) : [];
         }
-        const hifldEvents = Array.isArray(hifldFeed?.features) ? hifldFeed.features.map((f, idx) => {
-          const attr = f.attributes || {};
-          const geom = f.geometry || {};
-          const lon = typeof geom.x === 'number' ? geom.x : null;
-          const lat = typeof geom.y === 'number' ? geom.y : null;
-          return {
-            id: String(attr.id || `hifld-${idx}`),
-            timestamp: new Date().toISOString(),
-            source: 'hifld_infra',
-            latitude: lat,
-            longitude: lon,
-            confidence: 1,
-            data: { name: attr.name, type: attr.type, state: attr.state }
-          };
-        }) : [];
 
-        const censusKey = 'cache_census_counties';
-        let censusFeed = getCache(censusKey, 7 * 24 * 60 * 60 * 1000);
-        if (!censusFeed) {
-          const url = `https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/State_County/MapServer/11/query?where=1%3D1&outFields=NAME,STATE,INTPTLAT,INTPTLON,GEOID&returnGeometry=false&f=json`;
-          const r = await fetch(url);
-          censusFeed = await r.json();
-          setCache(censusKey, censusFeed);
+        let hifldEvents = [];
+        if (selectedSources.includes('hifld_infra')) {
+          const hifldKey = 'cache_hifld_hospitals';
+          let hifldFeed = getCache(hifldKey, 24 * 60 * 60 * 1000);
+          if (!hifldFeed) {
+            const url = `https://maps.nccs.nasa.gov/mapping/rest/services/hifld_open/public_health/FeatureServer/0/query?where=1%3D1&outFields=name,type,state&returnGeometry=true&f=json`;
+            const r = await fetch(url);
+            hifldFeed = await r.json();
+            setCache(hifldKey, hifldFeed);
+          }
+          hifldEvents = Array.isArray(hifldFeed?.features) ? hifldFeed.features.map((f, idx) => {
+            const attr = f.attributes || {};
+            const geom = f.geometry || {};
+            const lon = typeof geom.x === 'number' ? geom.x : null;
+            const lat = typeof geom.y === 'number' ? geom.y : null;
+            return {
+              id: String(attr.id || `hifld-${idx}`),
+              timestamp: new Date().toISOString(),
+              source: 'hifld_infra',
+              latitude: lat,
+              longitude: lon,
+              confidence: 1,
+              data: { name: attr.name, type: attr.type, state: attr.state }
+            };
+          }) : [];
         }
-        const censusEvents = Array.isArray(censusFeed?.features) ? censusFeed.features.map((f, idx) => {
-          const attr = f.attributes || {};
-          const lat = attr.INTPTLAT != null ? parseFloat(attr.INTPTLAT) : null;
-          const lon = attr.INTPTLON != null ? parseFloat(attr.INTPTLON) : null;
-          return {
-            id: String(attr.GEOID || `census-${idx}`),
-            timestamp: new Date().toISOString(),
-            source: 'census_pop',
-            latitude: isFinite(lat) ? lat : null,
-            longitude: isFinite(lon) ? lon : null,
-            confidence: 1,
-            data: { name: attr.NAME, state: attr.STATE }
-          };
-        }) : [];
+
+        let censusEvents = [];
+        if (selectedSources.includes('census_pop')) {
+          const censusKey = 'cache_census_counties';
+          let censusFeed = getCache(censusKey, 7 * 24 * 60 * 60 * 1000);
+          if (!censusFeed) {
+            const url = `https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/State_County/MapServer/11/query?where=1%3D1&outFields=NAME,STATE,INTPTLAT,INTPTLON,GEOID&returnGeometry=false&f=json`;
+            const r = await fetch(url);
+            censusFeed = await r.json();
+            setCache(censusKey, censusFeed);
+          }
+          censusEvents = Array.isArray(censusFeed?.features) ? censusFeed.features.map((f, idx) => {
+            const attr = f.attributes || {};
+            const lat = attr.INTPTLAT != null ? parseFloat(attr.INTPTLAT) : null;
+            const lon = attr.INTPTLON != null ? parseFloat(attr.INTPTLON) : null;
+            return {
+              id: String(attr.GEOID || `census-${idx}`),
+              timestamp: new Date().toISOString(),
+              source: 'census_pop',
+              latitude: isFinite(lat) ? lat : null,
+              longitude: isFinite(lon) ? lon : null,
+              confidence: 1,
+              data: { name: attr.NAME, state: attr.STATE }
+            };
+          }) : [];
+        }
 
         const allEvents = [ ...nasaEvents, ...usgsEvents, ...noaaEvents, ...gdacsEvents, ...femaEvents, ...hifldEvents, ...censusEvents ];
 
@@ -889,8 +918,8 @@ function App() {
       <AlertBar anomalies={visibleAnomalies} />
 
       <Routes>
-        <Route path="/" element={<DashboardPage />} />
-        <Route path="/map" element={(
+        <Route path="/" element={<Navigate to="/database" replace />} />
+        <Route path="/map" element={( 
           <div className="p-4">
             <div className="tactical-panel" style={{ height: '70vh' }}>
               <div style={{ display: 'grid', gridTemplateColumns: (typeof window !== 'undefined' && window.innerWidth < 768) ? '1fr' : '240px 1fr', height: '100%' }}>

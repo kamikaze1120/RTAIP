@@ -1,14 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 const suggestions = [
-  'Explain the dashboard metrics using current data',
-  'Summarize NASA EONET events by category (last 24 hours)',
-  'Count events per source (last 7 days)',
-  'List top countries by Macro Stress Index',
-  'Compare GDP growth: USA vs CHN (last 2 years)',
-  'Inflation trend for WLD and USA (last 5 years)',
-  'Unemployment overview for selected countries',
-  'Describe data sources and update cadence',
+  'Explain the dashboard numbers using current data',
+  'Summarize events by source (last 24 hours)',
+  'Are there any anomalies right now?',
+  'Which source has the most events?',
+  'What is the current threat level and why?',
+  'Show top geoclusters by source',
+  'Describe the selected data sources and update cadence',
 ];
 
 const ChatPanel = ({ apiBase, events = [], anomalies = [], filters = {}, sourceCounts = {}, threatScore = null, intelSummary = [] }) => {
@@ -61,6 +60,46 @@ const ChatPanel = ({ apiBase, events = [], anomalies = [], filters = {}, sourceC
     URL.revokeObjectURL(url);
   };
 
+  const offlineAnswer = (q) => {
+    const lc = q.toLowerCase();
+    const lines = [];
+    const total = events.length;
+    const anoms = anomalies.length;
+    const bySrc = events.reduce((acc, e) => { const k=(e.source||'unknown').toLowerCase(); acc[k]=(acc[k]||0)+1; return acc; }, {});
+    const topSrc = Object.entries(bySrc).sort((a,b)=>b[1]-a[1])[0];
+    if (lc.includes('how many') || lc.includes('count')) {
+      lines.push(`Events: ${total}`);
+      lines.push(`Anomalies: ${anoms}`);
+    }
+    if (lc.includes('which source') || lc.includes('most events') || lc.includes('top source')) {
+      lines.push(topSrc ? `Top source: ${(topSrc[0]||'UNKNOWN').toUpperCase()} (${topSrc[1]})` : 'No sources active.');
+    }
+    if (lc.includes('anomal')) {
+      lines.push(anoms > 0 ? `Anomalies present: ${anoms}` : 'No anomalies detected.');
+    }
+    if (lc.includes('threat')) {
+      const lvl = threatScore && threatScore.level ? threatScore.level : 'Unknown';
+      lines.push(`Threat level: ${lvl}`);
+    }
+    if (lc.includes('cluster')) {
+      const quant = (n) => Math.round(n / 0.5) * 0.5;
+      const clusters = events.slice(Math.max(0, events.length - 50)).reduce((acc, e) => {
+        if (e.latitude == null || e.longitude == null) return acc;
+        const key = `${quant(e.latitude).toFixed(2)},${quant(e.longitude).toFixed(2)}`;
+        acc[key] = (acc[key]||0)+1; return acc;
+      }, {});
+      const top = Object.entries(clusters).sort((a,b)=>b[1]-a[1]).slice(0,3);
+      if (top.length === 0) lines.push('No geoclusters identified.');
+      else top.forEach(([k,v]) => lines.push(`Cluster ${k}: ${v}`));
+    }
+    if (lines.length === 0) {
+      lines.push(`Events: ${total}`);
+      lines.push(`Anomalies: ${anoms}`);
+      Object.entries(bySrc).sort((a,b)=>b[1]-a[1]).forEach(([k,v])=>lines.push(`${(k||'UNKNOWN').toUpperCase()}: ${v}`));
+    }
+    return lines.join('\n');
+  };
+
   const send = async (prompt) => {
     const q = (prompt ?? input).trim();
     if (!q) return;
@@ -77,7 +116,8 @@ const ChatPanel = ({ apiBase, events = [], anomalies = [], filters = {}, sourceC
       });
       clearTimeout(to);
       const data = await res.json();
-      const full = String(data?.output || 'No analysis available.');
+      const fullRaw = String(data?.output || '').trim();
+      const full = fullRaw.length > 0 ? fullRaw : offlineAnswer(q);
       try {
         const preds = data?.predictions_points || [];
         if (Array.isArray(preds) && preds.length > 0) {
@@ -100,7 +140,7 @@ const ChatPanel = ({ apiBase, events = [], anomalies = [], filters = {}, sourceC
         });
       }
     } catch (e) {
-      const msg = (e && e.name === 'AbortError') ? 'Analyst request timed out. Please try again.' : 'Error contacting analyst API.';
+      const msg = offlineAnswer(q);
       setMessages(prev => [...prev, { role: 'assistant', text: msg, ts: new Date().toLocaleString() }]);
     } finally {
       setStreaming(false);
