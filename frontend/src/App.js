@@ -756,7 +756,7 @@ function App() {
           </div>
           <button className="button-tactical" disabled={selectedSources.length === 0} onClick={() => {
             setShowSourceSelect(false);
-            navigate('/');
+            navigate('/dashboard');
           }}>Continue</button>
         </div>
       </div>
@@ -793,6 +793,17 @@ function App() {
 
   const DashboardPage = () => (
     <div className="p-4">
+      {selectedSources.length === 0 && (
+        <div className="tactical-panel" style={{ marginBottom: 12 }}>
+          <div className="panel-header" style={{ justifyContent: 'space-between' }}>
+            <div style={{ color: 'var(--accent)' }}>No Sources Selected</div>
+            <button className="button-tactical" onClick={() => navigate('/database')}>Select Sources</button>
+          </div>
+          <div className="p-2" style={{ fontSize: 13, opacity: 0.85 }}>
+            Choose one or more sources in the Sources page to populate dashboard metrics.
+          </div>
+        </div>
+      )}
       <div className="tactical-panel" style={{ marginBottom: 12 }}>
         <div className="panel-header">
           <div style={{ color: 'var(--accent)' }}>Operational Overview</div>
@@ -902,7 +913,7 @@ function App() {
           <div style={{ color: 'var(--accent)', fontWeight: 600 }}>RTAIP</div>
           <div style={{ display: 'flex', gap: 12 }}>
             <NavLink to="/database" className={({ isActive }) => `button-tactical ${isActive ? 'active' : ''}`}>Sources</NavLink>
-            <NavLink to="/" end className={({ isActive }) => `button-tactical ${isActive ? 'active' : ''}`}>Dashboard</NavLink>
+            <NavLink to="/dashboard" className={({ isActive }) => `button-tactical ${isActive ? 'active' : ''}`}>Dashboard</NavLink>
             <NavLink to="/map" className={({ isActive }) => `button-tactical ${isActive ? 'active' : ''}`}>Map</NavLink>
             <NavLink to="/replay" className={({ isActive }) => `button-tactical ${isActive ? 'active' : ''}`}>Timeline</NavLink>
             <NavLink to="/settings" className={({ isActive }) => `button-tactical ${isActive ? 'active' : ''}`}>Settings</NavLink>
@@ -1018,6 +1029,7 @@ function App() {
             </div>
           </div>
         )} />
+        <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/database" element={<DatabasePage />} />
       </Routes>
