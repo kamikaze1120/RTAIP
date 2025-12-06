@@ -113,7 +113,10 @@ const ChatPanel = ({ apiBase, events = [], anomalies = [], filters = {}, sourceC
       let full = '';
       if (ollamaUrl) {
         try {
-          const res = await fetch(`${ollamaUrl}/api/chat`, {
+          const base = String(ollamaUrl).replace(/\/+$/, '');
+          const chatUrl = base.endsWith('/api') ? `${base}/chat` : `${base}/api/chat`;
+          const genUrl = base.endsWith('/api') ? `${base}/generate` : `${base}/api/generate`;
+          const res = await fetch(chatUrl, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ model: ollamaModel, messages: [
               { role: 'system', content: 'You are an intelligence analyst for RTAIP. Use provided context and data.' },
@@ -124,6 +127,17 @@ const ChatPanel = ({ apiBase, events = [], anomalies = [], filters = {}, sourceC
             const jd = await res.json();
             const txt = String(jd?.message?.content || jd?.response || '').trim();
             if (txt.length > 0) full = txt;
+          }
+          if (!full) {
+            const res2 = await fetch(genUrl, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ model: ollamaModel, prompt: q + '\n\nContext:\n' + JSON.stringify(ctx) })
+            });
+            if (res2.ok) {
+              const jd2 = await res2.json();
+              const txt2 = String(jd2?.response || '').trim();
+              if (txt2.length > 0) full = txt2;
+            }
           }
         } catch {}
       }
