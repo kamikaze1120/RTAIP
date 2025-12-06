@@ -113,6 +113,8 @@ function App() {
   const [refreshInterval, setRefreshInterval] = useState(10 * 60 * 1000);
   const [selectedEventId, setSelectedEventId] = useState(null);
   const [accentDim, setAccentDim] = useState(false);
+  const [ollamaUrlInput, setOllamaUrlInput] = useState(() => { try { return localStorage.getItem('rtaip_ollama_url') || ''; } catch { return ''; } });
+  const [ollamaModelInput, setOllamaModelInput] = useState(() => { try { return localStorage.getItem('rtaip_ollama_model') || 'gemma3'; } catch { return 'gemma3'; } });
   const [clusterResDeg, setClusterResDeg] = useState(0.5);
   const [showHelp, setShowHelp] = useState(false);
   const [mapOnboard, setMapOnboard] = useState(() => {
@@ -783,6 +785,15 @@ function App() {
               <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
                 <button className="button-tactical" onClick={() => { try { localStorage.setItem('rtaip_api', apiInput.trim()); } catch {} window.location.reload(); }}>Apply & Reload</button>
                 <button className="button-tactical" onClick={() => { try { localStorage.removeItem('rtaip_api'); } catch {} window.location.reload(); }}>Clear & Reload</button>
+              </div>
+            </div>
+            <div style={{ marginTop: 16 }}>
+              <div style={{ marginBottom: 6 }}>Ollama</div>
+              <input className="button-tactical" placeholder="Ollama URL (e.g., http://localhost:11434)" value={ollamaUrlInput} onChange={(e)=>setOllamaUrlInput(e.target.value)} style={{ width: '100%' }} />
+              <input className="button-tactical" placeholder="Model (e.g., gemma3)" value={ollamaModelInput} onChange={(e)=>setOllamaModelInput(e.target.value)} style={{ width: '100%', marginTop: 8 }} />
+              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                <button className="button-tactical" onClick={() => { try { localStorage.setItem('rtaip_ollama_url', ollamaUrlInput.trim()); localStorage.setItem('rtaip_ollama_model', ollamaModelInput.trim()); } catch {} }}>Save Ollama</button>
+                <button className="button-tactical" onClick={() => { try { localStorage.removeItem('rtaip_ollama_url'); localStorage.removeItem('rtaip_ollama_model'); } catch {} }}>Clear Ollama</button>
               </div>
             </div>
           </div>

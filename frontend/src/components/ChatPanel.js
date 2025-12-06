@@ -19,6 +19,8 @@ const ChatPanel = ({ apiBase, events = [], anomalies = [], filters = {}, sourceC
   const [sessionId] = useState(() => Math.random().toString(36).slice(2));
   const listRef = useRef(null);
   const [showLatestOnly, setShowLatestOnly] = useState(true);
+  const [ollamaUrl] = useState(() => { try { return localStorage.getItem('rtaip_ollama_url') || process.env.REACT_APP_OLLAMA_URL || ''; } catch { return process.env.REACT_APP_OLLAMA_URL || ''; } });
+  const [ollamaModel] = useState(() => { try { return localStorage.getItem('rtaip_ollama_model') || process.env.REACT_APP_OLLAMA_MODEL || 'gemma3'; } catch { return 'gemma3'; } });
   const ctx = useMemo(() => {
     const srcs = Object.entries(sourceCounts).map(([k,v]) => ({ source: k, count: v }));
     return {
@@ -108,21 +110,43 @@ const ChatPanel = ({ apiBase, events = [], anomalies = [], filters = {}, sourceC
     setMessages(prev => [...prev, userMsg]);
     setStreaming(true);
   try {
-      const ctl = new AbortController();
-      const to = setTimeout(() => { try { ctl.abort(); } catch {} }, 12000);
-      const res = await fetch(`${apiBase}/api/ai-analyst`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: q, sessionId, context: ctx }), signal: ctl.signal
-      });
-      clearTimeout(to);
-      const data = await res.json();
-      const fullRaw = String(data?.output || '').trim();
-      const full = fullRaw.length > 0 ? fullRaw : offlineAnswer(q);
+      let full = '';
+      if (ollamaUrl) {
+        try {
+          const res = await fetch(`${ollamaUrl}/api/chat`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model: ollamaModel, messages: [
+              { role: 'system', content: 'You are an intelligence analyst for RTAIP. Use provided context and data.' },
+              { role: 'user', content: q + '\n\nContext:\n' + JSON.stringify(ctx) }
+            ], stream: false })
+          });
+          if (res.ok) {
+            const jd = await res.json();
+            const txt = String(jd?.message?.content || jd?.response || '').trim();
+            if (txt.length > 0) full = txt;
+          }
+        } catch {}
+      }
+      if (!full) {
+        const ctl = new AbortController();
+        const to = setTimeout(() => { try { ctl.abort(); } catch {} }, 12000);
+        const res = await fetch(`${apiBase}/api/ai-analyst`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: q, sessionId, context: ctx }), signal: ctl.signal
+        });
+        clearTimeout(to);
+        const data = await res.json();
+        const fullRaw = String(data?.output || '').trim();
+        full = fullRaw.length > 0 ? fullRaw : offlineAnswer(q);
+        try {
+          const preds = data?.predictions_points || [];
+          if (Array.isArray(preds) && preds.length > 0) {
+            window.dispatchEvent(new CustomEvent('rtaip_predictions', { detail: preds }));
+          }
+        } catch {}
+      }
       try {
-        const preds = data?.predictions_points || [];
-        if (Array.isArray(preds) && preds.length > 0) {
-          window.dispatchEvent(new CustomEvent('rtaip_predictions', { detail: preds }));
-        }
+        const p = [];
       } catch {}
       let acc = '';
       const tokens = full.split(/(\s+)/);
