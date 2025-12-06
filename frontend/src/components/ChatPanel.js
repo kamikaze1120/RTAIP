@@ -142,6 +142,26 @@ const ChatPanel = ({ apiBase, events = [], anomalies = [], filters = {}, sourceC
         } catch {}
       }
       if (!full) {
+        const offline = typeof navigator !== 'undefined' && navigator && navigator.onLine === false;
+        if (offline) {
+          const msg = offlineAnswer(q);
+          let acc = '';
+          const tokens = msg.split(/(\s+)/);
+          for (let i = 0; i < tokens.length; i++) {
+            acc += tokens[i];
+            await new Promise(r => setTimeout(r, 10));
+            setMessages(prev => {
+              const last = prev[prev.length - 1];
+              if (last && last.role === 'assistant' && last.streaming) {
+                const copy = [...prev];
+                copy[copy.length - 1] = { ...last, text: acc };
+                return copy;
+              }
+              return [...prev, { role: 'assistant', text: acc, ts: new Date().toLocaleString(), streaming: true }];
+            });
+          }
+          return;
+        }
         const ctl = new AbortController();
         const to = setTimeout(() => { try { ctl.abort(); } catch {} }, 12000);
         const res = await fetch(`${apiBase}/api/ai-analyst`, {

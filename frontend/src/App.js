@@ -205,23 +205,33 @@ function App() {
           }
           return;
         }
-        const healthRes = await fetch(`${API}/health`).catch(()=>({ ok: false }));
-        if (!cancelled) setBackendOnline(!!(healthRes && healthRes.ok));
+        const offline = typeof navigator !== 'undefined' && navigator && navigator.onLine === false;
+        let healthOK = false;
+        if (!offline) {
+          const healthRes = await fetch(`${API}/health`).catch(()=>({ ok: false }));
+          healthOK = !!(healthRes && healthRes.ok);
+        }
+        if (!cancelled) setBackendOnline(healthOK);
         const now = new Date();
         const twoYearsAgo = new Date(now.getFullYear() - 2, now.getMonth(), now.getDate());
         const startStr = `${twoYearsAgo.getFullYear()}-${String(twoYearsAgo.getMonth()+1).padStart(2,'0')}-${String(twoYearsAgo.getDate()).padStart(2,'0')}`;
         const endStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
 
         let nasaEvents = [];
-        if (selectedSources.includes('nasa_eonet')) {
+        if (!offline && selectedSources.includes('nasa_eonet')) {
           const eonetKey = `cache_eonet_${startStr}_${endStr}`;
           let eonetEvents = getCache(eonetKey, 10 * 60 * 1000);
           if (!Array.isArray(eonetEvents)) {
-            const eonetOpenRes = await fetch(`https://eonet.gsfc.nasa.gov/api/v3/events?status=open&start=${startStr}&end=${endStr}`);
-            const eonetClosedRes = await fetch(`https://eonet.gsfc.nasa.gov/api/v3/events?status=closed&start=${startStr}&end=${endStr}`);
-            const eonetOpen = await eonetOpenRes.json();
-            const eonetClosed = await eonetClosedRes.json();
-            eonetEvents = [ ...(Array.isArray(eonetOpen?.events)?eonetOpen.events:[]), ...(Array.isArray(eonetClosed?.events)?eonetClosed.events:[]) ];
+            let open = [], closed = [];
+            try {
+              const r1 = await fetch(`https://eonet.gsfc.nasa.gov/api/v3/events?status=open&start=${startStr}&end=${endStr}`);
+              if (r1 && r1.ok) { const j1 = await r1.json(); open = Array.isArray(j1?.events) ? j1.events : []; }
+            } catch {}
+            try {
+              const r2 = await fetch(`https://eonet.gsfc.nasa.gov/api/v3/events?status=closed&start=${startStr}&end=${endStr}`);
+              if (r2 && r2.ok) { const j2 = await r2.json(); closed = Array.isArray(j2?.events) ? j2.events : []; }
+            } catch {}
+            eonetEvents = [ ...open, ...closed ];
             setCache(eonetKey, eonetEvents);
           }
           nasaEvents = eonetEvents.map((ev, idx) => {
@@ -242,12 +252,14 @@ function App() {
         }
 
         let usgsEvents = [];
-        if (selectedSources.includes('usgs_seismic')) {
+        if (!offline && selectedSources.includes('usgs_seismic')) {
           const usgsKey = 'cache_usgs_all_day';
           let usgsFeed = getCache(usgsKey, 10 * 60 * 1000);
           if (!usgsFeed) {
-            const r = await fetch('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson');
-            usgsFeed = await r.json();
+            try {
+              const r = await fetch('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson');
+              usgsFeed = r && r.ok ? await r.json() : { features: [] };
+            } catch { usgsFeed = { features: [] }; }
             setCache(usgsKey, usgsFeed);
           }
           usgsEvents = Array.isArray(usgsFeed?.features) ? usgsFeed.features.map((f, idx) => {
@@ -268,12 +280,14 @@ function App() {
         }
 
         let noaaEvents = [];
-        if (selectedSources.includes('noaa_weather')) {
+        if (!offline && selectedSources.includes('noaa_weather')) {
           const noaaKey = 'cache_noaa_alerts';
           let noaaFeed = getCache(noaaKey, 10 * 60 * 1000);
           if (!noaaFeed) {
-            const r = await fetch('https://api.weather.gov/alerts/active');
-            noaaFeed = await r.json();
+            try {
+              const r = await fetch('https://api.weather.gov/alerts/active');
+              noaaFeed = r && r.ok ? await r.json() : { features: [] };
+            } catch { noaaFeed = { features: [] }; }
             setCache(noaaKey, noaaFeed);
           }
           noaaEvents = Array.isArray(noaaFeed?.features) ? noaaFeed.features.map((f, idx) => {
@@ -302,12 +316,14 @@ function App() {
         }
 
         let gdacsEvents = [];
-        if (selectedSources.includes('gdacs_disasters')) {
+        if (!offline && selectedSources.includes('gdacs_disasters')) {
           const gdacsKey = `cache_gdacs_${startStr}_${endStr}`;
           let gdacsFeed = getCache(gdacsKey, 10 * 60 * 1000);
           if (!gdacsFeed) {
-            const r = await fetch(`https://www.gdacs.org/gdacsapi/api/events/geteventlist/SEARCH?eventlist=EQ;TC;FL;WF;VO;DR&fromdate=${startStr}&todate=${endStr}`);
-            gdacsFeed = await r.json();
+            try {
+              const r = await fetch(`https://www.gdacs.org/gdacsapi/api/events/geteventlist/SEARCH?eventlist=EQ;TC;FL;WF;VO;DR&fromdate=${startStr}&todate=${endStr}`);
+              gdacsFeed = r && r.ok ? await r.json() : { features: [] };
+            } catch { gdacsFeed = { features: [] }; }
             setCache(gdacsKey, gdacsFeed);
           }
           gdacsEvents = Array.isArray(gdacsFeed?.features) ? gdacsFeed.features.map((f, idx) => {
@@ -374,13 +390,12 @@ function App() {
         }
 
         let hifldEvents = [];
-        if (selectedSources.includes('hifld_infra')) {
+        if (!offline && selectedSources.includes('hifld_infra')) {
           const hifldKey = 'cache_hifld_hospitals';
           let hifldFeed = getCache(hifldKey, 24 * 60 * 60 * 1000);
           if (!hifldFeed) {
             const url = `https://maps.nccs.nasa.gov/mapping/rest/services/hifld_open/public_health/FeatureServer/0/query?where=1%3D1&outFields=name,type,state&returnGeometry=true&f=json`;
-            const r = await fetch(url);
-            hifldFeed = await r.json();
+            try { const r = await fetch(url); hifldFeed = r && r.ok ? await r.json() : { features: [] }; } catch { hifldFeed = { features: [] }; }
             setCache(hifldKey, hifldFeed);
           }
           hifldEvents = Array.isArray(hifldFeed?.features) ? hifldFeed.features.map((f, idx) => {
@@ -401,13 +416,12 @@ function App() {
         }
 
         let censusEvents = [];
-        if (selectedSources.includes('census_pop')) {
+        if (!offline && selectedSources.includes('census_pop')) {
           const censusKey = 'cache_census_counties';
           let censusFeed = getCache(censusKey, 7 * 24 * 60 * 60 * 1000);
           if (!censusFeed) {
             const url = `https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/State_County/MapServer/11/query?where=1%3D1&outFields=NAME,STATE,INTPTLAT,INTPTLON,GEOID&returnGeometry=false&f=json`;
-            const r = await fetch(url);
-            censusFeed = await r.json();
+            try { const r = await fetch(url); censusFeed = r && r.ok ? await r.json() : { features: [] }; } catch { censusFeed = { features: [] }; }
             setCache(censusKey, censusFeed);
           }
           censusEvents = Array.isArray(censusFeed?.features) ? censusFeed.features.map((f, idx) => {
