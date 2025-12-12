@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 
 const suggestions = [
   'Give me a quick situational brief',
@@ -31,6 +31,25 @@ const ChatPanel = ({ apiBase, events = [], anomalies = [], filters = {}, sourceC
       intel: intelSummary,
     };
   }, [events, anomalies, filters, sourceCounts, threatScore, intelSummary]);
+
+  const toHumanSummary = useCallback(() => {
+    const total = events.length;
+    const anoms = anomalies.length;
+    const bySrc = events.reduce((acc, e) => { const k=(e.source||'unknown').toLowerCase(); acc[k]=(acc[k]||0)+1; return acc; }, {});
+    const topSrc = Object.entries(bySrc).sort((a,b)=>b[1]-a[1])[0];
+    const quant = (n) => Math.round(n / 0.5) * 0.5;
+    const clusters = events.slice(Math.max(0, events.length - 50)).reduce((acc, e) => {
+      if (e.latitude == null || e.longitude == null) return acc;
+      const key = `${quant(e.latitude).toFixed(2)},${quant(e.longitude).toFixed(2)}`;
+      acc[key] = (acc[key]||0)+1; return acc;
+    }, {});
+    const top = Object.entries(clusters).sort((a,b)=>b[1]-a[1]).slice(0,3);
+    const lvl = threatScore && threatScore.level ? threatScore.level : 'Unknown';
+    const lead = anoms > 0 ? 'Some unusual signals are present.' : 'No unusual signals right now.';
+    const area = top.length > 0 ? `Hotspots: ${top.map(([k,v]) => `${k} (${v})`).join(', ')}.` : '';
+    const srcLine = topSrc ? `Most activity: ${(topSrc[0]||'UNKNOWN').toUpperCase()} (${topSrc[1]}).` : '';
+    return [`Quick take: ${lead} Threat level is ${lvl}.`, `Events: ${total} • Anomalies: ${anoms}.`, srcLine, area, `If you want, I can break this down by source or area in plain English.`].filter(Boolean).join('\n');
+  }, [events, anomalies, threatScore]);
 
   useEffect(() => {
     try { sessionStorage.setItem('rtaip_chat', JSON.stringify(messages)); } catch {}
@@ -112,7 +131,7 @@ const ChatPanel = ({ apiBase, events = [], anomalies = [], filters = {}, sourceC
           const res = await fetch(chatUrl, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ model: ollamaModel, messages: [
-              { role: 'system', content: 'You are RTAIP\'s friendly analyst. Speak naturally and clearly. Prefer short paragraphs and bullet points. Explain reasoning briefly. If uncertain, say so. Offer a helpful follow‑up question. Use provided context and data.' },
+              { role: 'system', content: 'You are RTAIP\'s friendly analyst. Speak like a human. Use plain language, short paragraphs and clear bullets. Avoid raw coordinates or database identifiers unless explicitly asked. Explain what the numbers mean in simple terms. If uncertain, say so. Offer a helpful follow‑up question. Use provided context and data.' },
               { role: 'user', content: q + '\n\nContext:\n' + JSON.stringify(ctx) }
             ], stream: false })
           });
@@ -124,7 +143,7 @@ const ChatPanel = ({ apiBase, events = [], anomalies = [], filters = {}, sourceC
           if (!full) {
             const res2 = await fetch(genUrl, {
               method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ model: ollamaModel, prompt: q + '\n\nContext:\n' + JSON.stringify(ctx) + '\n\nStyle: friendly, concise, human.' })
+              body: JSON.stringify({ model: ollamaModel, prompt: q + '\n\nContext:\n' + JSON.stringify(ctx) + '\n\nStyle: friendly, concise, human. Avoid raw coordinates or database labels; summarise in plain English.' })
             });
             if (res2.ok) {
               const jd2 = await res2.json();
@@ -175,6 +194,23 @@ const ChatPanel = ({ apiBase, events = [], anomalies = [], filters = {}, sourceC
       try {
         const p = [];
       } catch {}
+      // Convert raw metrics/JSON to friendly summary
+      try {
+        const trimmed = full.trim();
+        if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+          try {
+            const obj = JSON.parse(trimmed);
+            if (obj && (obj.events || obj.anomalies || obj.output)) {
+              full = toHumanSummary();
+            }
+          } catch {
+            full = toHumanSummary();
+          }
+        } else if (/latitude|longitude|confidence|source/i.test(trimmed)) {
+          full = toHumanSummary();
+        }
+      } catch {}
+
       let acc = '';
       const tokens = full.split(/(\s+)/);
       for (let i = 0; i < tokens.length; i++) {

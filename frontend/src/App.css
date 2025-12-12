@@ -39,25 +39,26 @@
 
 /* Tactical theme and splash screen */
 :root {
-  --bg: #0b0f14;
-  --panel: #11161d;
-  --accent: #00ffc6;
-  --accent-muted: #00a88b;
-  --text: #e6f8f4;
-  --danger: #ff3b3b;
+  --bg: #0e1116;
+  --panel: #121826;
+  --accent: #7c3aed;
+  --accent-muted: #a78bfa;
+  --text: #e5e7eb;
+  --danger: #ef4444;
 }
 
 body, #root, .app-root {
   background: var(--bg);
   color: var(--text);
+  font-family: Inter, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
 }
 
 /* Panels */
 .tactical-panel {
-  background: linear-gradient(180deg, rgba(17,22,29,0.9), rgba(17,22,29,0.6));
-  border: 1px solid rgba(0,255,198,0.15);
-  box-shadow: 0 0 12px rgba(0,255,198,0.08);
-  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(18,24,38,0.9), rgba(18,24,38,0.6));
+  border: 1px solid rgba(255,255,255,0.08);
+  box-shadow: 0 0 12px rgba(124,58,237,0.12);
+  border-radius: 10px;
 }
 
 /* Accent header */
@@ -128,14 +129,14 @@ body, #root, .app-root {
 
 /* Tactical buttons */
 .button-tactical {
-  background: rgba(0,255,198,0.1);
+  background: rgba(124,58,237,0.12);
   color: var(--accent);
-  border: 1px solid rgba(0,255,198,0.3);
-  border-radius: 6px;
-  padding: 6px 10px;
+  border: 1px solid rgba(124,58,237,0.35);
+  border-radius: 8px;
+  padding: 8px 12px;
   font-size: 12px;
 }
-.button-tactical:hover { background: rgba(0,255,198,0.2); }
+.button-tactical:hover { background: rgba(124,58,237,0.2); }
 
 .badge {
   display: inline-flex;
