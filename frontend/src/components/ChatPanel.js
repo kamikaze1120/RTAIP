@@ -1,13 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 const suggestions = [
-  'Explain the dashboard numbers using current data',
-  'Summarize events by source (last 24 hours)',
-  'Are there any anomalies right now?',
-  'Which source has the most events?',
-  'What is the current threat level and why?',
-  'Show top geoclusters by source',
-  'Describe the selected data sources and update cadence',
+  'Give me a quick situational brief',
+  'What changed in the last hour?',
+  'Any anomalies I should worry about?',
+  'Top sources and hotspots right now',
+  'Explain the threat level in simple terms',
+  'Summarize events by source (24h)',
+  'Describe selected sources and update cadence',
 ];
 
 const ChatPanel = ({ apiBase, events = [], anomalies = [], filters = {}, sourceCounts = {}, threatScore = null, intelSummary = [] }) => {
@@ -37,6 +37,13 @@ const ChatPanel = ({ apiBase, events = [], anomalies = [], filters = {}, sourceC
   }, [messages]);
 
   useEffect(() => {
+    if (messages.length === 0) {
+      const hello = { role: 'assistant', text: 'Hi — I\'m your RTAIP analyst. Ask me about current events, anomalies, sources, or trends and I\'ll keep it concise and helpful.', ts: new Date().toLocaleString() };
+      setMessages([hello]);
+    }
+  }, []);
+
+  useEffect(() => {
     if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
   }, [messages, streaming]);
 
@@ -64,25 +71,16 @@ const ChatPanel = ({ apiBase, events = [], anomalies = [], filters = {}, sourceC
 
   const offlineAnswer = (q) => {
     const lc = q.toLowerCase();
-    const lines = [];
     const total = events.length;
     const anoms = anomalies.length;
     const bySrc = events.reduce((acc, e) => { const k=(e.source||'unknown').toLowerCase(); acc[k]=(acc[k]||0)+1; return acc; }, {});
     const topSrc = Object.entries(bySrc).sort((a,b)=>b[1]-a[1])[0];
-    if (lc.includes('how many') || lc.includes('count')) {
-      lines.push(`Events: ${total}`);
-      lines.push(`Anomalies: ${anoms}`);
-    }
-    if (lc.includes('which source') || lc.includes('most events') || lc.includes('top source')) {
-      lines.push(topSrc ? `Top source: ${(topSrc[0]||'UNKNOWN').toUpperCase()} (${topSrc[1]})` : 'No sources active.');
-    }
-    if (lc.includes('anomal')) {
-      lines.push(anoms > 0 ? `Anomalies present: ${anoms}` : 'No anomalies detected.');
-    }
-    if (lc.includes('threat')) {
-      const lvl = threatScore && threatScore.level ? threatScore.level : 'Unknown';
-      lines.push(`Threat level: ${lvl}`);
-    }
+    const parts = [];
+    parts.push('Here\'s what I can tell right now:');
+    parts.push(`• Events: ${total}`);
+    parts.push(`• Anomalies: ${anoms}`);
+    if (topSrc) parts.push(`• Top source: ${(topSrc[0]||'UNKNOWN').toUpperCase()} (${topSrc[1]})`);
+    if (threatScore && threatScore.level) parts.push(`• Threat: ${threatScore.level}`);
     if (lc.includes('cluster')) {
       const quant = (n) => Math.round(n / 0.5) * 0.5;
       const clusters = events.slice(Math.max(0, events.length - 50)).reduce((acc, e) => {
@@ -91,15 +89,10 @@ const ChatPanel = ({ apiBase, events = [], anomalies = [], filters = {}, sourceC
         acc[key] = (acc[key]||0)+1; return acc;
       }, {});
       const top = Object.entries(clusters).sort((a,b)=>b[1]-a[1]).slice(0,3);
-      if (top.length === 0) lines.push('No geoclusters identified.');
-      else top.forEach(([k,v]) => lines.push(`Cluster ${k}: ${v}`));
+      if (top.length > 0) parts.push('• Hotspots: ' + top.map(([k,v]) => `${k} (${v})`).join(', '));
     }
-    if (lines.length === 0) {
-      lines.push(`Events: ${total}`);
-      lines.push(`Anomalies: ${anoms}`);
-      Object.entries(bySrc).sort((a,b)=>b[1]-a[1]).forEach(([k,v])=>lines.push(`${(k||'UNKNOWN').toUpperCase()}: ${v}`));
-    }
-    return lines.join('\n');
+    parts.push('Ask me for a source breakdown, anomalies by area, or a plain‑English summary.');
+    return parts.join('\n');
   };
 
   const send = async (prompt) => {
@@ -119,7 +112,7 @@ const ChatPanel = ({ apiBase, events = [], anomalies = [], filters = {}, sourceC
           const res = await fetch(chatUrl, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ model: ollamaModel, messages: [
-              { role: 'system', content: 'You are an intelligence analyst for RTAIP. Use provided context and data.' },
+              { role: 'system', content: 'You are RTAIP\'s friendly analyst. Speak naturally and clearly. Prefer short paragraphs and bullet points. Explain reasoning briefly. If uncertain, say so. Offer a helpful follow‑up question. Use provided context and data.' },
               { role: 'user', content: q + '\n\nContext:\n' + JSON.stringify(ctx) }
             ], stream: false })
           });
@@ -131,7 +124,7 @@ const ChatPanel = ({ apiBase, events = [], anomalies = [], filters = {}, sourceC
           if (!full) {
             const res2 = await fetch(genUrl, {
               method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ model: ollamaModel, prompt: q + '\n\nContext:\n' + JSON.stringify(ctx) })
+              body: JSON.stringify({ model: ollamaModel, prompt: q + '\n\nContext:\n' + JSON.stringify(ctx) + '\n\nStyle: friendly, concise, human.' })
             });
             if (res2.ok) {
               const jd2 = await res2.json();
@@ -224,7 +217,8 @@ const ChatPanel = ({ apiBase, events = [], anomalies = [], filters = {}, sourceC
     <div className="tactical-panel" style={{ height: '100%' }}>
       <div className="panel-header" style={{ justifyContent: 'space-between' }}>
         <div style={{ color: 'var(--accent)' }}>RTAIP Analyst</div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {streaming && <div className="badge accent">Typing…</div>}
           <button className={`button-tactical ${showLatestOnly ? 'active' : ''}`} onClick={() => setShowLatestOnly(v => !v)}>{showLatestOnly ? 'Latest' : 'History'}</button>
           <button className="button-tactical" onClick={exportTXT}>Export TXT</button>
           <button className="button-tactical" onClick={exportJSON}>Export JSON</button>
@@ -246,7 +240,7 @@ const ChatPanel = ({ apiBase, events = [], anomalies = [], filters = {}, sourceC
           ))}
         </div>
         <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-          <input value={input} onChange={e => setInput(e.target.value)} placeholder="Type your question…" className="button-tactical" style={{ flex: 1 }} />
+          <input value={input} onChange={e => setInput(e.target.value)} placeholder="Type your question…" className="input-text" style={{ flex: 1 }} />
           <button className="button-tactical" onClick={() => send()} disabled={streaming}>Send</button>
           <button className="button-tactical" onClick={() => { if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight; }}>Scroll Latest</button>
         </div>

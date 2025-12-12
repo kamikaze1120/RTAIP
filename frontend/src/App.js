@@ -168,15 +168,14 @@ function App() {
   
   const baseStyles = ['light','dark','terrain','satellite','osm'];
    // API base configurable via environment; defaults to 8000
-   const API = (() => { try { const o = localStorage.getItem('rtaip_api'); if (o) return o; } catch {} return process.env.REACT_APP_API_URL || 'https://rtaip-production.up.railway.app'; })();
+  const API = (() => { try { const o = localStorage.getItem('rtaip_api'); if (o) return o; } catch {} return process.env.REACT_APP_API_URL || 'https://rtaip-production.up.railway.app'; })();
   const sourceCardDefs = useMemo(() => ([
-    { key: 'nasa_eonet', title: 'NASA EONET', desc: 'Natural event intelligence (fires, storms, volcanoes).' },
-    { key: 'usgs_seismic', title: 'USGS Seismic', desc: 'Earthquake events (magnitude, location, time).'},
-    { key: 'noaa_weather', title: 'NOAA Weather', desc: 'Active weather alerts and polygons.'},
-    { key: 'gdacs_disasters', title: 'GDACS Disasters', desc: 'Global disaster alerts with geospatial context.' },
-    { key: 'fema_disasters', title: 'FEMA Declarations', desc: 'US disaster declarations and incident metadata.' },
-    { key: 'hifld_infra', title: 'HIFLD Infrastructure', desc: 'Critical infrastructure facilities (e.g., hospitals).'},
-    { key: 'census_pop', title: 'Census Counties', desc: 'County internal points for proximity and population context.' }
+    { key: 'usgs_seismic', title: 'USGS Seismic', desc: 'Earthquake events (magnitude, location, time).', cadence: 'Updated ~5m' },
+    { key: 'noaa_weather', title: 'NOAA Weather', desc: 'Active weather alerts and polygons.', cadence: 'Updated ~10m' },
+    { key: 'gdacs_disasters', title: 'GDACS Disasters', desc: 'Global disaster alerts with geospatial context.', cadence: 'Updated ~15m' },
+    { key: 'fema_disasters', title: 'FEMA Declarations', desc: 'US disaster declarations and incident metadata.', cadence: 'Updated daily' },
+    { key: 'hifld_infra', title: 'HIFLD Infrastructure', desc: 'Critical infrastructure facilities (e.g., hospitals).', cadence: 'Static' },
+    { key: 'census_pop', title: 'Census Counties', desc: 'County internal points for proximity and population context.', cadence: 'Static' }
   ]), []);
 
   
@@ -189,7 +188,7 @@ function App() {
   useEffect(() => {
     if (!initialRouteRedirectedRef.current && location.pathname === '/') {
       initialRouteRedirectedRef.current = true;
-      navigate('/database', { replace: true });
+      navigate('/database?anom=1', { replace: true });
     }
   }, [location.pathname, navigate]);
 
@@ -217,39 +216,6 @@ function App() {
         const startStr = `${twoYearsAgo.getFullYear()}-${String(twoYearsAgo.getMonth()+1).padStart(2,'0')}-${String(twoYearsAgo.getDate()).padStart(2,'0')}`;
         const endStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
 
-        let nasaEvents = [];
-        if (!offline && selectedSources.includes('nasa_eonet')) {
-          const eonetKey = `cache_eonet_${startStr}_${endStr}`;
-          let eonetEvents = getCache(eonetKey, 10 * 60 * 1000);
-          if (!Array.isArray(eonetEvents)) {
-            let open = [], closed = [];
-            try {
-              const r1 = await fetch(`https://eonet.gsfc.nasa.gov/api/v3/events?status=open&start=${startStr}&end=${endStr}`);
-              if (r1 && r1.ok) { const j1 = await r1.json(); open = Array.isArray(j1?.events) ? j1.events : []; }
-            } catch {}
-            try {
-              const r2 = await fetch(`https://eonet.gsfc.nasa.gov/api/v3/events?status=closed&start=${startStr}&end=${endStr}`);
-              if (r2 && r2.ok) { const j2 = await r2.json(); closed = Array.isArray(j2?.events) ? j2.events : []; }
-            } catch {}
-            eonetEvents = [ ...open, ...closed ];
-            setCache(eonetKey, eonetEvents);
-          }
-          nasaEvents = eonetEvents.map((ev, idx) => {
-            const g = Array.isArray(ev.geometry) && ev.geometry.length > 0 ? ev.geometry[0] : null;
-            const coords = g && Array.isArray(g.coordinates) ? g.coordinates : null;
-            const lon = coords && typeof coords[0] === 'number' ? coords[0] : null;
-            const lat = coords && typeof coords[1] === 'number' ? coords[1] : null;
-            return {
-              id: ev.id || `${ev.title}-${idx}`,
-              timestamp: g?.date || ev?.closed || new Date().toISOString(),
-              source: 'nasa_eonet',
-              latitude: lat,
-              longitude: lon,
-              confidence: 1,
-              data: { title: ev.title, categories: ev.categories }
-            };
-          });
-        }
 
         let usgsEvents = [];
         if (!offline && selectedSources.includes('usgs_seismic')) {
@@ -440,7 +406,7 @@ function App() {
           }) : [];
         }
 
-        const allEvents = [ ...nasaEvents, ...usgsEvents, ...noaaEvents, ...gdacsEvents, ...femaEvents, ...hifldEvents, ...censusEvents ];
+        const allEvents = [ ...usgsEvents, ...noaaEvents, ...gdacsEvents, ...femaEvents, ...hifldEvents, ...censusEvents ];
 
         const staticSources = new Set(['hifld_infra','census_pop']);
         const filteredEvents = allEvents.filter(event => {
@@ -729,39 +695,34 @@ function App() {
     <div className="p-4">
       <div className="tactical-panel" style={{ margin: '12px 0', paddingBottom: 12 }}>
         <div className="panel-header" style={{ justifyContent: 'space-between' }}>
-          <div style={{ color: 'var(--accent)' }}>Select Data Sources</div>
+          <div className="hero">Sources</div>
           <div style={{ display: 'flex', gap: 8 }}>
             <button className="button-tactical" onClick={() => setSelectedSources(sourceCardDefs.map(s => s.key))}>Select All</button>
             <button className="button-tactical" onClick={() => setSelectedSources([])}>Clear</button>
-            <button className="button-tactical" onClick={() => setSelectedSources(prev => {
-              const all = sourceCardDefs.map(s => s.key);
-              return all.filter(k => !prev.includes(k));
-            })}>Invert</button>
+            <button className="button-tactical" onClick={() => setSelectedSources(prev => { const all = sourceCardDefs.map(s => s.key); return all.filter(k => !prev.includes(k)); })}>Invert</button>
           </div>
         </div>
-        <div className="p-3" style={{ display: 'grid', gridTemplateColumns: (typeof window !== 'undefined' && window.innerWidth < 768) ? '1fr' : 'repeat(4, minmax(0, 1fr))', gap: 12 }}>
-          {sourceCardDefs.map(card => (
-            <div
-              key={card.key}
-              className="tactical-panel"
-              style={{ cursor: 'pointer', background: 'rgba(0,0,0,0.25)', transition: 'transform 180ms ease, box-shadow 180ms ease', border: selectedSources.includes(card.key) ? '1px solid rgba(0,255,198,0.35)' : '1px solid rgba(255,255,255,0.08)' }}
-              onClick={() => setSelectedSources(prev => prev.includes(card.key) ? prev.filter(s => s !== card.key) : [...prev, card.key])}
-              onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.02)'; e.currentTarget.style.boxShadow = '0 6px 16px rgba(0,0,0,0.35)'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}
-            >
-              <div className="panel-header" style={{ justifyContent: 'space-between' }}>
-                <div style={{ color: 'var(--accent)' }}>{card.title}</div>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
-                  <input type="checkbox" checked={selectedSources.includes(card.key)} onChange={() => setSelectedSources(prev => prev.includes(card.key) ? prev.filter(s => s !== card.key) : [...prev, card.key])} />
-                  Include
-                </label>
+        <div className="p-2 subhero">Choose data sources. Cards show current counts, confidence, update cadence, and last activity.</div>
+        <div className="p-3 card-grid">
+          {sourceCardDefs.map(card => {
+            const selected = selectedSources.includes(card.key);
+            const cnt = sourceCounts[card.key] || 0;
+            const conf = confidenceBySrc[card.key] ?? null;
+            const last = eventsBySource[card.key]?.length ? eventsBySource[card.key][eventsBySource[card.key].length - 1].timestamp : null;
+            return (
+              <div key={card.key} className="card" onClick={() => setSelectedSources(prev => prev.includes(card.key) ? prev.filter(s => s !== card.key) : [...prev, card.key])}>
+                <div className="panel-header" style={{ borderBottom: 'none', padding: 0, marginBottom: 8 }}>
+                  <div style={{ color: selected ? 'var(--accent)' : 'var(--text)' }}>{card.title}</div>
+                  <button className="button-tactical" onClick={(e) => { e.stopPropagation(); setSelectedSources(prev => prev.includes(card.key) ? prev.filter(s => s !== card.key) : [...prev, card.key]); }}>{selected ? 'Included' : 'Include'}</button>
+                </div>
+                <div style={{ fontSize: 13, opacity: 0.9 }}>{card.desc}</div>
+                <div className="stat"><div>Current events</div><div className="badge accent">{cnt}</div></div>
+                <div className="stat"><div>Confidence</div><div className="badge accent">{conf != null ? `${conf}%` : '—'}</div></div>
+                <div className="stat"><div>Cadence</div><div className="badge">{card.cadence}</div></div>
+                <div className="stat"><div>Last activity</div><div className="badge">{last ? new Date(last).toLocaleString() : '—'}</div></div>
               </div>
-              <div className="p-2" style={{ fontSize: 13, opacity: 0.9 }}>{card.desc}</div>
-              <div className="p-2" style={{ fontSize: 12, opacity: 0.8 }}>
-                <span style={{ color: 'var(--accent-muted)' }}>Current events:</span> {sourceCounts[card.key] || 0}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
         <div className="p-3" style={{ display: 'grid', gridTemplateColumns: '1fr auto', alignItems: 'center', gap: 8 }}>
           <div>
@@ -770,10 +731,7 @@ function App() {
               <div style={{ width: `${Math.round((selectedSources.length / sourceCardDefs.length) * 100)}%`, height: '100%', background: 'var(--accent)' }} />
             </div>
           </div>
-          <button className="button-tactical" disabled={selectedSources.length === 0} onClick={() => {
-            setShowSourceSelect(false);
-            navigate('/dashboard');
-          }}>Continue</button>
+          <button className="button-tactical" disabled={selectedSources.length === 0} onClick={() => { setShowSourceSelect(false); navigate('/dashboard'); }}>Open Dashboard</button>
         </div>
       </div>
     </div>
@@ -954,14 +912,14 @@ function App() {
       <AlertBar anomalies={visibleAnomalies} />
 
       <Routes>
-        <Route path="/" element={<Navigate to="/database" replace />} />
+        <Route path="/" element={<Navigate to="/database?anom=1" replace />} />
         <Route path="/map" element={( 
           <div className="p-4">
             <div className="tactical-panel" style={{ height: '70vh' }}>
               <div style={{ display: 'grid', gridTemplateColumns: (typeof window !== 'undefined' && window.innerWidth < 768) ? '1fr' : '240px 1fr', height: '100%' }}>
                 <div className="p-2" style={{ borderRight: '1px solid rgba(255,255,255,0.08)' }}>
                   {(() => {
-                    const groupSources = { disasters: ['gdacs_disasters','fema_disasters','nasa_eonet','usgs_seismic','noaa_weather'], aviation: ['faa_tfr'], infrastructure: ['hifld_infra'], population: ['census_pop'] };
+                    const groupSources = { disasters: ['gdacs_disasters','fema_disasters','usgs_seismic','noaa_weather'], aviation: ['faa_tfr'], infrastructure: ['hifld_infra'], population: ['census_pop'] };
                     const applyGroups = (next) => {
                       const set = new Set(selectedSources);
                       Object.keys(groupSources).forEach(g => {
