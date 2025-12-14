@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Header } from './components/Header';
 import MapPage from './pages/Map';
+import Dashboard from './pages/Dashboard';
 
 function Home() {
   return (
@@ -18,9 +19,9 @@ export default function App() {
       <Header isOnline={isOnline} />
       <div className="pt-16">
         <Routes>
-          <Route path="/" element={<Home />} />
+          <Route path="/" element={<Dashboard />} />
           <Route path="/sources" element={<Home />} />
-          <Route path="/dashboard" element={<Home />} />
+          <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/map" element={<MapPage />} />
           <Route path="/timeline" element={<Home />} />
           <Route path="/settings" element={<Home />} />
