@@ -75,12 +75,12 @@ const MapComponent = ({ events, anomalies, focusEventId, onSelect, basemapStyle,
     const clusterSource = new ClusterSource({ distance: 40, source: eventSource });
     let eventLayer;
     if (useWebGL) {
-      eventLayer = new WebGLPoints({ source: eventSource, style: { symbol: { symbolType: 'circle', size: 8, color: '#00ffc6', opacity: 0.9 } } });
+      eventLayer = new WebGLPoints({ source: eventSource, style: { symbol: { symbolType: 'circle', size: 8, color: 'rgba(255,255,255,0.35)', opacity: 0.8 } } });
     } else {
       eventLayer = new VectorLayer({ source: clusterSource, style: (feature) => {
         const size = feature.get('features')?.length || 1;
         const radius = Math.min(24, 8 + Math.log(size + 1) * 4);
-        return new Style({ image: new CircleStyle({ radius, fill: new Fill({ color: 'rgba(0,255,198,0.35)' }), stroke: new Stroke({ color: 'rgba(0,255,198,0.85)', width: 2 }) }) });
+        return new Style({ image: new CircleStyle({ radius, fill: new Fill({ color: 'rgba(255,255,255,0.12)' }), stroke: new Stroke({ color: 'rgba(255,255,255,0.25)', width: 2 }) }) });
       } });
     }
     map.addLayer(eventLayer);

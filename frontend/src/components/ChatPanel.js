@@ -33,22 +33,60 @@ const ChatPanel = ({ apiBase, events = [], anomalies = [], filters = {}, sourceC
   }, [events, anomalies, filters, sourceCounts, threatScore, intelSummary]);
 
   const toHumanSummary = useCallback(() => {
-    const total = events.length;
+    const now = new Date();
+    const start = new Date(now.getTime() - 60 * 60000);
+    const inWindow = events.filter(e => { const t = new Date(e.timestamp).getTime(); return !isNaN(t) && t >= start.getTime(); });
+    const total = inWindow.length;
     const anoms = anomalies.length;
-    const bySrc = events.reduce((acc, e) => { const k=(e.source||'unknown').toLowerCase(); acc[k]=(acc[k]||0)+1; return acc; }, {});
+    const bySrc = inWindow.reduce((acc, e) => { const k=(e.source||'unknown').toLowerCase(); acc[k]=(acc[k]||0)+1; return acc; }, {});
     const topSrc = Object.entries(bySrc).sort((a,b)=>b[1]-a[1])[0];
-    const quant = (n) => Math.round(n / 0.5) * 0.5;
-    const clusters = events.slice(Math.max(0, events.length - 50)).reduce((acc, e) => {
-      if (e.latitude == null || e.longitude == null) return acc;
-      const key = `${quant(e.latitude).toFixed(2)},${quant(e.longitude).toFixed(2)}`;
-      acc[key] = (acc[key]||0)+1; return acc;
-    }, {});
-    const top = Object.entries(clusters).sort((a,b)=>b[1]-a[1]).slice(0,3);
     const lvl = threatScore && threatScore.level ? threatScore.level : 'Unknown';
-    const lead = anoms > 0 ? 'Some unusual signals are present.' : 'No unusual signals right now.';
-    const area = top.length > 0 ? `Hotspots: ${top.map(([k,v]) => `${k} (${v})`).join(', ')}.` : '';
+
+    const severityLine = (() => {
+      const sevCounts = { low: 0, medium: 0, high: 0, critical: 0 };
+      anomalies.forEach(a => {
+        const s = a.severity;
+        if (typeof s === 'number') {
+          if (s < 3) sevCounts.low++; else if (s < 6) sevCounts.medium++; else if (s < 8) sevCounts.high++; else sevCounts.critical++;
+        }
+      });
+      const order = ['critical','high','medium','low'];
+      const top = order.find(k => sevCounts[k] > 0);
+      return top ? `Dominant severity: ${top.toUpperCase()}.` : 'No significant anomalies.';
+    })();
+
+    const confidenceLine = (() => {
+      const vals = inWindow.map(e => typeof e.confidence === 'number' ? e.confidence : (typeof e.confidence === 'string' ? Number(e.confidence) : 0));
+      const avg = vals.length ? (vals.reduce((a,b)=>a+b,0)/vals.length) : 0;
+      const pct = Math.round(avg * 100);
+      const band = pct >= 70 ? 'High' : pct >= 40 ? 'Moderate' : 'Low';
+      return `Confidence: ${band}.`;
+    })();
+
+    const correlationLine = (() => {
+      const hasSeismic = inWindow.some(e => (e.source||'').toLowerCase()==='usgs_seismic');
+      const hasWeather = inWindow.some(e => (e.source||'').toLowerCase()==='noaa_weather');
+      const hasMaritime = inWindow.some(e => (e.source||'').toLowerCase()==='ais');
+      const hasInfra = inWindow.some(e => (e.source||'').toLowerCase()==='hifld_infra');
+      if (hasSeismic && hasMaritime) return 'Potential maritime impact near recent seismic areas.';
+      if (hasWeather && hasInfra) return 'Weather alerts observed near infrastructure points.';
+      return 'No supporting anomalies detected across aviation or maritime domains.';
+    })();
+
     const srcLine = topSrc ? `Most activity: ${(topSrc[0]||'UNKNOWN').toUpperCase()} (${topSrc[1]}).` : '';
-    return [`Quick take: ${lead} Threat level is ${lvl}.`, `Events: ${total} • Anomalies: ${anoms}.`, srcLine, area, `If you want, I can break this down by source or area in plain English.`].filter(Boolean).join('\n');
+    const lead = anoms > 0 ? `Between ${start.toISOString().slice(11,16)}–${now.toISOString().slice(11,16)} UTC, elevated activity observed.` : 'Stable patterns in the last hour.';
+
+    const nextActions = `Next: monitor ${topSrc ? topSrc[0].toUpperCase() : 'key sources'} and keep an eye on new anomaly flags.`;
+
+    return [
+      `${lead} Threat level: ${lvl}.`,
+      `Events: ${total} • Anomalies: ${anoms}.`,
+      severityLine,
+      confidenceLine,
+      srcLine,
+      correlationLine,
+      nextActions,
+    ].filter(Boolean).join('\n');
   }, [events, anomalies, threatScore]);
 
   useEffect(() => {
@@ -261,6 +299,9 @@ const ChatPanel = ({ apiBase, events = [], anomalies = [], filters = {}, sourceC
           <button className={`button-tactical ${showLatestOnly ? 'active' : ''}`} onClick={() => setShowLatestOnly(v => !v)}>{showLatestOnly ? 'Latest' : 'History'}</button>
           <button className="button-tactical" onClick={exportTXT}>Export TXT</button>
           <button className="button-tactical" onClick={exportJSON}>Export JSON</button>
+          {suggestions.slice(0,4).map(s => (
+            <button key={s} className="button-tactical" onClick={() => send(s)}>{s}</button>
+          ))}
         </div>
       </div>
       <div className="p-2" style={{ height: 'calc(100% - 42px)', display: 'flex', flexDirection: 'column' }}>

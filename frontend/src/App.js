@@ -120,7 +120,7 @@ function App() {
   const [mapOnboard, setMapOnboard] = useState(() => {
     try { return !localStorage.getItem('rtaip_onboard_map_done'); } catch { return true; }
   });
-  const [basemapStyle, setBasemapStyle] = useState('light');
+  const [basemapStyle, setBasemapStyle] = useState('dark');
   const [useWebGL, setUseWebGL] = useState(false);
   const [perfInfo, setPerfInfo] = useState({ fps: 0, events: 0, anomalies: 0 });
   const perfUpdateTsRef = useRef(0);

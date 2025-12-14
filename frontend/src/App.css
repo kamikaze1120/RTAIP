@@ -39,13 +39,17 @@
 
 /* Tactical theme and splash screen */
 :root {
-  --bg: #f8fafc;
-  --panel: #ffffff;
-  --accent: #2563eb;
-  --accent-muted: #60a5fa;
-  --text: #0f172a;
+  --bg: #0b0f14;
+  --panel: #0f141a;
+  --accent: #00ffc6;
+  --accent-muted: #66ffe2;
+  --text: #e6edf3;
   --danger: #ef4444;
-  --muted: #64748b;
+  --muted: #93a4b5;
+  --sev-low: #3b82f6;
+  --sev-medium: #f59e0b;
+  --sev-high: #ef4444;
+  --sev-critical: #dc2626;
 }
 
 body, #root, .app-root {
@@ -57,8 +61,8 @@ body, #root, .app-root {
 /* Panels */
 .tactical-panel {
   background: var(--panel);
-  border: 1px solid rgba(15,23,42,0.08);
-  box-shadow: 0 4px 20px rgba(15,23,42,0.06);
+  border: 1px solid rgba(255,255,255,0.06);
+  box-shadow: 0 6px 24px rgba(0,0,0,0.35);
   border-radius: 12px;
 }
 
@@ -146,10 +150,29 @@ body, #root, .app-root {
   padding: 4px 8px;
   border-radius: 12px;
   font-size: 11px;
-  background: rgba(15,23,42,0.06);
+  background: rgba(255,255,255,0.06);
 }
-.badge.accent { background: rgba(37,99,235,0.12); color: var(--accent); }
+.badge.accent { background: rgba(0,255,198,0.12); color: var(--accent); }
 .badge.danger { background: rgba(239,68,68,0.12); color: var(--danger); }
+
+/* Severity strips */
+.sev-strip { width: 6px; border-radius: 4px; }
+.sev-low { background: var(--sev-low); }
+.sev-medium { background: var(--sev-medium); }
+.sev-high { background: var(--sev-high); }
+.sev-critical { background: var(--sev-critical); box-shadow: 0 0 0 2px rgba(220,38,38,0.35); animation: pulse-border 2400ms ease-in-out infinite; }
+
+/* Animations */
+@keyframes arrival {
+  0% { transform: scale(0.95); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes pulse-border {
+  0% { box-shadow: 0 0 0 0 rgba(220,38,38,0.0); }
+  50% { box-shadow: 0 0 0 6px rgba(220,38,38,0.12); }
+  100% { box-shadow: 0 0 0 0 rgba(220,38,38,0.0); }
+}
+.animate-arrival { animation: arrival 220ms ease-out; }
 
 .card-grid {
   display: grid;
