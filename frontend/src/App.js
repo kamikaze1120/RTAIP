@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Routes, Route, NavLink, useNavigate, useLocation, Navigate } from 'react-router-dom';
+import Header from './components/Header';
 import { Suspense, lazy } from 'react';
 import EventFeed from './components/EventFeed';
 // Removed Filters import
@@ -891,17 +892,7 @@ function App() {
   return (
     <div className="app-root">
       {showSplash && <SplashScreen />}
-      {/* Tactical top navbar */}
-        <div className="tactical-panel" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px' }}>
-          <div style={{ color: 'var(--accent)', fontWeight: 600 }}>RTAIP</div>
-          <div style={{ display: 'flex', gap: 12 }}>
-            <NavLink to="/database" className={({ isActive }) => `button-tactical ${isActive ? 'active' : ''}`}>Sources</NavLink>
-            <NavLink to="/dashboard" className={({ isActive }) => `button-tactical ${isActive ? 'active' : ''}`}>Dashboard</NavLink>
-            <NavLink to="/map" className={({ isActive }) => `button-tactical ${isActive ? 'active' : ''}`}>Map</NavLink>
-            <NavLink to="/replay" className={({ isActive }) => `button-tactical ${isActive ? 'active' : ''}`}>Timeline</NavLink>
-            <NavLink to="/settings" className={({ isActive }) => `button-tactical ${isActive ? 'active' : ''}`}>Settings</NavLink>
-          </div>
-        </div>
+      <Header isOnline={backendOnline} />
 
       <div className="p-2" style={{ opacity: 0.6, fontSize: 11 }}>
         <div className={`health-badge ${backendOnline ? '' : 'offline'}`}>

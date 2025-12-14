@@ -1,0 +1,30 @@
+{
+  "name": "rtaip-vite",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.30.2",
+    "lucide-react": "^0.462.0",
+    "@fontsource/jetbrains-mono": "^5.2.8",
+    "tailwindcss-animate": "^1.0.7",
+    "ol": "^10.7.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.23",
+    "@types/react-dom": "^18.3.7",
+    "@vitejs/plugin-react-swc": "^3.11.0",
+    "autoprefixer": "^10.4.21",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.4.18",
+    "typescript": "^5.8.3",
+    "vite": "^5.4.19"
+  }
+}
