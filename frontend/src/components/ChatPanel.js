@@ -123,6 +123,7 @@ const ChatPanel = ({ apiBase, events = [], anomalies = [], filters = {}, sourceC
     setStreaming(true);
   try {
       let full = '';
+      const wantsRaw = /\b(raw|json|ids?|coordinates?|lat|long|exact)\b/i.test(q);
       if (ollamaUrl) {
         try {
           const base = String(ollamaUrl).replace(/\/+$/, '');
@@ -194,10 +195,10 @@ const ChatPanel = ({ apiBase, events = [], anomalies = [], filters = {}, sourceC
       try {
         const p = [];
       } catch {}
-      // Convert raw metrics/JSON to friendly summary
+      // Convert output to friendly summary when not explicitly asking for raw
       try {
         const trimmed = full.trim();
-        if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+        if (!wantsRaw && (trimmed.startsWith('{') || trimmed.startsWith('['))) {
           try {
             const obj = JSON.parse(trimmed);
             if (obj && (obj.events || obj.anomalies || obj.output)) {
@@ -206,7 +207,9 @@ const ChatPanel = ({ apiBase, events = [], anomalies = [], filters = {}, sourceC
           } catch {
             full = toHumanSummary();
           }
-        } else if (/latitude|longitude|confidence|source/i.test(trimmed)) {
+        } else if (!wantsRaw && /latitude|longitude|confidence|source|event[_\s-]?id/i.test(trimmed)) {
+          full = toHumanSummary();
+        } else if (!wantsRaw && (!trimmed || trimmed.length < 20)) {
           full = toHumanSummary();
         }
       } catch {}
