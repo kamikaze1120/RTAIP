@@ -1,12 +1,7 @@
 {
-  "builds": [
-    {
-      "src": "frontend-vite/package.json",
-      "use": "@vercel/static-build",
-      "config": { "distDir": "dist" }
-    }
-  ],
-  "routes": [
-    { "src": "/(.*)", "dest": "/index.html" }
+  "buildCommand": "cd frontend-vite && npm run build",
+  "outputDirectory": "frontend-vite/dist",
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
