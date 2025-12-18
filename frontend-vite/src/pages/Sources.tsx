@@ -1,12 +1,21 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import StatCard from '../components/StatCard';
 import { Database, Satellite, ShieldAlert, Hospital, Landmark, CloudDrizzle } from 'lucide-react';
 import { fetchUSGSAllDay, fetchNOAAAlerts, fetchGDACS, fetchFEMA, fetchHIFLDHospitals, fetchCensusCounties } from '../services/data';
+import AlertList from '../components/AlertList';
 
 type SourceStat = { label: string; count: number; subtitle?: string; icon: React.ReactNode; variant?: 'default'|'warning'|'danger'|'success' };
 
 export default function Sources() {
-  const [stats, setStats] = useState<SourceStat[]>([]);
+  const [stats, setStats] = useState<SourceStat[]>([
+    { label: 'USGS Seismic', count: 0, subtitle: 'Fetching...', icon: <Database className="w-4 h-4" />, variant: 'warning' },
+    { label: 'NOAA Weather', count: 0, subtitle: 'Fetching...', icon: <CloudDrizzle className="w-4 h-4" />, variant: 'success' },
+    { label: 'GDACS Disasters', count: 0, subtitle: 'Fetching...', icon: <Satellite className="w-4 h-4" />, variant: 'danger' },
+    { label: 'FEMA Declarations', count: 0, subtitle: 'Fetching...', icon: <ShieldAlert className="w-4 h-4" />, variant: 'warning' },
+    { label: 'HIFLD Infrastructure', count: 0, subtitle: 'Fetching...', icon: <Hospital className="w-4 h-4" />, variant: 'default' },
+    { label: 'Census Counties', count: 0, subtitle: 'Fetching...', icon: <Landmark className="w-4 h-4" />, variant: 'default' },
+  ]);
+  const [alerts, setAlerts] = useState<{ id: string; title: string; source: string; ago: string; severity: 'low'|'medium'|'high' }[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -32,6 +41,24 @@ export default function Sources() {
         { label: 'Census Counties', count: census.length, subtitle: 'Population geography', icon: <Landmark className="w-4 h-4" />, variant: 'default' },
       ];
       setStats(items);
+
+      const genAlerts: { id: string; title: string; source: string; ago: string; severity: 'low'|'medium'|'high' }[] = [];
+      const toAgo = (ts: string) => {
+        const d = new Date(ts).getTime();
+        const mins = Math.max(1, Math.round((Date.now() - d) / 60000));
+        return `${mins} min ago`;
+      };
+      usgs.slice(0, 3).forEach((e, i) => {
+        const mag = (e.data as any)?.mag;
+        const sev = mag >= 5 ? 'high' : mag >= 3 ? 'medium' : 'low';
+        genAlerts.push({ id: `u-${i}`, title: `Seismic ${mag != null ? `M${mag}` : 'activity'} detected`, source: 'USGS', ago: toAgo(e.timestamp), severity: sev });
+      });
+      noaa.slice(0, 2).forEach((e, i) => {
+        const ev = (e.data as any)?.event || 'Weather alert';
+        const sev = /warning|watch/i.test(String(ev)) ? 'medium' : 'low';
+        genAlerts.push({ id: `n-${i}`, title: ev, source: 'NOAA', ago: toAgo(e.timestamp), severity: sev });
+      });
+      setAlerts(genAlerts);
     })();
     return () => { cancelled = true; };
   }, []);
@@ -49,6 +76,20 @@ export default function Sources() {
           <StatCard key={s.label} title={s.label} value={s.count} subtitle={s.subtitle} icon={s.icon} variant={s.variant}
           />
         ))}
+      </div>
+
+      <div className="clip-corner border border-primary/20">
+        <div className="px-4 py-3 flex items-center justify-between">
+          <div className="text-sm text-primary tracking-widest uppercase">Alert Channel</div>
+          <div className="text-xs text-muted-foreground">{alerts.length} active</div>
+        </div>
+        <div className="px-2 pb-3">
+          {alerts.length === 0 ? (
+            <div className="px-3 py-2 text-xs text-muted-foreground">No alerts yet.</div>
+          ) : (
+            <AlertList alerts={alerts} />
+          )}
+        </div>
       </div>
 
       <div className="clip-corner border border-primary/20 p-4">

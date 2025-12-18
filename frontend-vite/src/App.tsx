@@ -21,7 +21,7 @@ export default function App() {
       <Header isOnline={isOnline} />
       <div className="pt-16">
         <Routes>
-          <Route path="/" element={<Dashboard />} />
+          <Route path="/" element={<Sources />} />
           <Route path="/sources" element={<Sources />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/map" element={<MapPage />} />
