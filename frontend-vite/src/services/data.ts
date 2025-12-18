@@ -166,17 +166,17 @@ export async function fetchCensusCounties(): Promise<RtaEvent[]> {
     const feats: any[] = Array.isArray(jd?.features) ? jd.features : [];
     return feats.map((f: any, idx: number) => {
       const attr = f.attributes || {};
-      const lat = attr.INTPTLAT != null ? parseFloat(attr.INTPTLAT) : null;
-      const lon = attr.INTPTLON != null ? parseFloat(attr.INTPTLON) : null;
-      return {
-        id: String(attr.GEOID || `census-${idx}`),
-        timestamp: new Date().toISOString(),
-        source: 'census_pop',
-        latitude: isFinite(lat) ? lat : null,
-        longitude: isFinite(lon) ? lon : null,
-        confidence: 1,
-        data: { name: attr.NAME, state: attr.STATE },
-      };
+  const lat = attr.INTPTLAT != null ? parseFloat(attr.INTPTLAT) : null;
+  const lon = attr.INTPTLON != null ? parseFloat(attr.INTPTLON) : null;
+  return {
+    id: String(attr.GEOID || `census-${idx}`),
+    timestamp: new Date().toISOString(),
+    source: 'census_pop',
+    latitude: typeof lat === 'number' && isFinite(lat) ? lat : null,
+    longitude: typeof lon === 'number' && isFinite(lon) ? lon : null,
+    confidence: 1,
+    data: { name: attr.NAME, state: attr.STATE },
+  };
     });
   } catch {
     return [];
