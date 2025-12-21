@@ -10,11 +10,13 @@ import { Circle as CircleStyle, Fill, Stroke } from 'ol/style';
 import { fromLonLat } from 'ol/proj';
 import Feature from 'ol/Feature';
 import Point from 'ol/geom/Point';
+import CircleGeom from 'ol/geom/Circle';
 
 export function MapComponent({ events, selectedId }: { events: RtaEvent[]; selectedId?: string }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<Map | null>(null);
   const layerRef = useRef<VectorLayer<VectorSource> | null>(null);
+  const focusLayerRef = useRef<VectorLayer<VectorSource> | null>(null);
 
   useEffect(() => {
     if (!ref.current) return;
@@ -30,13 +32,17 @@ export function MapComponent({ events, selectedId }: { events: RtaEvent[]; selec
         }) as any;
       },
     });
+    const focusLayer = new VectorLayer({
+      source: new VectorSource(),
+    });
     const map = new Map({
       target: ref.current,
-      layers: [new TileLayer({ source: new OSM() }), layer],
+      layers: [new TileLayer({ source: new OSM() }), layer, focusLayer],
       view: new View({ center: fromLonLat([0, 0]), zoom: 2 }),
     });
     mapRef.current = map;
     layerRef.current = layer;
+    focusLayerRef.current = focusLayer;
     return () => { map.setTarget(undefined); };
   }, []);
 
@@ -50,6 +56,7 @@ export function MapComponent({ events, selectedId }: { events: RtaEvent[]; selec
       if (e.longitude == null || e.latitude == null) return;
       const f = new Feature({ geometry: new Point(fromLonLat([e.longitude, e.latitude])) });
       f.set('id', e.id);
+      f.set('source', e.source);
       source.addFeature(f);
     });
   }, [events]);
@@ -58,6 +65,7 @@ export function MapComponent({ events, selectedId }: { events: RtaEvent[]; selec
     if (!selectedId) return;
     const layer = layerRef.current;
     const map = mapRef.current;
+    const focusLayer = focusLayerRef.current;
     if (!layer || !map) return;
     const source = layer.getSource();
     if (!source) return;
@@ -68,7 +76,30 @@ export function MapComponent({ events, selectedId }: { events: RtaEvent[]; selec
     const center = geom.getCoordinates();
     map.getView().animate({ center, zoom: 6, duration: 600 });
     layer.changed();
+    if (focusLayer) {
+      const s = focusLayer.getSource();
+      s?.clear();
+      const src = String(f.get('source') || '').toLowerCase();
+      const km = radiusKmForSource(src);
+      const circle = new CircleGeom(center, km * 1000);
+      const outline = new Feature(circle);
+      outline.setStyle(new CircleStyle({
+        radius: 0,
+        fill: new Fill({ color: 'rgba(255, 215, 0, 0.08)' }),
+        stroke: new Stroke({ color: 'rgba(255, 215, 0, 0.6)', width: 2 }),
+      }) as any);
+      s?.addFeature(outline);
+    }
   }, [selectedId]);
+
+  function radiusKmForSource(src?: string) {
+    const s = String(src || '').toLowerCase();
+    if (s.includes('usgs')) return 120;
+    if (s.includes('noaa')) return 60;
+    if (s.includes('gdacs')) return 200;
+    if (s.includes('fema')) return 40;
+    return 80;
+  }
 
   return <div ref={ref} className="w-full h-[60vh] border border-primary/20" />;
 }

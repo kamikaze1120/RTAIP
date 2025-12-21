@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard';
 import Sources from './pages/Sources';
 import Timeline from './pages/Timeline';
 import SettingsPage from './pages/Settings';
+import { getBackendBase } from './services/data';
 
 function Home() {
   return (
@@ -17,11 +18,27 @@ function Home() {
 }
 
 export default function App() {
-  const isOnline = true;
+  const [isOnline, setIsOnline] = useState(false);
   const [splash, setSplash] = useState(true);
   useEffect(() => {
     const t = setTimeout(() => setSplash(false), 1200);
     return () => clearTimeout(t);
+  }, []);
+  useEffect(() => {
+    let cancelled = false;
+    async function check() {
+      const base = getBackendBase();
+      if (!base) { setIsOnline(false); return; }
+      try {
+        const r = await fetch(`${base.replace(/\/$/, '')}/health`, { cache: 'no-store' });
+        setIsOnline(r.ok);
+      } catch {
+        setIsOnline(false);
+      }
+    }
+    check();
+    const id = setInterval(check, 30000);
+    return () => { cancelled = true; clearInterval(id); };
   }, []);
   return (
     <div className="min-h-screen">

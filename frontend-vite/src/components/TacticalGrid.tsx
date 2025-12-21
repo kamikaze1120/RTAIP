@@ -30,6 +30,7 @@ export default function TacticalGrid({ events = [] }: { events?: RtaEvent[] }) {
             {pts.map((e, i) => (
               <g key={i}>
                 <circle cx={toX(e.longitude as number)} cy={toY(e.latitude as number)} r={4} fill={colorFor(e.source)} />
+                <circle cx={toX(e.longitude as number)} cy={toY(e.latitude as number)} r={12} fill={colorFor(e.source).replace('/ 0.9', '/ 0.15')} className="animate-ping" />
                 <title>{`${e.source} • ${new Date(e.timestamp).toUTCString()}`}</title>
               </g>
             ))}
