@@ -66,6 +66,99 @@ export async function fetchBackendEvents(): Promise<RtaEvent[]> {
   }
 }
 
+export function eventSeverity(e: RtaEvent): number {
+  const src = String(e.source || '').toLowerCase();
+  let sev = 0.3;
+  if (src.includes('usgs')) {
+    const m = typeof (e.data as any)?.mag === 'number' ? (e.data as any).mag : 0;
+    sev = Math.min(1, Math.max(0, (m - 2) / 6));
+  } else if (src.includes('noaa')) {
+    const ev = String((e.data as any)?.event || '').toLowerCase();
+    sev = ev.includes('warning') ? 0.8 : ev.includes('watch') ? 0.6 : 0.4;
+  } else if (src.includes('gdacs')) {
+    const lvl = String((e.data as any)?.alertlevel || '').toLowerCase();
+    sev = lvl === 'red' ? 0.9 : lvl === 'orange' ? 0.7 : 0.5;
+  } else if (src.includes('fema')) {
+    const t = String((e.data as any)?.incidentType || '').toLowerCase();
+    sev = t.includes('hurricane') ? 0.7 : t.includes('flood') ? 0.6 : 0.4;
+  }
+  const conf = typeof e.confidence === 'number' ? e.confidence : 0.5;
+  return Math.max(0, Math.min(1, sev * (0.6 + 0.4 * conf)));
+}
+
+export function globalThreatScore(events: RtaEvent[]): number {
+  const weights = events.map(eventSeverity);
+  const sum = weights.reduce((a, b) => a + b, 0);
+  const scaled = Math.round(Math.min(1000, sum * 40));
+  return scaled;
+}
+
+export function topClusters(events: RtaEvent[], binDeg = 1): Array<{ lat: number; lon: number; score: number }>{
+  const grid = new Map<string, { latSum: number; lonSum: number; n: number; score: number }>();
+  events.forEach(e => {
+    if (e.latitude == null || e.longitude == null) return;
+    const latBin = Math.floor(e.latitude / binDeg) * binDeg;
+    const lonBin = Math.floor(e.longitude / binDeg) * binDeg;
+    const key = `${latBin}:${lonBin}`;
+    const sev = eventSeverity(e);
+    const cur = grid.get(key) || { latSum: 0, lonSum: 0, n: 0, score: 0 };
+    cur.latSum += e.latitude; cur.lonSum += e.longitude; cur.n += 1; cur.score += sev;
+    grid.set(key, cur);
+  });
+  return Array.from(grid.entries())
+    .map(([k, v]) => ({ lat: v.latSum / v.n, lon: v.lonSum / v.n, score: v.score }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 5);
+}
+
+export function typeProbabilities(events: RtaEvent[]): Record<string, number> {
+  const now = Date.now();
+  const cutoff = now - 72 * 3600000;
+  const recent = events.filter(e => {
+    const t = new Date(e.timestamp).getTime();
+    return !isNaN(t) && t >= cutoff;
+  });
+  const byType: Record<string, number> = {};
+  recent.forEach(e => {
+    const s = String(e.source || '').toLowerCase();
+    const type = s.includes('usgs') ? 'seismic' : s.includes('noaa') ? 'weather' : s.includes('gdacs') ? 'disaster' : s.includes('fema') ? 'disaster' : 'other';
+    byType[type] = (byType[type] || 0) + eventSeverity(e);
+  });
+  const total = Object.values(byType).reduce((a, b) => a + b, 0) || 1;
+  const probs: Record<string, number> = {};
+  Object.keys(byType).forEach(k => { probs[k] = Math.round((byType[k] / total) * 100); });
+  return probs;
+}
+
+export function predictedPoints(events: RtaEvent[]): Array<{ lat: number; lon: number; weight: number }>{
+  const clusters = topClusters(events, 1);
+  return clusters.flatMap(c => {
+    return [
+      { lat: c.lat, lon: c.lon, weight: c.score },
+      { lat: c.lat + 0.5, lon: c.lon, weight: c.score * 0.6 },
+      { lat: c.lat - 0.4, lon: c.lon + 0.3, weight: c.score * 0.5 },
+    ];
+  });
+}
+
+export function correlationMatrix(events: RtaEvent[]): Record<string, Record<string, number>> {
+  const sources = ['usgs', 'noaa', 'gdacs', 'fema', 'hifld', 'census'];
+  const mat: Record<string, Record<string, number>> = {};
+  sources.forEach(a => { mat[a] = {}; sources.forEach(b => { mat[a][b] = 0; }); });
+  const pts = events.filter(e => e.latitude != null && e.longitude != null);
+  for (let i = 0; i < pts.length; i++) {
+    for (let j = i + 1; j < pts.length; j++) {
+      const a = pts[i], b = pts[j];
+      const sa = sources.find(s => String(a.source).toLowerCase().includes(s)) || 'other';
+      const sb = sources.find(s => String(b.source).toLowerCase().includes(s)) || 'other';
+      const dt = Math.abs(new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+      const geo = Math.abs((a.latitude as number) - (b.latitude as number)) + Math.abs((a.longitude as number) - (b.longitude as number));
+      if (dt <= 6 * 3600000 && geo <= 2) mat[sa][sb] += (eventSeverity(a) + eventSeverity(b)) / 2;
+    }
+  }
+  return mat;
+}
+
 export async function fetchUSGSAllDay(): Promise<RtaEvent[]> {
   try {
     const r = await fetchWithTimeout('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson');

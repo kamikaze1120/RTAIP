@@ -5,6 +5,7 @@ import View from 'ol/View';
 import TileLayer from 'ol/layer/Tile';
 import OSM from 'ol/source/OSM';
 import VectorLayer from 'ol/layer/Vector';
+import Heatmap from 'ol/layer/Heatmap';
 import VectorSource from 'ol/source/Vector';
 import { Circle as CircleStyle, Fill, Stroke } from 'ol/style';
 import { fromLonLat } from 'ol/proj';
@@ -12,11 +13,13 @@ import Feature from 'ol/Feature';
 import Point from 'ol/geom/Point';
 import CircleGeom from 'ol/geom/Circle';
 
-export function MapComponent({ events, selectedId }: { events: RtaEvent[]; selectedId?: string }) {
+export function MapComponent({ events, selectedId, predictionPoints = [], showPredictions = false, simRadiusKm, showHospitals = false }: { events: RtaEvent[]; selectedId?: string; predictionPoints?: Array<{ lat: number; lon: number; weight: number }>; showPredictions?: boolean; simRadiusKm?: number; showHospitals?: boolean }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<Map | null>(null);
   const layerRef = useRef<VectorLayer<VectorSource> | null>(null);
   const focusLayerRef = useRef<VectorLayer<VectorSource> | null>(null);
+  const heatLayerRef = useRef<Heatmap | null>(null);
+  const infraLayerRef = useRef<VectorLayer<VectorSource> | null>(null);
 
   useEffect(() => {
     if (!ref.current) return;
@@ -35,14 +38,22 @@ export function MapComponent({ events, selectedId }: { events: RtaEvent[]; selec
     const focusLayer = new VectorLayer({
       source: new VectorSource(),
     });
+    const heatLayer = new Heatmap({
+      source: new VectorSource(),
+      blur: 12,
+      radius: 8,
+    });
+    const infraLayer = new VectorLayer({ source: new VectorSource() });
     const map = new Map({
       target: ref.current,
-      layers: [new TileLayer({ source: new OSM() }), layer, focusLayer],
+      layers: [new TileLayer({ source: new OSM() }), layer, heatLayer, infraLayer, focusLayer],
       view: new View({ center: fromLonLat([0, 0]), zoom: 2 }),
     });
     mapRef.current = map;
     layerRef.current = layer;
     focusLayerRef.current = focusLayer;
+    heatLayerRef.current = heatLayer;
+    infraLayerRef.current = infraLayer;
     return () => { map.setTarget(undefined); };
   }, []);
 
@@ -80,7 +91,7 @@ export function MapComponent({ events, selectedId }: { events: RtaEvent[]; selec
       const s = focusLayer.getSource();
       s?.clear();
       const src = String(f.get('source') || '').toLowerCase();
-      const km = radiusKmForSource(src);
+    const km = typeof simRadiusKm === 'number' ? simRadiusKm : radiusKmForSource(src);
       const circle = new CircleGeom(center, km * 1000);
       const outline = new Feature(circle);
       outline.setStyle(new CircleStyle({
@@ -105,3 +116,28 @@ export function MapComponent({ events, selectedId }: { events: RtaEvent[]; selec
 }
 
 export default MapComponent;
+  useEffect(() => {
+    const heat = heatLayerRef.current;
+    if (!heat) return;
+    const src = heat.getSource();
+    src?.clear();
+    if (!showPredictions) return;
+    predictionPoints.forEach(p => {
+      const f = new Feature({ geometry: new Point(fromLonLat([p.lon, p.lat])) });
+      (f as any).set('weight', Math.min(1, Math.max(0.1, p.weight)));
+      src?.addFeature(f);
+    });
+  }, [predictionPoints, showPredictions]);
+
+  useEffect(() => {
+    const infra = infraLayerRef.current;
+    if (!infra) return;
+    const src = infra.getSource();
+    src?.clear();
+    if (!showHospitals) return;
+    events.filter(e => String(e.source).toLowerCase().includes('hifld')).forEach(e => {
+      if (e.longitude == null || e.latitude == null) return;
+      const f = new Feature({ geometry: new Point(fromLonLat([e.longitude, e.latitude])) });
+      src?.addFeature(f);
+    });
+  }, [showHospitals, events]);

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getBackendBase, fetchBackendEvents, fetchUSGSAllDay, fetchNOAAAlerts, fetchGDACS, fetchFEMA, fetchHIFLDHospitals, fetchCensusCounties, type RtaEvent } from '../services/data';
+import { getBackendBase, fetchBackendEvents, fetchUSGSAllDay, fetchNOAAAlerts, fetchGDACS, fetchFEMA, fetchHIFLDHospitals, fetchCensusCounties, type RtaEvent, predictedPoints } from '../services/data';
 import MapComponent from '../components/MapComponent';
 import EventFeed from '../components/EventFeed';
 import AnalystPanel from '../components/AnalystPanel';
@@ -9,6 +9,9 @@ export default function MapPage() {
   const [selectedId, setSelectedId] = useState<string | undefined>(undefined);
   const [sources, setSources] = useState({ usgs: true, noaa: true, gdacs: false, fema: false, hifld: false, census: false });
   const [hoursWindow, setHoursWindow] = useState(24);
+  const [showPred, setShowPred] = useState(false);
+  const [simRadiusKm, setSimRadiusKm] = useState<number | undefined>(undefined);
+  const [showHospitals, setShowHospitals] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -73,8 +76,16 @@ export default function MapPage() {
             <label className="text-xs flex items-center gap-1"><input type="checkbox" checked={sources.fema} onChange={e=>setSources(s=>({ ...s, fema: e.target.checked }))} /> FEMA</label>
             <label className="text-xs flex items-center gap-1"><input type="checkbox" checked={sources.hifld} onChange={e=>setSources(s=>({ ...s, hifld: e.target.checked }))} /> HIFLD</label>
             <label className="text-xs flex items-center gap-1"><input type="checkbox" checked={sources.census} onChange={e=>setSources(s=>({ ...s, census: e.target.checked }))} /> Census</label>
+            <span className="mx-2">•</span>
+            <label className="text-xs flex items-center gap-1"><input type="checkbox" checked={showPred} onChange={e=>setShowPred(e.target.checked)} /> Predictions</label>
+            <label className="text-xs flex items-center gap-1"><input type="checkbox" checked={showHospitals} onChange={e=>setShowHospitals(e.target.checked)} /> Hospitals</label>
+            <div className="text-xs ml-auto flex items-center gap-2">
+              <span>Impact radius</span>
+              <input type="range" min="10" max="250" value={simRadiusKm ?? 120} onChange={e=>setSimRadiusKm(Number(e.target.value))} />
+              <span>{simRadiusKm ?? 120} km</span>
+            </div>
           </div>
-          <MapComponent events={events} selectedId={selectedId} />
+          <MapComponent events={events} selectedId={selectedId} predictionPoints={predictedPoints(events)} showPredictions={showPred} simRadiusKm={simRadiusKm} showHospitals={showHospitals} />
           <AnalystPanel events={events} onAsk={() => {}} />
         </div>
       </div>

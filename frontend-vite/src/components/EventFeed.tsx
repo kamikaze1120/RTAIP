@@ -29,16 +29,19 @@ const summarizeEvent = (e: RtaEvent) => {
 };
 
 export function EventFeed({ events, onSelect }: { events: RtaEvent[]; onSelect?: (id: string) => void }) {
+  const seen = new Set<string>();
+  const clean = events.filter(e => { const key = `${String(e.source).toLowerCase()}-${e.id}`; if (seen.has(key)) return false; seen.add(key); return true; });
   return (
     <div className="p-2">
       <div className="border-b border-primary/20 px-2 py-1 flex items-center justify-between">
         <div className="text-primary">Event Feed</div>
       </div>
       <ul className="divide-y divide-primary/10">
-        {events.map((event) => {
+        {clean.map((event) => {
           const icon = iconFor(event.source);
           const summary = summarizeEvent(event);
           const confPct = typeof event.confidence === 'number' ? Math.round(event.confidence * 100) : '—';
+          const sevPct = Math.round(eventSeverity(event) * 100);
           return (
             <li key={event.id} className="px-2 py-2">
               <div className="grid grid-cols-[6px_auto_80px] gap-2 items-center">
@@ -49,7 +52,7 @@ export function EventFeed({ events, onSelect }: { events: RtaEvent[]; onSelect?:
                     <span className="text-xs tracking-widest text-muted-foreground">{(event.source || 'UNKNOWN').toUpperCase()}</span>
                   </div>
                   <div className="text-sm">{summary}</div>
-                  <div className="text-xs text-muted-foreground">Conf: {confPct}%</div>
+                  <div className="text-xs text-muted-foreground">Conf: {confPct}% • Severity: {sevPct}%</div>
                 </div>
                 <div className="flex justify-end">
                   <button className="px-2 py-1 text-xs clip-corner-sm bg-primary/20 text-primary border border-primary/30" onClick={() => onSelect?.(event.id)}>Focus</button>

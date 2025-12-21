@@ -4,7 +4,9 @@ import TacticalGrid from '../components/TacticalGrid';
 import AlertList from '../components/AlertList';
 import SystemStats from '../components/SystemStats';
 import { Database, Users, ShieldAlert, Shield } from 'lucide-react';
-import { fetchUSGSAllDay, fetchNOAAAlerts, fetchGDACS, fetchFEMA, fetchHIFLDHospitals, fetchCensusCounties, type RtaEvent } from '../services/data';
+import { fetchUSGSAllDay, fetchNOAAAlerts, fetchGDACS, fetchFEMA, fetchHIFLDHospitals, fetchCensusCounties, type RtaEvent, globalThreatScore, topClusters, typeProbabilities } from '../services/data';
+import CommanderPanel from '../components/CommanderPanel';
+import ReadinessPanel from '../components/ReadinessPanel';
 
 export default function Dashboard() {
   const [events, setEvents] = useState<RtaEvent[]>([]);
@@ -76,6 +78,10 @@ export default function Dashboard() {
     }, 0);
   }, [events]);
 
+  const gts = useMemo(() => globalThreatScore(events), [events]);
+  const clusters = useMemo(() => topClusters(events), [events]);
+  const probs = useMemo(() => typeProbabilities(events), [events]);
+
   const securityLevel = useMemo(() => {
     return highThreats > 3 ? 'ALPHA' : highThreats > 0 ? 'BRAVO' : 'NORMAL';
   }, [highThreats]);
@@ -89,9 +95,9 @@ export default function Dashboard() {
       </div>
 
       <div className="grid md:grid-cols-4 gap-4">
+        <StatCard title="Global Threat Score" value={gts} subtitle={gts>700?'CRITICAL':gts>450?'HIGH':gts>250?'ELEVATED':'LOW'} icon={<ShieldAlert className="w-4 h-4" />} variant={gts>700?'danger':gts>450?'warning':'default'} />
         <StatCard title="Active Sources" value={activeSources} subtitle="Synced" icon={<Database className="w-4 h-4" />} />
         <StatCard title="Events Processed" value={events.length} subtitle="Last 7 days" icon={<Users className="w-4 h-4" />} />
-        <StatCard title="Active Threats" value={highThreats} subtitle="Under monitoring" icon={<ShieldAlert className="w-4 h-4" />} variant="warning" />
         <StatCard title="Security Level" value={securityLevel} subtitle={securityLevel==='ALPHA'?'Elevated':'Nominal'} icon={<Shield className="w-4 h-4" />} variant={securityLevel==='ALPHA'?'danger':'default'} />
       </div>
 
@@ -103,6 +109,17 @@ export default function Dashboard() {
         <div className="space-y-4">
           <AlertList alerts={alerts} />
           <SystemStats stats={stats} />
+          <div className="clip-corner border border-primary/20 p-3">
+            <div className="text-xs text-primary tracking-widest uppercase mb-2">Top Emerging Threat Clusters</div>
+            <ul className="text-xs space-y-1">
+              {clusters.map((c, i) => (
+                <li key={i} className="flex items-center justify-between"><span>({c.lat.toFixed(2)}, {c.lon.toFixed(2)})</span><span className="text-muted-foreground">score {Math.round(c.score*100)}</span></li>
+              ))}
+            </ul>
+            <div className="mt-3 text-xs text-muted-foreground">Type probabilities (72h): weather {probs.weather||0}% • seismic {probs.seismic||0}% • disaster {probs.disaster||0}%</div>
+          </div>
+          <CommanderPanel events={events} />
+          <ReadinessPanel events={events} />
         </div>
       </div>
     </div>

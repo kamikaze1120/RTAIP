@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import type { RtaEvent } from '../services/data';
+import { topClusters } from '../services/data';
 
 export default function TacticalGrid({ events = [] }: { events?: RtaEvent[] }) {
   const pts = events.filter(e => e.latitude != null && e.longitude != null).slice(0, 200);
@@ -19,6 +20,10 @@ export default function TacticalGrid({ events = [] }: { events?: RtaEvent[] }) {
     gdacs: events.filter(e => String(e.source).toLowerCase().includes('gdacs')).length,
     fema: events.filter(e => String(e.source).toLowerCase().includes('fema')).length,
   };
+  const usgsClusters = useMemo(() => topClusters(events.filter(e => String(e.source).toLowerCase().includes('usgs'))), [events]);
+  const noaaClusters = useMemo(() => topClusters(events.filter(e => String(e.source).toLowerCase().includes('noaa'))), [events]);
+  const gdacsClusters = useMemo(() => topClusters(events.filter(e => String(e.source).toLowerCase().includes('gdacs'))), [events]);
+  const femaClusters = useMemo(() => topClusters(events.filter(e => String(e.source).toLowerCase().includes('fema'))), [events]);
   return (
     <div className="clip-corner border border-primary/20 bg-background/30">
       <div className="relative h-[420px]">
@@ -34,6 +39,13 @@ export default function TacticalGrid({ events = [] }: { events?: RtaEvent[] }) {
                 <title>{`${e.source} • ${new Date(e.timestamp).toUTCString()}`}</title>
               </g>
             ))}
+            {[usgsClusters, noaaClusters, gdacsClusters, femaClusters].map((list, idx) => {
+              const c = idx===0?'hsl(0 85% 55% / 0.22)':idx===1?'hsl(35 100% 50% / 0.22)':idx===2?'hsl(180 100% 50% / 0.22)':'hsl(150 80% 45% / 0.22)';
+              const r = idx===0?8:idx===1?6:idx===2?10:5; // percent radii
+              return list.map((cl, i) => (
+                <circle key={`${idx}-${i}`} cx={toX(cl.lon)} cy={toY(cl.lat)} r={`${r}%`} fill={c} />
+              ));
+            })}
           </svg>
         </div>
         <div className="absolute top-2 left-2 text-[11px] text-muted-foreground bg-background/60 px-2 py-1 clip-corner-sm border border-primary/20">

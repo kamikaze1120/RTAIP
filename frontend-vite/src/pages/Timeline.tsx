@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { fetchBackendEvents, fetchUSGSAllDay, fetchNOAAAlerts, fetchGDACS, fetchFEMA, fetchHIFLDHospitals, fetchCensusCounties, type RtaEvent } from '../services/data';
+import { fetchBackendEvents, fetchUSGSAllDay, fetchNOAAAlerts, fetchGDACS, fetchFEMA, fetchHIFLDHospitals, fetchCensusCounties, type RtaEvent, correlationMatrix } from '../services/data';
 import EventFeed from '../components/EventFeed';
+import CorrelationMatrix from '../components/CorrelationMatrix';
 
 export default function Timeline() {
   const [events, setEvents] = useState<RtaEvent[]>([]);
@@ -31,6 +32,12 @@ export default function Timeline() {
   }, []);
 
   const count = useMemo(() => events.length, [events]);
+  const [replayHours, setReplayHours] = useState(12);
+  const filtered = useMemo(() => {
+    const cutoff = Date.now() - replayHours * 3600000;
+    return events.filter(e => { const t = new Date(e.timestamp).getTime(); return !isNaN(t) && t >= cutoff; });
+  }, [events, replayHours]);
+  const corr = useMemo(() => correlationMatrix(filtered), [filtered]);
 
   return (
     <div className="px-6 pt-20 space-y-4">
@@ -42,13 +49,25 @@ export default function Timeline() {
       <div className="clip-corner border border-primary/20">
         <div className="px-4 py-3 flex items-center justify-between">
           <div className="text-sm text-primary tracking-widest uppercase">Latest Events</div>
-          <div className="text-xs text-muted-foreground">{count} total</div>
+          <div className="text-xs text-muted-foreground">{filtered.length} / {count} shown</div>
+        </div>
+        <div className="px-4 pb-2">
+          <div className="flex items-center justify-between">
+            <div className="text-xs text-primary tracking-widest uppercase">Playback Window</div>
+            <div className="text-xs text-muted-foreground">{replayHours}h</div>
+          </div>
+          <input type="range" min="1" max="168" value={replayHours} onChange={(e)=>setReplayHours(Number(e.target.value))} className="w-full" />
         </div>
         {events.length === 0 ? (
           <div className="px-4 pb-4 text-xs text-muted-foreground">No events available yet. Try again shortly or check backend ingestion.</div>
         ) : (
-          <EventFeed events={events} onSelect={() => {}} />
+          <EventFeed events={filtered} onSelect={() => {}} />
         )}
+      </div>
+      <div className="clip-corner border border-primary/20 p-4">
+        <div className="text-sm text-primary tracking-widest uppercase mb-2">Correlation Snapshot</div>
+        <div className="text-xs text-muted-foreground mb-2">Before / During / After analysis: adjust the slider to observe correlation changes across sources.</div>
+        <CorrelationMatrix matrix={corr} />
       </div>
     </div>
   );
