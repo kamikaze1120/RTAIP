@@ -8,9 +8,67 @@ export type RtaEvent = {
   data?: Record<string, any>;
 };
 
+const inMemoryCache = new Map<string, { ts: number; data: any }>();
+const TTL_MS = 2 * 60 * 1000;
+function getCache<T>(key: string): T | null {
+  const v = inMemoryCache.get(key);
+  if (!v) return null;
+  if (Date.now() - v.ts > TTL_MS) { inMemoryCache.delete(key); return null; }
+  return v.data as T;
+}
+function setCache(key: string, data: any) { inMemoryCache.set(key, { ts: Date.now(), data }); }
+
+async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit & { timeoutMs?: number } = {}): Promise<Response> {
+  const { timeoutMs = 8000, ...rest } = init;
+  const ctrl = new AbortController();
+  const id = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    // cache layer for GET
+    const key = typeof input === 'string' ? `http:${input}` : `http:${String(input)}`;
+    if ((rest.method || 'GET') === 'GET') {
+      const cached = getCache<Response>(key);
+      if (cached) return cached;
+    }
+    const r = await fetch(input, { ...rest, signal: ctrl.signal });
+    clearTimeout(id);
+    if ((rest.method || 'GET') === 'GET' && r.ok) setCache(typeof input === 'string' ? `http:${input}` : `http:${String(input)}`, r.clone());
+    return r;
+  } catch (e) {
+    clearTimeout(id);
+    throw e;
+  }
+}
+
+export function getBackendBase(): string | null {
+  const env = import.meta.env.VITE_BACKEND_URL as string | undefined;
+  const local = typeof window !== 'undefined' ? window.localStorage.getItem('backendUrl') : null;
+  return (local && local.trim()) || (env && env.trim()) || null;
+}
+
+export async function fetchBackendEvents(): Promise<RtaEvent[]> {
+  const base = getBackendBase();
+  if (!base) return [];
+  try {
+    const r = await fetchWithTimeout(`${base.replace(/\/$/, '')}/events`, { timeoutMs: 7000 });
+    const jd = await r.json();
+    const arr: any[] = Array.isArray(jd) ? jd : [];
+    return arr.map((e, i) => ({
+      id: String(e.id ?? i),
+      timestamp: e.timestamp ?? new Date().toISOString(),
+      source: String(e.source || 'unknown'),
+      latitude: typeof e.latitude === 'number' ? e.latitude : null,
+      longitude: typeof e.longitude === 'number' ? e.longitude : null,
+      confidence: typeof e.confidence === 'number' ? e.confidence : 0.5,
+      data: e.data || {},
+    }));
+  } catch {
+    return [];
+  }
+}
+
 export async function fetchUSGSAllDay(): Promise<RtaEvent[]> {
   try {
-    const r = await fetch('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson');
+    const r = await fetchWithTimeout('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson');
     const jd = await r.json();
     const feats: any[] = Array.isArray(jd?.features) ? jd.features : [];
     return feats.map((f: any, idx: number) => {
@@ -35,7 +93,7 @@ export async function fetchUSGSAllDay(): Promise<RtaEvent[]> {
 
 export async function fetchNOAAAlerts(): Promise<RtaEvent[]> {
   try {
-    const r = await fetch('https://api.weather.gov/alerts/active');
+    const r = await fetchWithTimeout('https://api.weather.gov/alerts/active');
     const jd = await r.json();
     const feats: any[] = Array.isArray(jd?.features) ? jd.features : [];
     return feats.map((f: any, idx: number) => {
@@ -68,7 +126,7 @@ export async function fetchNOAAAlerts(): Promise<RtaEvent[]> {
 
 export async function fetchGDACS(fromISO: string, toISO: string): Promise<RtaEvent[]> {
   try {
-    const r = await fetch(`https://www.gdacs.org/gdacsapi/api/events/geteventlist/SEARCH?eventlist=EQ;TC;FL;WF;VO;DR&fromdate=${fromISO}&todate=${toISO}`);
+    const r = await fetchWithTimeout(`https://www.gdacs.org/gdacsapi/api/events/geteventlist/SEARCH?eventlist=EQ;TC;FL;WF;VO;DR&fromdate=${fromISO}&todate=${toISO}`);
     const jd = await r.json();
     const feats: any[] = Array.isArray(jd?.features) ? jd.features : [];
     return feats.map((f: any, idx: number) => {
@@ -107,7 +165,7 @@ export async function fetchGDACS(fromISO: string, toISO: string): Promise<RtaEve
 export async function fetchFEMA(): Promise<RtaEvent[]> {
   try {
     const url = `https://gis.fema.gov/arcgis/rest/services/IncidentManagement/DisasterDeclarationsSummaries/FeatureServer/0/query?where=1%3D1&outFields=declarationDate,incidentType,declaredCountyArea,declaredState,disasterNumber&returnGeometry=true&outSR=4326&f=json`;
-    const r = await fetch(url);
+    const r = await fetchWithTimeout(url);
     const jd = await r.json();
     const feats: any[] = Array.isArray(jd?.features) ? jd.features : [];
     return feats.map((f: any, idx: number) => {
@@ -135,7 +193,7 @@ export async function fetchFEMA(): Promise<RtaEvent[]> {
 export async function fetchHIFLDHospitals(): Promise<RtaEvent[]> {
   try {
     const url = `https://maps.nccs.nasa.gov/mapping/rest/services/hifld_open/public_health/FeatureServer/0/query?where=1%3D1&outFields=name,type,state&returnGeometry=true&f=json`;
-    const r = await fetch(url);
+    const r = await fetchWithTimeout(url);
     const jd = await r.json();
     const feats: any[] = Array.isArray(jd?.features) ? jd.features : [];
     return feats.map((f: any, idx: number) => {
@@ -161,7 +219,7 @@ export async function fetchHIFLDHospitals(): Promise<RtaEvent[]> {
 export async function fetchCensusCounties(): Promise<RtaEvent[]> {
   try {
     const url = `https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/State_County/MapServer/11/query?where=1%3D1&outFields=NAME,STATE,INTPTLAT,INTPTLON,GEOID&returnGeometry=false&f=json`;
-    const r = await fetch(url);
+    const r = await fetchWithTimeout(url);
     const jd = await r.json();
     const feats: any[] = Array.isArray(jd?.features) ? jd.features : [];
     return feats.map((f: any, idx: number) => {

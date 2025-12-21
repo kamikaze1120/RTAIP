@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { fetchUSGSAllDay, fetchNOAAAlerts, fetchGDACS, fetchFEMA, fetchHIFLDHospitals, fetchCensusCounties, type RtaEvent } from '../services/data';
+import { getBackendBase, fetchBackendEvents, fetchUSGSAllDay, fetchNOAAAlerts, fetchGDACS, fetchFEMA, fetchHIFLDHospitals, fetchCensusCounties, type RtaEvent } from '../services/data';
 import MapComponent from '../components/MapComponent';
 import EventFeed from '../components/EventFeed';
 import AnalystPanel from '../components/AnalystPanel';
@@ -11,18 +11,24 @@ export default function MapPage() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const now = new Date();
-      const fromISO = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
-      const toISO = now.toISOString();
-      const promises: Promise<RtaEvent[]>[] = [];
-      if (sources.usgs) promises.push(fetchUSGSAllDay());
-      if (sources.noaa) promises.push(fetchNOAAAlerts());
-      if (sources.gdacs) promises.push(fetchGDACS(fromISO, toISO));
-      if (sources.fema) promises.push(fetchFEMA());
-      if (sources.hifld) promises.push(fetchHIFLDHospitals());
-      if (sources.census) promises.push(fetchCensusCounties());
-      const results = await Promise.all(promises);
-      const all = results.flat();
+      const backend = getBackendBase();
+      let all: RtaEvent[] = [];
+      if (backend) {
+        all = await fetchBackendEvents();
+      } else {
+        const now = new Date();
+        const fromISO = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+        const toISO = now.toISOString();
+        const promises: Promise<RtaEvent[]>[] = [];
+        if (sources.usgs) promises.push(fetchUSGSAllDay());
+        if (sources.noaa) promises.push(fetchNOAAAlerts());
+        if (sources.gdacs) promises.push(fetchGDACS(fromISO, toISO));
+        if (sources.fema) promises.push(fetchFEMA());
+        if (sources.hifld) promises.push(fetchHIFLDHospitals());
+        if (sources.census) promises.push(fetchCensusCounties());
+        const results = await Promise.all(promises);
+        all = results.flat();
+      }
       if (!cancelled) setEvents(all);
     })();
     return () => { cancelled = true; };

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { fetchUSGSAllDay, fetchNOAAAlerts, fetchGDACS, fetchFEMA, fetchHIFLDHospitals, fetchCensusCounties, type RtaEvent } from '../services/data';
+import { fetchBackendEvents, fetchUSGSAllDay, fetchNOAAAlerts, fetchGDACS, fetchFEMA, fetchHIFLDHospitals, fetchCensusCounties, type RtaEvent } from '../services/data';
 import EventFeed from '../components/EventFeed';
 
 export default function Timeline() {
@@ -8,18 +8,22 @@ export default function Timeline() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const now = new Date();
-      const fromISO = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
-      const toISO = now.toISOString();
-      const [usgs, noaa, gdacs, fema, hifld, census] = await Promise.all([
-        fetchUSGSAllDay(),
-        fetchNOAAAlerts(),
-        fetchGDACS(fromISO, toISO),
-        fetchFEMA(),
-        fetchHIFLDHospitals(),
-        fetchCensusCounties(),
-      ]);
-      const all = [...usgs, ...noaa, ...gdacs, ...fema, ...hifld, ...census];
+      const backend = await fetchBackendEvents();
+      let all: RtaEvent[] = backend;
+      if (all.length === 0) {
+        const now = new Date();
+        const fromISO = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+        const toISO = now.toISOString();
+        const [usgs, noaa, gdacs, fema, hifld, census] = await Promise.all([
+          fetchUSGSAllDay(),
+          fetchNOAAAlerts(),
+          fetchGDACS(fromISO, toISO),
+          fetchFEMA(),
+          fetchHIFLDHospitals(),
+          fetchCensusCounties(),
+        ]);
+        all = [...usgs, ...noaa, ...gdacs, ...fema, ...hifld, ...census];
+      }
       all.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
       if (!cancelled) setEvents(all);
     })();
@@ -40,7 +44,11 @@ export default function Timeline() {
           <div className="text-sm text-primary tracking-widest uppercase">Latest Events</div>
           <div className="text-xs text-muted-foreground">{count} total</div>
         </div>
-        <EventFeed events={events} onSelect={() => {}} />
+        {events.length === 0 ? (
+          <div className="px-4 pb-4 text-xs text-muted-foreground">No events available yet. Try again shortly or check backend ingestion.</div>
+        ) : (
+          <EventFeed events={events} onSelect={() => {}} />
+        )}
       </div>
     </div>
   );

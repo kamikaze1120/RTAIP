@@ -90,7 +90,7 @@ export default function Dashboard() {
 
       <div className="grid md:grid-cols-4 gap-4">
         <StatCard title="Active Sources" value={activeSources} subtitle="Synced" icon={<Database className="w-4 h-4" />} />
-        <StatCard title="Personnel" value={47} subtitle="All units deployed" icon={<Users className="w-4 h-4" />} />
+        <StatCard title="Events Processed" value={events.length} subtitle="Last 7 days" icon={<Users className="w-4 h-4" />} />
         <StatCard title="Active Threats" value={highThreats} subtitle="Under monitoring" icon={<ShieldAlert className="w-4 h-4" />} variant="warning" />
         <StatCard title="Security Level" value={securityLevel} subtitle={securityLevel==='ALPHA'?'Elevated':'Nominal'} icon={<Shield className="w-4 h-4" />} variant={securityLevel==='ALPHA'?'danger':'default'} />
       </div>
@@ -98,7 +98,7 @@ export default function Dashboard() {
       <div className="grid lg:grid-cols-[1fr_360px] gap-4">
         <div>
           <div className="text-sm text-primary tracking-widest uppercase mb-2">Tactical Overview</div>
-          <TacticalGrid />
+          <TacticalGrid events={events} />
         </div>
         <div className="space-y-4">
           <AlertList alerts={alerts} />

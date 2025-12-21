@@ -4,6 +4,7 @@ import MapPage from './pages/Map';
 import Dashboard from './pages/Dashboard';
 import Sources from './pages/Sources';
 import Timeline from './pages/Timeline';
+import SettingsPage from './pages/Settings';
 
 function Home() {
   return (
@@ -26,7 +27,7 @@ export default function App() {
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/map" element={<MapPage />} />
           <Route path="/timeline" element={<Timeline />} />
-          <Route path="/settings" element={<Home />} />
+          <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>
