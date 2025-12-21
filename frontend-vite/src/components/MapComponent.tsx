@@ -112,17 +112,13 @@ export function MapComponent({ events, selectedId, predictionPoints = [], showPr
     return 80;
   }
 
-  return <div ref={ref} className="w-full h-[60vh] border border-primary/20" />;
-}
-
-export default MapComponent;
   useEffect(() => {
     const heat = heatLayerRef.current;
     if (!heat) return;
     const src = heat.getSource();
     src?.clear();
     if (!showPredictions) return;
-    predictionPoints.forEach(p => {
+    predictionPoints.forEach((p: { lat: number; lon: number; weight: number }) => {
       const f = new Feature({ geometry: new Point(fromLonLat([p.lon, p.lat])) });
       (f as any).set('weight', Math.min(1, Math.max(0.1, p.weight)));
       src?.addFeature(f);
@@ -135,9 +131,14 @@ export default MapComponent;
     const src = infra.getSource();
     src?.clear();
     if (!showHospitals) return;
-    events.filter(e => String(e.source).toLowerCase().includes('hifld')).forEach(e => {
+    events.filter((e: RtaEvent) => String(e.source).toLowerCase().includes('hifld')).forEach((e: RtaEvent) => {
       if (e.longitude == null || e.latitude == null) return;
       const f = new Feature({ geometry: new Point(fromLonLat([e.longitude, e.latitude])) });
       src?.addFeature(f);
     });
   }, [showHospitals, events]);
+
+  return <div ref={ref} className="w-full h-[60vh] border border-primary/20" />;
+}
+
+export default MapComponent;

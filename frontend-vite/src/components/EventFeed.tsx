@@ -1,5 +1,6 @@
 import React from 'react';
 import type { RtaEvent } from '../services/data';
+import { eventSeverity } from '../services/data';
 
 const iconFor = (src?: string) => {
   const s = String(src || '').toLowerCase();
