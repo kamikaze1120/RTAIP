@@ -6,6 +6,7 @@ import AnalystPanel from '../components/AnalystPanel';
 
 export default function MapPage() {
   const [events, setEvents] = useState<RtaEvent[]>([]);
+  const [selectedId, setSelectedId] = useState<string | undefined>(undefined);
   const [sources, setSources] = useState({ usgs: true, noaa: true, gdacs: false, fema: false, hifld: false, census: false });
 
   useEffect(() => {
@@ -38,7 +39,7 @@ export default function MapPage() {
     <div className="px-6 pt-20">
       <div className="grid md:grid-cols-[280px_1fr] gap-4">
         <div className="border border-primary/20 clip-corner">
-          <EventFeed events={events} onSelect={() => {}} />
+          <EventFeed events={events} onSelect={(id) => setSelectedId(id)} />
         </div>
         <div className="border border-primary/20 clip-corner">
           <div className="px-3 py-2 border-b border-primary/20 flex flex-wrap gap-2">
@@ -50,7 +51,7 @@ export default function MapPage() {
             <label className="text-xs flex items-center gap-1"><input type="checkbox" checked={sources.hifld} onChange={e=>setSources(s=>({ ...s, hifld: e.target.checked }))} /> HIFLD</label>
             <label className="text-xs flex items-center gap-1"><input type="checkbox" checked={sources.census} onChange={e=>setSources(s=>({ ...s, census: e.target.checked }))} /> Census</label>
           </div>
-          <MapComponent events={events} />
+          <MapComponent events={events} selectedId={selectedId} />
           <AnalystPanel events={events} onAsk={() => {}} />
         </div>
       </div>

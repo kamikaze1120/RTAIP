@@ -1,4 +1,5 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
 import { Header } from './components/Header';
 import MapPage from './pages/Map';
 import Dashboard from './pages/Dashboard';
@@ -17,6 +18,11 @@ function Home() {
 
 export default function App() {
   const isOnline = true;
+  const [splash, setSplash] = useState(true);
+  useEffect(() => {
+    const t = setTimeout(() => setSplash(false), 1200);
+    return () => clearTimeout(t);
+  }, []);
   return (
     <div className="min-h-screen">
       <Header isOnline={isOnline} />
@@ -31,6 +37,15 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>
+      {splash && (
+        <div className="fixed inset-0 z-[100] grid place-items-center bg-background">
+          <div className="text-center">
+            <div className="text-[12px] tracking-widest text-muted-foreground uppercase">RTAIP</div>
+            <div className="text-4xl font-bold"><span className="text-primary">Rapid</span> Tactical AI Platform</div>
+            <div className="mt-4 inline-block clip-corner-sm border border-primary/30 px-4 py-2 text-xs text-primary bg-primary/10">Initializing Systems…</div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

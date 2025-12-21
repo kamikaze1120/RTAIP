@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import type { RtaEvent } from '../services/data';
+import { getBackendBase } from '../services/data';
 
 function brief(events: RtaEvent[]) {
   const now = new Date();
@@ -24,21 +25,45 @@ function brief(events: RtaEvent[]) {
 
 export default function AnalystPanel({ events, onAsk }: { events: RtaEvent[]; onAsk?: (q: string) => void }) {
   const [input, setInput] = useState('');
+  const [answer, setAnswer] = useState('');
   const base = useMemo(() => brief(events), [events]);
   const suggestions = [ 'Summarize last 6 hours', 'Explain top 3 anomalies', 'Any threats near critical infrastructure?', 'What should I monitor next?' ];
   return (
     <div className="p-3 border-t border-primary/20">
       <div className="text-sm text-primary">Analyst Brief</div>
       <pre className="mt-2 text-xs text-foreground/90 whitespace-pre-wrap">{base}</pre>
+      {answer && <pre className="mt-2 text-xs text-success whitespace-pre-wrap">{answer}</pre>}
       <div className="mt-3 flex flex-wrap gap-2">
         {suggestions.map(s => (
-          <button key={s} className="px-2 py-1 text-xs clip-corner-sm bg-primary/20 text-primary border border-primary/30" onClick={() => onAsk?.(s)}>{s}</button>
+          <button key={s} className="px-2 py-1 text-xs clip-corner-sm bg-primary/20 text-primary border border-primary/30" onClick={async () => {
+            await handleAsk(s);
+            onAsk?.(s);
+          }}>{s}</button>
         ))}
       </div>
       <div className="mt-3 flex gap-2">
         <input className="px-2 py-1 text-xs bg-secondary text-foreground border border-primary/20 clip-corner-sm flex-1" value={input} onChange={(e) => setInput(e.target.value)} placeholder="Ask the analyst" />
-        <button className="px-2 py-1 text-xs clip-corner-sm bg-primary/20 text-primary border border-primary/30" onClick={() => { const q = input.trim(); if (!q) return; onAsk?.(q); setInput(''); }}>Ask</button>
+        <button className="px-2 py-1 text-xs clip-corner-sm bg-primary/20 text-primary border border-primary/30" onClick={async () => { const q = input.trim(); if (!q) return; await handleAsk(q); onAsk?.(q); setInput(''); }}>Ask</button>
       </div>
     </div>
   );
+
+  async function handleAsk(q: string) {
+    const baseUrl = getBackendBase();
+    if (!baseUrl) {
+      const local = `No backend configured. Based on current telemetry: ${brief(events)}\nFocus: Monitor top source; watch for new anomaly flags.`;
+      setAnswer(local);
+      return;
+    }
+    try {
+      const r = await fetch(`${baseUrl.replace(/\/$/, '')}/api/ai-analyst`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: q })
+      });
+      const jd = await r.json();
+      const text = typeof jd === 'string' ? jd : JSON.stringify(jd, null, 2);
+      setAnswer(text);
+    } catch {
+      setAnswer('Analyst service unreachable. Falling back to local brief.\n' + brief(events));
+    }
+  }
 }
