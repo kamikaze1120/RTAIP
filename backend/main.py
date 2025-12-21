@@ -172,8 +172,12 @@ def get_anomalies(db: Session = Depends(get_db), bbox: Optional[str] = None):
     return data
 
 @app.get("/health")
-def health():
-    return {"status": "ok"}
+def health(db: Session = Depends(get_db)):
+    try:
+        db.execute("SELECT 1")
+        return {"status": "ok"}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
 
 # Email notification request model
 class EmailRequest(BaseModel):
@@ -589,9 +593,20 @@ def migrate():
     ok, msg = ensure_schema()
     return {"ok": ok, "message": msg}
 
-# Run schedulers in background
-threading.Thread(target=schedule_ingestion, daemon=True).start()
-threading.Thread(target=schedule_detection, daemon=True).start()
+@app.on_event("startup")
+def _startup():
+    try:
+        ensure_schema()
+    except Exception:
+        pass
+    try:
+        threading.Thread(target=schedule_ingestion, daemon=True).start()
+    except Exception:
+        pass
+    try:
+        threading.Thread(target=schedule_detection, daemon=True).start()
+    except Exception:
+        pass
 
 @app.get("/ingest")
 def ingest_now():

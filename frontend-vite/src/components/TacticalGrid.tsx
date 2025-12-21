@@ -25,13 +25,26 @@ export default function TacticalGrid({ events = [] }: { events?: RtaEvent[] }) {
   const gdacsClusters = useMemo(() => topClusters(events.filter(e => String(e.source).toLowerCase().includes('gdacs'))), [events]);
   const femaClusters = useMemo(() => topClusters(events.filter(e => String(e.source).toLowerCase().includes('fema'))), [events]);
   return (
-    <div className="clip-corner border border-primary/20 bg-background/30">
+    <div className="clip-corner border border-primary/20 bg-secondary">
       <div className="relative h-[420px]">
         <div className="absolute inset-2 border border-primary/20" />
         <div className="absolute inset-0">
           <svg width="100%" height="100%">
-            <circle cx="50%" cy="55%" r="60" fill="none" stroke="hsl(180 100% 50% / 0.15)" />
-            <circle cx="50%" cy="55%" r="30" fill="none" stroke="hsl(180 100% 50% / 0.12)" />
+            <defs>
+              <linearGradient id="bggrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="rgba(255,255,255,0.08)" />
+                <stop offset="100%" stopColor="rgba(255,255,255,0.02)" />
+              </linearGradient>
+            </defs>
+            <rect x="0" y="0" width="100%" height="100%" fill="url(#bggrad)" />
+            {[10,20,30,40,50,60,70,80,90].map((p) => (
+              <line key={`v${p}`} x1={`${p}%`} y1="0" x2={`${p}%`} y2="100%" stroke="rgba(255,255,255,0.08)" />
+            ))}
+            {[10,20,30,40,50,60,70,80,90].map((p) => (
+              <line key={`h${p}`} x1="0" y1={`${p}%`} x2="100%" y2={`${p}%`} stroke="rgba(255,255,255,0.08)" />
+            ))}
+            <circle cx="50%" cy="55%" r="60" fill="none" stroke="rgba(255,255,255,0.15)" />
+            <circle cx="50%" cy="55%" r="30" fill="none" stroke="rgba(255,255,255,0.12)" />
             {pts.map((e, i) => (
               <g key={i}>
                 <circle cx={toX(e.longitude as number)} cy={toY(e.latitude as number)} r={4} fill={colorFor(e.source)} />
