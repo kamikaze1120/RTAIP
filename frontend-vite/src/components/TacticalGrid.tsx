@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import type { RtaEvent } from '../services/data';
-import { topClusters } from '../services/data';
+import { topClusters, eventSeverity } from '../services/data';
 
 export default function TacticalGrid({ events = [] }: { events?: RtaEvent[] }) {
   const pts = events.filter(e => e.latitude != null && e.longitude != null).slice(0, 200);
@@ -45,13 +45,21 @@ export default function TacticalGrid({ events = [] }: { events?: RtaEvent[] }) {
             ))}
             <circle cx="50%" cy="55%" r="60" fill="none" stroke="rgba(255,255,255,0.15)" />
             <circle cx="50%" cy="55%" r="30" fill="none" stroke="rgba(255,255,255,0.12)" />
-            {pts.map((e, i) => (
-              <g key={i}>
-                <circle cx={toX(e.longitude as number)} cy={toY(e.latitude as number)} r={4} fill={colorFor(e.source)} />
-                <circle cx={toX(e.longitude as number)} cy={toY(e.latitude as number)} r={12} fill={colorFor(e.source).replace('/ 0.9', '/ 0.15')} className="animate-ping" />
-                <title>{`${e.source} • ${new Date(e.timestamp).toUTCString()}`}</title>
-              </g>
-            ))}
+            {pts.map((e, i) => {
+              const sev = eventSeverity(e);
+              const r = 3 + Math.round(sev * 7);
+              const alpha = (0.4 + (e.confidence || 0.5) * 0.5).toFixed(2);
+              const fill = colorFor(e.source).replace('/ 0.9', `/ ${alpha}`);
+              const pingFill = colorFor(e.source).replace('/ 0.9', '/ 0.12');
+              const t = `${String(e.source || '').toUpperCase()} • ${new Date(e.timestamp).toUTCString()} • Risk ${Math.round(sev*100)}%`;
+              return (
+                <g key={i}>
+                  <circle cx={toX(e.longitude as number)} cy={toY(e.latitude as number)} r={r} fill={fill} className={sev>0.6?"animate-pulse":""} />
+                  {sev>0.7 && <circle cx={toX(e.longitude as number)} cy={toY(e.latitude as number)} r={r*3} fill={pingFill} className="animate-ping" />}
+                  <title>{t}</title>
+                </g>
+              );
+            })}
             {[usgsClusters, noaaClusters, gdacsClusters, femaClusters].map((list, idx) => {
               const c = idx===0?'hsl(0 85% 55% / 0.22)':idx===1?'hsl(35 100% 50% / 0.22)':idx===2?'hsl(180 100% 50% / 0.22)':'hsl(150 80% 45% / 0.22)';
               const r = idx===0?8:idx===1?6:idx===2?10:5; // percent radii

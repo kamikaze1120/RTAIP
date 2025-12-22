@@ -37,7 +37,7 @@ export function EventFeed({ events, onSelect }: { events: RtaEvent[]; onSelect?:
       <div className="border-b border-primary/20 px-2 py-1 flex items-center justify-between">
         <div className="text-primary">Event Feed</div>
       </div>
-      <ul className="divide-y divide-primary/10">
+      <ul className="divide-y divide-primary/10 max-h-[420px] overflow-y-auto">
         {clean.map((event) => {
           const icon = iconFor(event.source);
           const summary = summarizeEvent(event);

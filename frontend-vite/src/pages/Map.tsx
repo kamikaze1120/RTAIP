@@ -14,13 +14,21 @@ export default function MapPage() {
   const [showHospitals, setShowHospitals] = useState(false);
 
   useEffect(() => {
+    const ep = window.localStorage.getItem('enablePredictions');
+    if (ep) setShowPred(ep === 'true');
+    const dir = window.localStorage.getItem('defaultImpactRadius');
+    if (dir) setSimRadiusKm(Number(dir));
+  }, []);
+
+  useEffect(() => {
     let cancelled = false;
     (async () => {
       const backend = getBackendBase();
+      const fallback = (window.localStorage.getItem('useOpenFallback') || 'true') === 'true';
       let all: RtaEvent[] = [];
       if (backend) {
         all = await fetchBackendEvents();
-      } else {
+      } else if (fallback) {
         const now = new Date();
         const fromISO = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
         const toISO = now.toISOString();

@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import type { RtaEvent } from '../services/data';
-import { getBackendBase } from '../services/data';
+import { getBackendBase, topClusters, estimatePopulationNear } from '../services/data';
 
 function brief(events: RtaEvent[]) {
   const now = new Date();
@@ -26,6 +26,7 @@ function brief(events: RtaEvent[]) {
 export default function AnalystPanel({ events, onAsk }: { events: RtaEvent[]; onAsk?: (q: string) => void }) {
   const [input, setInput] = useState('');
   const [answer, setAnswer] = useState('');
+  const [busy, setBusy] = useState(false);
   const base = useMemo(() => brief(events), [events]);
   const suggestions = [ 'Summarize last 6 hours', 'Explain top 3 anomalies', 'Any threats near critical infrastructure?', 'What should I monitor next?' ];
   return (
@@ -49,21 +50,35 @@ export default function AnalystPanel({ events, onAsk }: { events: RtaEvent[]; on
   );
 
   async function handleAsk(q: string) {
+    if (busy) return;
+    setBusy(true);
     const baseUrl = getBackendBase();
+    const aiPath = typeof window !== 'undefined' ? (window.localStorage.getItem('aiEndpointPath') || '/api/ai-analyst') : '/api/ai-analyst';
+    const lower = q.toLowerCase();
+    if (lower.includes('population')) {
+      const cluster = topClusters(events)[0];
+      if (cluster) {
+        const est = await estimatePopulationNear(cluster.lat, cluster.lon);
+        const pop = est?.population != null ? est?.population : 'unknown';
+        setAnswer(a => (a ? a + '\n' : '') + `Estimated population near ${est?.place || 'target area'}: ${pop}`);
+      }
+    }
     if (!baseUrl) {
       const local = `No backend configured. Based on current telemetry: ${brief(events)}\nFocus: Monitor top source; watch for new anomaly flags.`;
-      setAnswer(local);
+      setAnswer(a => (a ? a + '\n' : '') + local);
+      setBusy(false);
       return;
     }
     try {
-      const r = await fetch(`${baseUrl.replace(/\/$/, '')}/api/ai-analyst`, {
+      const r = await fetch(`${baseUrl.replace(/\/$/, '')}${aiPath}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: q })
       });
       const jd = await r.json();
       const text = typeof jd === 'string' ? jd : JSON.stringify(jd, null, 2);
-      setAnswer(text);
+      setAnswer(a => (a ? a + '\n' : '') + text);
     } catch {
-      setAnswer('Analyst service unreachable. Falling back to local brief.\n' + brief(events));
+      setAnswer(a => (a ? a + '\n' : '') + ('Analyst service unreachable. Falling back to local brief.\n' + brief(events)));
     }
+    setBusy(false);
   }
 }

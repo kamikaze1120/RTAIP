@@ -10,8 +10,10 @@ const navItems = [
   { label: 'Settings', path: '/settings', icon: Settings },
 ];
 
-export function Header({ isOnline = false }: { isOnline?: boolean }) {
+import React, { useState } from 'react';
+export function Header({ status = 'offline', mode = 'open', lastHeartbeat }: { status?: 'online'|'degraded'|'offline'; mode?: 'backend'|'open'; lastHeartbeat?: string | null }) {
   const location = useLocation();
+  const [open, setOpen] = useState(false);
   return (
     <header className="fixed top-0 left-0 right-0 z-50 border-b border-primary/20 bg-background/80 backdrop-blur-md">
       <div className="flex items-center justify-between px-6 py-3">
@@ -46,14 +48,23 @@ export function Header({ isOnline = false }: { isOnline?: boolean }) {
         </nav>
 
         <div className="flex items-center gap-3">
-          <div className={cn(
+          <button className={cn(
             'flex items-center gap-2 px-3 py-1.5 text-xs font-medium tracking-wider uppercase clip-corner-sm',
-            isOnline ? 'bg-success/20 text-success border border-success/30' : 'bg-destructive/20 text-destructive border border-destructive/30'
-          )}>
-            <div className={cn('w-2 h-2 rounded-full', isOnline ? 'bg-success animate-pulse' : 'bg-destructive')} />
-            Backend: {isOnline ? 'Online' : 'Offline'}
-          </div>
+            status === 'online' ? 'bg-success/20 text-success border border-success/30' : status === 'degraded' ? 'bg-warning/20 text-warning border border-warning/30' : 'bg-destructive/20 text-destructive border border-destructive/30'
+          )} onClick={()=>setOpen(o=>!o)}>
+            <div className={cn('w-2 h-2 rounded-full', status === 'online' ? 'bg-success animate-pulse' : status === 'degraded' ? 'bg-warning animate-pulse' : 'bg-destructive')} />
+            Backend: {status === 'online' ? 'Online' : status === 'degraded' ? 'Degraded' : 'Offline'}
+          </button>
+          <div className={cn('px-3 py-1.5 text-xs uppercase clip-corner-sm', mode==='backend'?'bg-primary/15 border border-primary/30 text-primary':'bg-muted/20 border border-muted text-muted-foreground')}>Data: {mode==='backend'?'Backend':'Open Feeds'}</div>
         </div>
+        {open && (
+          <div className="absolute right-6 top-14 z-50 clip-corner-sm border border-primary/20 bg-background px-3 py-2 text-xs w-[280px]">
+            <div className="text-primary">Connectivity</div>
+            <div className="mt-1 text-muted-foreground">Status: {status}</div>
+            <div className="mt-1 text-muted-foreground">Mode: {mode==='backend'?'Backend':'Open Feeds'}</div>
+            <div className="mt-1 text-muted-foreground">Last heartbeat: {lastHeartbeat ? new Date(lastHeartbeat).toLocaleString() : '—'}</div>
+          </div>
+        )}
       </div>
     </header>
   );

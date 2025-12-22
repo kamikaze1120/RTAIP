@@ -6,7 +6,7 @@ import Dashboard from './pages/Dashboard';
 import Sources from './pages/Sources';
 import Timeline from './pages/Timeline';
 import SettingsPage from './pages/Settings';
-import { getBackendBase } from './services/data';
+import { getBackendBase, getHealthPaths } from './services/data';
 
 function Home() {
   return (
@@ -18,7 +18,9 @@ function Home() {
 }
 
 export default function App() {
-  const [isOnline, setIsOnline] = useState(false);
+  const [backendStatus, setBackendStatus] = useState<'online'|'degraded'|'offline'>('offline');
+  const [lastHeartbeat, setLastHeartbeat] = useState<string | null>(null);
+  const [dataMode, setDataMode] = useState<'backend'|'open'>('open');
   const [splash, setSplash] = useState(true);
   useEffect(() => {
     const t = setTimeout(() => setSplash(false), 1200);
@@ -28,21 +30,39 @@ export default function App() {
     let cancelled = false;
     async function check() {
       const base = getBackendBase();
-      if (!base) { setIsOnline(false); return; }
+      if (!base) { setBackendStatus('offline'); setDataMode('open'); window.localStorage.setItem('backendStatus', 'offline'); window.localStorage.setItem('dataMode', 'open'); return; }
+      const b = base.replace(/\/$/, '');
       try {
-        const r = await fetch(`${base.replace(/\/$/, '')}/health`, { cache: 'no-store' });
-        setIsOnline(r.ok);
+        const paths = getHealthPaths();
+        for (const p of paths) {
+          try {
+            const r = await fetch(`${b}${p}`, { cache: 'no-store' });
+            if (r.ok) { setBackendStatus('online'); setDataMode('backend'); setLastHeartbeat(new Date().toISOString()); window.localStorage.setItem('backendStatus', 'online'); window.localStorage.setItem('dataMode', 'backend'); window.localStorage.setItem('lastHeartbeat', new Date().toISOString()); return; }
+          } catch {}
+        }
+        try {
+          const ping = await fetch(b, { cache: 'no-store' });
+          if (ping.ok) { setBackendStatus('degraded'); setDataMode('backend'); window.localStorage.setItem('backendStatus', 'degraded'); window.localStorage.setItem('dataMode', 'backend'); }
+        } catch {}
+        try {
+          const ev = await fetch(`${b}/events`, { cache: 'no-store' });
+          if (ev.ok) { setBackendStatus('degraded'); setDataMode('backend'); setLastHeartbeat(new Date().toISOString()); window.localStorage.setItem('backendStatus', 'degraded'); window.localStorage.setItem('dataMode', 'backend'); window.localStorage.setItem('lastHeartbeat', new Date().toISOString()); }
+          else { setBackendStatus('offline'); setDataMode('open'); window.localStorage.setItem('backendStatus', 'offline'); window.localStorage.setItem('dataMode', 'open'); }
+        } catch {
+          setBackendStatus('offline'); setDataMode('open'); window.localStorage.setItem('backendStatus', 'offline'); window.localStorage.setItem('dataMode', 'open');
+        }
       } catch {
-        setIsOnline(false);
+        setBackendStatus('offline'); setDataMode('open'); window.localStorage.setItem('backendStatus', 'offline'); window.localStorage.setItem('dataMode', 'open');
       }
     }
     check();
-    const id = setInterval(check, 30000);
+    const r = Number(window.localStorage.getItem('refreshMs') || '60000');
+    const id = setInterval(check, Math.max(15000, r));
     return () => { cancelled = true; clearInterval(id); };
   }, []);
   return (
     <div className="min-h-screen">
-      <Header isOnline={isOnline} />
+      <Header status={backendStatus} mode={dataMode} lastHeartbeat={lastHeartbeat} />
       <div className="pt-16">
         <Routes>
           <Route path="/" element={<Sources />} />

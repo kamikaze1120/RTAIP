@@ -1,5 +1,6 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import type { RtaEvent } from '../services/data';
+import { eventSeverity } from '../services/data';
 import Map from 'ol/Map';
 import View from 'ol/View';
 import TileLayer from 'ol/layer/Tile';
@@ -13,13 +14,14 @@ import Feature from 'ol/Feature';
 import Point from 'ol/geom/Point';
 import CircleGeom from 'ol/geom/Circle';
 
-export function MapComponent({ events, selectedId, predictionPoints = [], showPredictions = false, simRadiusKm, showHospitals = false }: { events: RtaEvent[]; selectedId?: string; predictionPoints?: Array<{ lat: number; lon: number; weight: number }>; showPredictions?: boolean; simRadiusKm?: number; showHospitals?: boolean }) {
+export function MapComponent({ events, selectedId, predictionPoints = [], showPredictions = false, simRadiusKm, showHospitals = false, onSelect }: { events: RtaEvent[]; selectedId?: string; predictionPoints?: Array<{ lat: number; lon: number; weight: number }>; showPredictions?: boolean; simRadiusKm?: number; showHospitals?: boolean; onSelect?: (id: string) => void }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<Map | null>(null);
   const layerRef = useRef<VectorLayer<VectorSource> | null>(null);
   const focusLayerRef = useRef<VectorLayer<VectorSource> | null>(null);
   const heatLayerRef = useRef<Heatmap | null>(null);
   const infraLayerRef = useRef<VectorLayer<VectorSource> | null>(null);
+  const [detail, setDetail] = useState<{ id: string; x: number; y: number; zoom: number } | null>(null);
 
   useEffect(() => {
     if (!ref.current) return;
@@ -56,6 +58,24 @@ export function MapComponent({ events, selectedId, predictionPoints = [], showPr
     infraLayerRef.current = infraLayer;
     return () => { map.setTarget(undefined); };
   }, []);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const handler = (evt: any) => {
+      const pixel = map.getEventPixel(evt.originalEvent);
+      const feature = map.forEachFeatureAtPixel(pixel, (f: any) => f);
+      if (!feature) { setDetail(null); return; }
+      const id = feature.get('id');
+      const z = map.getView().getZoom();
+      const zoom = typeof z === 'number' && isFinite(z) ? z : 2;
+      const [x, y] = pixel as [number, number];
+      setDetail({ id, x, y, zoom });
+      onSelect?.(id);
+    };
+    map.on('singleclick', handler);
+    return () => { map.un('singleclick', handler as any); };
+  }, [onSelect]);
 
   useEffect(() => {
     const layer = layerRef.current;
@@ -138,7 +158,24 @@ export function MapComponent({ events, selectedId, predictionPoints = [], showPr
     });
   }, [showHospitals, events]);
 
-  return <div ref={ref} className="w-full h-[60vh] border border-primary/20" />;
+  return (
+    <div className="relative">
+      <div ref={ref} className="w-full h-[60vh] border border-primary/20" />
+      {detail && (() => {
+        const ev = events.find(e => e.id === detail.id);
+        if (!ev) return null;
+        const sev = eventSeverity(ev);
+        const more = (detail.zoom || 2) >= 5;
+        return (
+          <div style={{ left: detail.x + 12, top: detail.y + 12 }} className="absolute z-40 clip-corner-sm border border-primary/20 bg-background/95 px-3 py-2 text-xs w-[280px]">
+            <div className="text-primary">{String(ev.source || '').toUpperCase()} • Risk {Math.round(sev*100)}%</div>
+            <div className="text-muted-foreground">{new Date(ev.timestamp).toLocaleString()}</div>
+            {more && <div className="mt-1 text-[11px] whitespace-pre-wrap">{JSON.stringify(ev.data || {}, null, 2)}</div>}
+          </div>
+        );
+      })()}
+    </div>
+  );
 }
 
 export default MapComponent;

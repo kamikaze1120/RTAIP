@@ -45,6 +45,19 @@ export function getBackendBase(): string | null {
   return (local && local.trim()) || (env && env.trim()) || null;
 }
 
+export function getHealthPaths(): string[] {
+  try {
+    const v = typeof window !== 'undefined' ? window.localStorage.getItem('healthPath') : null;
+    const primary = (v && v.trim()) || '/health';
+    const candidates = [primary, '/api/health', '/status'];
+    const uniq: string[] = [];
+    candidates.forEach((p) => { if (!uniq.includes(p)) uniq.push(p); });
+    return uniq;
+  } catch {
+    return ['/health', '/api/health', '/status'];
+  }
+}
+
 export async function fetchBackendEvents(): Promise<RtaEvent[]> {
   const base = getBackendBase();
   if (!base) return [];
@@ -157,6 +170,54 @@ export function correlationMatrix(events: RtaEvent[]): Record<string, Record<str
     }
   }
   return mat;
+}
+
+export async function reverseGeocode(lat: number, lon: number): Promise<{ name?: string; city?: string; county?: string; state?: string; country?: string } | null> {
+  if (!isFinite(lat) || !isFinite(lon)) return null;
+  const key = `rev:${lat.toFixed(4)}:${lon.toFixed(4)}`;
+  const cached = getCache<any>(key);
+  if (cached) return cached;
+  try {
+    const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`;
+    const r = await fetchWithTimeout(url, { timeoutMs: 7000, headers: { 'Accept': 'application/json' } });
+    const jd: any = await r.json();
+    const addr = jd?.address || {};
+    const res = { name: jd?.name, city: addr.city || addr.town || addr.village, county: addr.county, state: addr.state, country: addr.country };
+    setCache(key, res);
+    return res;
+  } catch {
+    return null;
+  }
+}
+
+const STATE_FIPS: Record<string, string> = {
+  'alabama': '01','alaska': '02','arizona': '04','arkansas': '05','california': '06','colorado': '08','connecticut': '09','delaware':'10','district of columbia':'11','florida':'12','georgia':'13','hawaii':'15','idaho':'16','illinois':'17','indiana':'18','iowa':'19','kansas':'20','kentucky':'21','louisiana':'22','maine':'23','maryland':'24','massachusetts':'25','michigan':'26','minnesota':'27','mississippi':'28','missouri':'29','montana':'30','nebraska':'31','nevada':'32','new hampshire':'33','new jersey':'34','new mexico':'35','new york':'36','north carolina':'37','north dakota':'38','ohio':'39','oklahoma':'40','oregon':'41','pennsylvania':'42','rhode island':'44','south carolina':'45','south dakota':'46','tennessee':'47','texas':'48','utah':'49','vermont':'50','virginia':'51','washington':'53','west virginia':'54','wisconsin':'55','wyoming':'56'
+};
+
+export async function countyPopulation(stateName: string | undefined, countyName: string | undefined): Promise<number | null> {
+  if (!stateName || !countyName) return null;
+  const code = STATE_FIPS[String(stateName).toLowerCase()];
+  try {
+    const url = code ? `https://api.census.gov/data/2023/pep/population?get=NAME,POP&for=county:*&in=state:${code}` : `https://api.census.gov/data/2023/pep/population?get=NAME,POP&for=county:*&in=state:*`;
+    const r = await fetchWithTimeout(url, { timeoutMs: 8000 });
+    const jd: any = await r.json();
+    const rows: any[] = Array.isArray(jd) ? jd.slice(1) : [];
+    const norm = (s: string) => s.toLowerCase().replace(/ county$/,'').replace(/ parish$/,'').trim();
+    const target = norm(countyName);
+    const match = rows.find((row: any[]) => norm(String(row[0] || '')).includes(target));
+    const pop = match ? Number(match[1]) : null;
+    return isFinite(pop || NaN) ? pop : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function estimatePopulationNear(lat: number, lon: number): Promise<{ population?: number; place?: string } | null> {
+  const geo = await reverseGeocode(lat, lon);
+  const county = geo?.county; const state = geo?.state; const country = geo?.country;
+  const pop = await countyPopulation(state, county);
+  const place = [county, state, country].filter(Boolean).join(', ');
+  return { population: pop ?? undefined, place };
 }
 
 export async function fetchUSGSAllDay(): Promise<RtaEvent[]> {

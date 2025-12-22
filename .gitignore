@@ -1,0 +1,7 @@
+frontend-vite/dist/
+frontend-vite/node_modules/
+frontend-vite/.vite/
+.DS_Store
+*.log
+*.tmp
+*.cache

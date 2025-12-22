@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import StatCard from '../components/StatCard';
 import TacticalGrid from '../components/TacticalGrid';
+import MapComponent from '../components/MapComponent';
 import AlertList from '../components/AlertList';
 import SystemStats from '../components/SystemStats';
 import { Database, Users, ShieldAlert, Shield } from 'lucide-react';
-import { fetchUSGSAllDay, fetchNOAAAlerts, fetchGDACS, fetchFEMA, fetchHIFLDHospitals, fetchCensusCounties, type RtaEvent, globalThreatScore, topClusters, typeProbabilities } from '../services/data';
+import { fetchUSGSAllDay, fetchNOAAAlerts, fetchGDACS, fetchHIFLDHospitals, fetchCensusCounties, fetchBackendEvents, getBackendBase, type RtaEvent, globalThreatScore, topClusters, typeProbabilities } from '../services/data';
 import CommanderPanel from '../components/CommanderPanel';
 import ReadinessPanel from '../components/ReadinessPanel';
 
@@ -21,19 +22,23 @@ export default function Dashboard() {
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    async function load() {
       const now = new Date();
       const fromISO = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
       const toISO = now.toISOString();
-      const [usgs, noaa, gdacs, fema, hifld, census] = await Promise.all([
+      const base = getBackendBase();
+      let backend: RtaEvent[] = [];
+      if (base) {
+        try { backend = await fetchBackendEvents(); } catch {}
+      }
+      const [usgs, noaa, gdacs, hifld, census] = await Promise.all([
         fetchUSGSAllDay(),
         fetchNOAAAlerts(),
         fetchGDACS(fromISO, toISO),
-        fetchFEMA(),
         fetchHIFLDHospitals(),
         fetchCensusCounties(),
       ]);
-      const all = [...usgs, ...noaa, ...gdacs, ...fema, ...hifld, ...census];
+      const all = [...backend, ...usgs, ...noaa, ...gdacs, ...hifld, ...census];
       if (!cancelled) setEvents(all);
 
       const genAlerts: { id: string; title: string; source: string; ago: string; severity: 'low'|'medium'|'high' }[] = [];
@@ -53,8 +58,11 @@ export default function Dashboard() {
         genAlerts.push({ id: `n-${i}`, title: ev, source: 'NOAA', ago: toAgo(e.timestamp), severity: sev });
       });
       if (!cancelled) setAlerts(genAlerts);
-    })();
-    return () => { cancelled = true; };
+    }
+    load();
+    const r = Number(window.localStorage.getItem('refreshMs') || '60000');
+    const id = setInterval(load, Math.max(30000, r));
+    return () => { cancelled = true; clearInterval(id); };
   }, []);
 
   const activeSources = useMemo(() => {
@@ -81,6 +89,21 @@ export default function Dashboard() {
   const gts = useMemo(() => globalThreatScore(events), [events]);
   const clusters = useMemo(() => topClusters(events), [events]);
   const probs = useMemo(() => typeProbabilities(events), [events]);
+  const lastUpdated = useMemo(() => {
+    const t = events.map(e => new Date(e.timestamp).getTime()).filter(t=>!isNaN(t)).sort((a,b)=>b-a)[0];
+    return t ? new Date(t).toLocaleString() : '—';
+  }, [events]);
+  const trend = useMemo(() => {
+    const now = Date.now();
+    const recent = events.filter(e => { const t = new Date(e.timestamp).getTime(); return !isNaN(t) && t >= now - 24*3600000; });
+    const prev = events.filter(e => { const t = new Date(e.timestamp).getTime(); return !isNaN(t) && t < now - 24*3600000 && t >= now - 48*3600000; });
+    const a = globalThreatScore(recent);
+    const b = globalThreatScore(prev) || 1;
+    const delta = Math.round(((a - b) / b) * 100);
+    const sign = delta > 0 ? `↑ ${delta}%` : delta < 0 ? `↓ ${Math.abs(delta)}%` : 'stable';
+    return sign;
+  }, [events]);
+  const backendStatus = useMemo(() => (typeof window !== 'undefined' ? window.localStorage.getItem('backendStatus') : null) || 'offline', []);
 
   const securityLevel = useMemo(() => {
     return highThreats > 3 ? 'ALPHA' : highThreats > 0 ? 'BRAVO' : 'NORMAL';
@@ -91,11 +114,12 @@ export default function Dashboard() {
       <div className="space-y-1">
         <div className="text-xs tracking-widest text-muted-foreground uppercase">Real-Time Tactical Analysis Intelligence Platform</div>
         <div className="text-4xl font-bold">Command <span className="text-primary">Center</span></div>
-        <div className="text-sm text-muted-foreground">Advanced situational awareness and threat monitoring. All systems synchronized and operational.</div>
+        <div className="text-sm text-muted-foreground">{backendStatus==='offline'?'Data may be degraded. Confidence reduced.':'Advanced situational awareness and threat monitoring.'}</div>
+        <div className="text-[11px] text-muted-foreground">Last updated: {lastUpdated}</div>
       </div>
 
       <div className="grid md:grid-cols-4 gap-4">
-        <StatCard title="Global Threat Score" value={gts} subtitle={gts>700?'CRITICAL':gts>450?'HIGH':gts>250?'ELEVATED':'LOW'} icon={<ShieldAlert className="w-4 h-4" />} variant={gts>700?'danger':gts>450?'warning':'default'} />
+        <StatCard title="Global Threat Score" value={gts} subtitle={`${gts>700?'CRITICAL':gts>450?'HIGH':gts>250?'ELEVATED':'LOW'} • ${trend}`} icon={<ShieldAlert className="w-4 h-4" />} variant={gts>700?'danger':gts>450?'warning':'default'} />
         <StatCard title="Active Sources" value={activeSources} subtitle="Synced" icon={<Database className="w-4 h-4" />} />
         <StatCard title="Events Processed" value={events.length} subtitle="Last 7 days" icon={<Users className="w-4 h-4" />} />
         <StatCard title="Security Level" value={securityLevel} subtitle={securityLevel==='ALPHA'?'Elevated':'Nominal'} icon={<Shield className="w-4 h-4" />} variant={securityLevel==='ALPHA'?'danger':'default'} />
@@ -104,7 +128,9 @@ export default function Dashboard() {
       <div className="grid lg:grid-cols-[1fr_360px] gap-4">
         <div>
           <div className="text-sm text-primary tracking-widest uppercase mb-2">Tactical Overview</div>
-          <TacticalGrid events={events} />
+          <div className="clip-corner border border-primary/20 bg-secondary">
+            <MapComponent events={events} showPredictions={false} showHospitals={false} onSelect={() => {}} />
+          </div>
         </div>
         <div className="space-y-4">
           <AlertList alerts={alerts} />
