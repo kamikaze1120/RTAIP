@@ -9,7 +9,7 @@ const navItems = [
   { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
   { label: 'Map', path: '/map', icon: Map },
   { label: 'Timeline', path: '/timeline', icon: Clock },
-  { label: 'Settings', path: '/settings', icon: Settings },
+  
 ];
 
 export function Header({ status = 'offline', mode = 'open', lastHeartbeat }: { status?: 'online'|'degraded'|'offline'; mode?: 'backend'|'open'; lastHeartbeat?: string | null }) {

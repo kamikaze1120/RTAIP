@@ -63,7 +63,7 @@ export default function AnalystPanel({ events, onAsk }: { events: RtaEvent[]; on
         setAnswer(a => (a ? a + '\n' : '') + `Estimated population near ${est?.place || 'target area'}: ${pop}`);
       }
     }
-    const provider = typeof window !== 'undefined' ? (window.localStorage.getItem('aiProvider') || 'backend') : 'backend';
+    const provider = (import.meta as any)?.env?.VITE_AI_PROVIDER || 'backend';
     if (provider === 'gemini') {
       const ctx = brief(events);
       const res = await callGemini(q, ctx);

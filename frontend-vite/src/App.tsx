@@ -5,7 +5,7 @@ import MapPage from './pages/Map';
 import Dashboard from './pages/Dashboard';
 import Sources from './pages/Sources';
 import Timeline from './pages/Timeline';
-import SettingsPage from './pages/Settings';
+ 
 import { getBackendBase, getHealthPaths, checkSupabaseHealth, getSupabaseConfig } from './services/data';
 
 function Home() {
@@ -75,7 +75,7 @@ export default function App() {
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/map" element={<MapPage />} />
           <Route path="/timeline" element={<Timeline />} />
-          <Route path="/settings" element={<SettingsPage />} />
+          
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>

@@ -41,21 +41,16 @@ async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit & { 
 
 export function getBackendBase(): string | null {
   const env = import.meta.env.VITE_BACKEND_URL as string | undefined;
-  const local = typeof window !== 'undefined' ? window.localStorage.getItem('backendUrl') : null;
-  return (local && local.trim()) || (env && env.trim()) || null;
+  return (env && env.trim()) || null;
 }
 
 export function getHealthPaths(): string[] {
-  try {
-    const v = typeof window !== 'undefined' ? window.localStorage.getItem('healthPath') : null;
-    const primary = (v && v.trim()) || '/health';
-    const candidates = [primary, '/api/health', '/status'];
-    const uniq: string[] = [];
-    candidates.forEach((p) => { if (!uniq.includes(p)) uniq.push(p); });
-    return uniq;
-  } catch {
-    return ['/health', '/api/health', '/status'];
-  }
+  const hp = import.meta.env.VITE_HEALTH_PATH as string | undefined;
+  const primary = (hp && hp.trim()) || '/health';
+  const candidates = [primary, '/api/health', '/status'];
+  const uniq: string[] = [];
+  candidates.forEach((p) => { if (!uniq.includes(p)) uniq.push(p); });
+  return uniq;
 }
 
 export async function fetchBackendEvents(): Promise<RtaEvent[]> {
@@ -259,10 +254,9 @@ export async function runConnectivityDiagnostics(): Promise<ConnectivityDiagnost
 }
 
 export function getSupabaseConfig(): { url?: string; anon?: string; table?: string } {
-  if (typeof window === 'undefined') return {};
-  const url = window.localStorage.getItem('supabaseUrl') || undefined;
-  const anon = window.localStorage.getItem('supabaseAnon') || undefined;
-  const table = window.localStorage.getItem('supabaseTable') || 'events';
+  const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+  const anon = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+  const table = (import.meta.env.VITE_SUPABASE_TABLE as string | undefined) || 'events';
   return { url, anon, table };
 }
 
@@ -297,10 +291,9 @@ export async function fetchSupabaseEvents(): Promise<RtaEvent[]> {
 }
 
 export async function callGemini(query: string, context?: string): Promise<string | null> {
-  if (typeof window === 'undefined') return null;
-  const key = window.localStorage.getItem('geminiApiKey');
+  const key = import.meta.env.VITE_GEMINI_API_KEY as string | undefined;
   if (!key) return null;
-  const model = window.localStorage.getItem('geminiModel') || 'models/gemini-1.5-flash';
+  const model = (import.meta.env.VITE_GEMINI_MODEL as string | undefined) || 'models/gemini-1.5-flash';
   try {
     const url = `https://generativelanguage.googleapis.com/v1beta/${model}:generateContent?key=${encodeURIComponent(key)}`;
     const body = {
