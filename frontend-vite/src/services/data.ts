@@ -258,6 +258,64 @@ export async function runConnectivityDiagnostics(): Promise<ConnectivityDiagnost
   return out;
 }
 
+export function getSupabaseConfig(): { url?: string; anon?: string; table?: string } {
+  if (typeof window === 'undefined') return {};
+  const url = window.localStorage.getItem('supabaseUrl') || undefined;
+  const anon = window.localStorage.getItem('supabaseAnon') || undefined;
+  const table = window.localStorage.getItem('supabaseTable') || 'events';
+  return { url, anon, table };
+}
+
+export async function checkSupabaseHealth(): Promise<boolean> {
+  const { url, anon, table } = getSupabaseConfig();
+  if (!url || !anon || !table) return false;
+  try {
+    const r = await fetchWithTimeout(`${url.replace(/\/$/, '')}/rest/v1/${encodeURIComponent(table)}?select=id&limit=1`, { timeoutMs: 6000, headers: { apikey: anon, Authorization: `Bearer ${anon}` } });
+    return r.ok;
+  } catch { return false; }
+}
+
+export async function fetchSupabaseEvents(): Promise<RtaEvent[]> {
+  const { url, anon, table } = getSupabaseConfig();
+  if (!url || !anon || !table) return [];
+  try {
+    const r = await fetchWithTimeout(`${url.replace(/\/$/, '')}/rest/v1/${encodeURIComponent(table)}?select=*`, { timeoutMs: 10000, headers: { apikey: anon, Authorization: `Bearer ${anon}` } });
+    if (!r.ok) return [];
+    const rows: any[] = await r.json();
+    const events: RtaEvent[] = rows.map((row: any) => ({
+      id: String(row.id ?? `${row.source}-${row.timestamp}`),
+      source: row.source ?? 'supabase',
+      lat: Number(row.lat ?? row.latitude ?? 0),
+      lon: Number(row.lon ?? row.longitude ?? 0),
+      timestamp: row.timestamp ?? row.created_at ?? new Date().toISOString(),
+      confidence: Number(row.confidence ?? 0.6),
+      severity: Number(row.severity ?? 0.2),
+      data: row
+    }));
+    return events;
+  } catch { return []; }
+}
+
+export async function callGemini(query: string, context?: string): Promise<string | null> {
+  if (typeof window === 'undefined') return null;
+  const key = window.localStorage.getItem('geminiApiKey');
+  if (!key) return null;
+  const model = window.localStorage.getItem('geminiModel') || 'models/gemini-1.5-flash';
+  try {
+    const url = `https://generativelanguage.googleapis.com/v1beta/${model}:generateContent?key=${encodeURIComponent(key)}`;
+    const body = {
+      contents: [
+        { role: 'user', parts: [{ text: (context ? context + '\n\n' : '') + query }] }
+      ]
+    };
+    const r = await fetchWithTimeout(url, { timeoutMs: 12000, method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if (!r.ok) return null;
+    const jd: any = await r.json();
+    const text = jd?.candidates?.[0]?.content?.parts?.[0]?.text;
+    return typeof text === 'string' ? text : JSON.stringify(jd);
+  } catch { return null; }
+}
+
 export async function fetchUSGSAllDay(): Promise<RtaEvent[]> {
   try {
     const r = await fetchWithTimeout('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson');

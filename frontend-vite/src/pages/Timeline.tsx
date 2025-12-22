@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { fetchBackendEvents, fetchUSGSAllDay, fetchGDACS, fetchFEMA, fetchHIFLDHospitals, fetchCensusCounties, fetchNOAAAlerts, type RtaEvent, correlationMatrix, eventSeverity } from '../services/data';
+import { fetchBackendEvents, fetchUSGSAllDay, fetchGDACS, fetchFEMA, fetchHIFLDHospitals, fetchCensusCounties, fetchNOAAAlerts, type RtaEvent, correlationMatrix, eventSeverity, fetchSupabaseEvents, getSupabaseConfig } from '../services/data';
 import EventFeed from '../components/EventFeed';
 import CorrelationMatrix from '../components/CorrelationMatrix';
 
@@ -13,8 +13,14 @@ export default function Timeline() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const backend = await fetchBackendEvents();
-      let all: RtaEvent[] = backend;
+      const supa = getSupabaseConfig();
+      let all: RtaEvent[] = [];
+      if (supa.url && supa.anon) {
+        try { all = await fetchSupabaseEvents(); } catch {}
+      } else {
+        const backend = await fetchBackendEvents();
+        all = backend;
+      }
       const fallback = (window.localStorage.getItem('useOpenFallback') || 'true') === 'true';
       if (all.length === 0 && fallback) {
         const now = new Date();

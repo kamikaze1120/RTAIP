@@ -6,7 +6,7 @@ import Dashboard from './pages/Dashboard';
 import Sources from './pages/Sources';
 import Timeline from './pages/Timeline';
 import SettingsPage from './pages/Settings';
-import { getBackendBase, getHealthPaths } from './services/data';
+import { getBackendBase, getHealthPaths, checkSupabaseHealth, getSupabaseConfig } from './services/data';
 
 function Home() {
   return (
@@ -30,6 +30,11 @@ export default function App() {
     let cancelled = false;
     async function check() {
       const base = getBackendBase();
+      const supa = getSupabaseConfig();
+      if (!base && supa.url && supa.anon) {
+        const ok = await checkSupabaseHealth();
+        if (ok) { setBackendStatus('online'); setDataMode('backend'); const ts = new Date().toISOString(); setLastHeartbeat(ts); window.localStorage.setItem('backendStatus', 'online'); window.localStorage.setItem('dataMode', 'backend'); window.localStorage.setItem('lastHeartbeat', ts); return; }
+      }
       if (!base) { setBackendStatus('offline'); setDataMode('open'); window.localStorage.setItem('backendStatus', 'offline'); window.localStorage.setItem('dataMode', 'open'); return; }
       const b = base.replace(/\/$/, '');
       try {

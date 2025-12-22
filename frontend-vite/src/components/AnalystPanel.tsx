@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import type { RtaEvent } from '../services/data';
-import { getBackendBase, topClusters, estimatePopulationNear } from '../services/data';
+import { getBackendBase, topClusters, estimatePopulationNear, callGemini } from '../services/data';
 
 function brief(events: RtaEvent[]) {
   const now = new Date();
@@ -61,6 +61,16 @@ export default function AnalystPanel({ events, onAsk }: { events: RtaEvent[]; on
         const est = await estimatePopulationNear(cluster.lat, cluster.lon);
         const pop = est?.population != null ? est?.population : 'unknown';
         setAnswer(a => (a ? a + '\n' : '') + `Estimated population near ${est?.place || 'target area'}: ${pop}`);
+      }
+    }
+    const provider = typeof window !== 'undefined' ? (window.localStorage.getItem('aiProvider') || 'backend') : 'backend';
+    if (provider === 'gemini') {
+      const ctx = brief(events);
+      const res = await callGemini(q, ctx);
+      if (res) {
+        setAnswer(a => (a ? a + '\n' : '') + res);
+        setBusy(false);
+        return;
       }
     }
     if (!baseUrl) {
