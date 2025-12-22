@@ -2,7 +2,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { Database, LayoutDashboard, Map, Clock, Settings, Radio } from 'lucide-react';
 import { cn } from '../lib/utils';
 import React, { useEffect, useState } from 'react';
-import { runConnectivityDiagnostics, type ConnectivityDiagnostics } from '../services/data';
+import { runConnectivityDiagnostics, type ConnectivityDiagnostics, runSupabaseDiagnostics, type SupabaseDiagnostics, getSupabaseConfig } from '../services/data';
 
 const navItems = [
   { label: 'Sources', path: '/sources', icon: Database },
@@ -16,9 +16,12 @@ export function Header({ status = 'offline', mode = 'open', lastHeartbeat }: { s
   const location = useLocation();
   const [open, setOpen] = useState(false);
   const [diag, setDiag] = useState<ConnectivityDiagnostics | null>(null);
+  const [supa, setSupa] = useState<SupabaseDiagnostics | null>(null);
   useEffect(() => {
     if (!open) return;
     (async () => { try { const d = await runConnectivityDiagnostics(); setDiag(d); } catch {} })();
+    const cfg = getSupabaseConfig();
+    if (cfg.url && cfg.anon) (async () => { try { const s = await runSupabaseDiagnostics(); setSupa(s); } catch {} })();
   }, [open]);
   return (
     <header className="fixed top-0 left-0 right-0 z-50 border-b border-primary/20 bg-background/80 backdrop-blur-md">
@@ -83,6 +86,15 @@ export function Header({ status = 'offline', mode = 'open', lastHeartbeat }: { s
                 {diag.root && <div className="mt-1 text-muted-foreground">Root: {diag.root.ok?'OK':`Fail${diag.root.status?` (${diag.root.status})`:''}${diag.root.error?` — ${diag.root.error}`:''}`}</div>}
                 {diag.events && <div className="mt-1 text-muted-foreground">Events: {diag.events.ok?'OK':`Fail${diag.events.status?` (${diag.events.status})`:''}${diag.events.error?` — ${diag.events.error}`:''}`}</div>}
                 <div className="mt-1 text-muted-foreground">Checked: {new Date(diag.timestamp).toLocaleString()}</div>
+              </div>
+            )}
+            {supa && (
+              <div className="mt-3">
+                <div className="text-primary">Supabase</div>
+                <div className="text-muted-foreground">Configured: {String(supa.configured)}</div>
+                {supa.url && <div className="text-muted-foreground">URL: {supa.url}</div>}
+                {supa.table && <div className="text-muted-foreground">Table: {supa.table}</div>}
+                <div className="text-muted-foreground">Query: {supa.ok?'OK':`Fail${supa.status?` (${supa.status})`:''}${supa.error?` — ${supa.error}`:''}`}</div>
               </div>
             )}
           </div>

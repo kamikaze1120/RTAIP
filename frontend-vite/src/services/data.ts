@@ -316,6 +316,31 @@ export async function callGemini(query: string, context?: string): Promise<strin
   } catch { return null; }
 }
 
+export type SupabaseDiagnostics = {
+  configured: boolean;
+  url?: string;
+  table?: string;
+  ok?: boolean;
+  status?: number;
+  error?: string;
+};
+
+export async function runSupabaseDiagnostics(): Promise<SupabaseDiagnostics> {
+  const { url, anon, table } = getSupabaseConfig();
+  const out: SupabaseDiagnostics = { configured: !!(url && anon && table), url, table };
+  if (!url || !anon || !table) return out;
+  try {
+    const r = await fetchWithTimeout(`${url.replace(/\/$/, '')}/rest/v1/${encodeURIComponent(table)}?select=id&limit=1`, { timeoutMs: 6000, headers: { apikey: anon, Authorization: `Bearer ${anon}`, Accept: 'application/json' } });
+    out.ok = r.ok; out.status = r.status;
+    if (!r.ok) {
+      try { out.error = await r.text(); } catch {}
+    }
+  } catch (e: any) {
+    out.ok = false; out.error = String(e?.message || e);
+  }
+  return out;
+}
+
 export async function fetchUSGSAllDay(): Promise<RtaEvent[]> {
   try {
     const r = await fetchWithTimeout('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson');
