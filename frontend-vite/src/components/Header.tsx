@@ -1,6 +1,8 @@
 import { Link, useLocation } from 'react-router-dom';
 import { Database, LayoutDashboard, Map, Clock, Settings, Radio } from 'lucide-react';
 import { cn } from '../lib/utils';
+import React, { useEffect, useState } from 'react';
+import { runConnectivityDiagnostics, type ConnectivityDiagnostics } from '../services/data';
 
 const navItems = [
   { label: 'Sources', path: '/sources', icon: Database },
@@ -10,10 +12,14 @@ const navItems = [
   { label: 'Settings', path: '/settings', icon: Settings },
 ];
 
-import React, { useState } from 'react';
 export function Header({ status = 'offline', mode = 'open', lastHeartbeat }: { status?: 'online'|'degraded'|'offline'; mode?: 'backend'|'open'; lastHeartbeat?: string | null }) {
   const location = useLocation();
   const [open, setOpen] = useState(false);
+  const [diag, setDiag] = useState<ConnectivityDiagnostics | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    (async () => { try { const d = await runConnectivityDiagnostics(); setDiag(d); } catch {} })();
+  }, [open]);
   return (
     <header className="fixed top-0 left-0 right-0 z-50 border-b border-primary/20 bg-background/80 backdrop-blur-md">
       <div className="flex items-center justify-between px-6 py-3">
@@ -58,11 +64,27 @@ export function Header({ status = 'offline', mode = 'open', lastHeartbeat }: { s
           <div className={cn('px-3 py-1.5 text-xs uppercase clip-corner-sm', mode==='backend'?'bg-primary/15 border border-primary/30 text-primary':'bg-muted/20 border border-muted text-muted-foreground')}>Data: {mode==='backend'?'Backend':'Open Feeds'}</div>
         </div>
         {open && (
-          <div className="absolute right-6 top-14 z-50 clip-corner-sm border border-primary/20 bg-background px-3 py-2 text-xs w-[280px]">
+          <div className="absolute right-6 top-14 z-50 clip-corner-sm border border-primary/20 bg-background px-3 py-2 text-xs w-[320px]">
             <div className="text-primary">Connectivity</div>
             <div className="mt-1 text-muted-foreground">Status: {status}</div>
             <div className="mt-1 text-muted-foreground">Mode: {mode==='backend'?'Backend':'Open Feeds'}</div>
             <div className="mt-1 text-muted-foreground">Last heartbeat: {lastHeartbeat ? new Date(lastHeartbeat).toLocaleString() : '—'}</div>
+            {diag && (
+              <div className="mt-2">
+                <div className="text-primary">Diagnostic</div>
+                <div className="text-muted-foreground">Configured: {String(diag.configured)}</div>
+                {diag.base && <div className="text-muted-foreground">Base: {diag.base}</div>}
+                <div className="mt-1">Health checks:</div>
+                <ul className="mt-1 space-y-1">
+                  {diag.health.map((h, i) => (
+                    <li key={i} className="text-muted-foreground">{h.path}: {h.ok?'OK':`Fail${h.status?` (${h.status})`:''}${h.error?` — ${h.error}`:''}`}</li>
+                  ))}
+                </ul>
+                {diag.root && <div className="mt-1 text-muted-foreground">Root: {diag.root.ok?'OK':`Fail${diag.root.status?` (${diag.root.status})`:''}${diag.root.error?` — ${diag.root.error}`:''}`}</div>}
+                {diag.events && <div className="mt-1 text-muted-foreground">Events: {diag.events.ok?'OK':`Fail${diag.events.status?` (${diag.events.status})`:''}${diag.events.error?` — ${diag.events.error}`:''}`}</div>}
+                <div className="mt-1 text-muted-foreground">Checked: {new Date(diag.timestamp).toLocaleString()}</div>
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -220,6 +220,44 @@ export async function estimatePopulationNear(lat: number, lon: number): Promise<
   return { population: pop ?? undefined, place };
 }
 
+export type ConnectivityDiagnostics = {
+  configured: boolean;
+  base?: string;
+  health: Array<{ path: string; ok: boolean; status?: number; error?: string }>;
+  root?: { ok: boolean; status?: number; error?: string };
+  events?: { ok: boolean; status?: number; error?: string };
+  mode: 'backend'|'open';
+  timestamp: string;
+};
+
+export async function runConnectivityDiagnostics(): Promise<ConnectivityDiagnostics> {
+  const base = getBackendBase();
+  const ts = new Date().toISOString();
+  const mode = base ? 'backend' : 'open';
+  const out: ConnectivityDiagnostics = { configured: !!base, base: base || undefined, health: [], timestamp: ts, mode };
+  if (!base) return out;
+  const b = base.replace(/\/$/, '');
+  const paths = getHealthPaths();
+  for (const p of paths) {
+    try {
+      const r = await fetchWithTimeout(`${b}${p}`, { timeoutMs: 6000 });
+      out.health.push({ path: p, ok: r.ok, status: r.status });
+      if (r.ok) return out;
+    } catch (e: any) {
+      out.health.push({ path: p, ok: false, error: String(e?.message || e) });
+    }
+  }
+  try {
+    const r = await fetchWithTimeout(b, { timeoutMs: 6000 });
+    out.root = { ok: r.ok, status: r.status };
+  } catch (e: any) { out.root = { ok: false, error: String(e?.message || e) }; }
+  try {
+    const r = await fetchWithTimeout(`${b}/events`, { timeoutMs: 6000 });
+    out.events = { ok: r.ok, status: r.status };
+  } catch (e: any) { out.events = { ok: false, error: String(e?.message || e) }; }
+  return out;
+}
+
 export async function fetchUSGSAllDay(): Promise<RtaEvent[]> {
   try {
     const r = await fetchWithTimeout('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson');
