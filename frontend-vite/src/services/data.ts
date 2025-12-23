@@ -387,7 +387,7 @@ export async function fetchUSGSAllDay(): Promise<RtaEvent[]> {
 
 export async function fetchNOAAAlerts(): Promise<RtaEvent[]> {
   try {
-    const r = await fetchWithTimeout('https://api.weather.gov/alerts/active');
+    const r = await fetchWithTimeout('https://api.weather.gov/alerts/active', { timeoutMs: 12000, headers: { 'Accept': 'application/geo+json, application/json', 'User-Agent': 'RTAIP/1.0' } });
     const jd = await r.json();
     const feats: any[] = Array.isArray(jd?.features) ? jd.features : [];
     return feats.map((f: any, idx: number) => {

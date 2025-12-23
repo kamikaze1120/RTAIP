@@ -34,15 +34,16 @@ export function MapComponent({ events, selectedId, predictionPoints = [], showPr
       style: (f: any) => {
         const isFocus = f.get('id') === selectedId;
         const src = String(f.get('source') || '').toLowerCase();
-        const shape = src.includes('usgs')
+        const shapeImg = src.includes('usgs')
           ? new RegularShape({ points: 3, radius: isFocus ? 10 : 7, fill: new Fill({ color: 'rgba(255,0,0,0.6)' }), stroke: new Stroke({ color: 'rgba(255,255,255,0.8)', width: 2 }) })
           : src.includes('noaa')
           ? new RegularShape({ points: 4, radius: isFocus ? 10 : 7, angle: Math.PI / 4, fill: new Fill({ color: 'rgba(255,165,0,0.6)' }), stroke: new Stroke({ color: 'rgba(255,255,255,0.8)', width: 2 }) })
           : src.includes('gdacs')
           ? new RegularShape({ points: 5, radius: isFocus ? 10 : 7, fill: new Fill({ color: 'rgba(0,200,255,0.6)' }), stroke: new Stroke({ color: 'rgba(255,255,255,0.8)', width: 2 }) })
           : new CircleStyle({ radius: isFocus ? 10 : 6, fill: new Fill({ color: 'rgba(255,255,255,0.12)' }), stroke: new Stroke({ color: 'rgba(255,255,255,0.25)', width: isFocus ? 3 : 2 }) });
+        const marker = new Style({ image: shapeImg });
         const label = new Style({ text: new Text({ text: src.includes('usgs') ? 'SEI' : src.includes('noaa') ? 'WX' : src.includes('gdacs') ? 'DIS' : 'EVT', font: '11px JetBrains Mono, monospace', offsetY: -14 }) });
-        return [shape as any, label];
+        return [marker, label];
       },
     });
     const focusLayer = new VectorLayer({
