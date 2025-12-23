@@ -1,3 +1,5 @@
+import { getSupabaseClient } from '../utils/supabase';
+
 export type RtaEvent = {
   id: string;
   timestamp: string;
@@ -255,13 +257,22 @@ export async function runConnectivityDiagnostics(): Promise<ConnectivityDiagnost
 
 export function getSupabaseConfig(): { url?: string; anon?: string; table?: string } {
   const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-  const anon = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+  const anon = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) || (import.meta.env.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY as string | undefined);
   const table = (import.meta.env.VITE_SUPABASE_TABLE as string | undefined) || 'events';
   return { url, anon, table };
 }
 
 export async function checkSupabaseHealth(): Promise<boolean> {
   const { url, anon, table } = getSupabaseConfig();
+  if (url && anon && table) {
+    const client = await getSupabaseClient();
+    if (client) {
+      try {
+        const { error } = await client.from(table).select('id').limit(1);
+        return !error;
+      } catch { return false; }
+    }
+  }
   if (!url || !anon || !table) return false;
   try {
     const r = await fetchWithTimeout(`${url.replace(/\/$/, '')}/rest/v1/${encodeURIComponent(table)}?select=id&limit=1`, { timeoutMs: 6000, headers: { apikey: anon, Authorization: `Bearer ${anon}` } });
@@ -272,6 +283,22 @@ export async function checkSupabaseHealth(): Promise<boolean> {
 export async function fetchSupabaseEvents(): Promise<RtaEvent[]> {
   const { url, anon, table } = getSupabaseConfig();
   if (!url || !anon || !table) return [];
+  const client = await getSupabaseClient();
+  if (client) {
+    try {
+      const { data, error } = await client.from(table).select('*').limit(1000);
+      if (error || !Array.isArray(data)) return [];
+      return data.map((row: any) => ({
+        id: String(row.id ?? `${row.source}-${row.timestamp}`),
+        source: row.source ?? 'supabase',
+        timestamp: row.timestamp ?? row.created_at ?? new Date().toISOString(),
+        latitude: typeof row.lat === 'number' ? row.lat : (typeof row.latitude === 'number' ? row.latitude : null),
+        longitude: typeof row.lon === 'number' ? row.lon : (typeof row.longitude === 'number' ? row.longitude : null),
+        confidence: typeof row.confidence === 'number' ? row.confidence : 0.6,
+        data: row
+      }));
+    } catch { /* fall through to REST */ }
+  }
   try {
     const r = await fetchWithTimeout(`${url.replace(/\/$/, '')}/rest/v1/${encodeURIComponent(table)}?select=*`, { timeoutMs: 10000, headers: { apikey: anon, Authorization: `Bearer ${anon}` } });
     if (!r.ok) return [];
@@ -505,5 +532,29 @@ export async function fetchCensusCounties(): Promise<RtaEvent[]> {
     });
   } catch {
     return [];
+  }
+}
+export async function fetchGlobalPopulationByContinent(): Promise<{ total: number; continents: Record<string, number> }> {
+  try {
+    const r = await fetchWithTimeout('https://restcountries.com/v3.1/all?fields=population,region,subregion', { timeoutMs: 10000 });
+    const rows: any[] = await r.json();
+    const continents: Record<string, number> = { 'Africa': 0, 'Asia': 0, 'Europe': 0, 'North America': 0, 'South America': 0, 'Oceania': 0, 'Antarctica': 0 };
+    rows.forEach((c: any) => {
+      const pop = Number(c?.population || 0);
+      const region = String(c?.region || '');
+      const sub = String(c?.subregion || '');
+      let key = '';
+      if (region === 'Africa') key = 'Africa';
+      else if (region === 'Asia') key = 'Asia';
+      else if (region === 'Europe') key = 'Europe';
+      else if (region === 'Americas') key = /North/i.test(sub) ? 'North America' : /South/i.test(sub) ? 'South America' : 'North America';
+      else if (region === 'Oceania') key = 'Oceania';
+      else if (region === 'Antarctic') key = 'Antarctica';
+      if (key) continents[key] = (continents[key] || 0) + (isFinite(pop) ? pop : 0);
+    });
+    const total = Object.values(continents).reduce((a, b) => a + b, 0);
+    return { total, continents };
+  } catch {
+    return { total: 0, continents: {} };
   }
 }

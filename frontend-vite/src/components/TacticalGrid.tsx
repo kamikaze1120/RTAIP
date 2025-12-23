@@ -11,19 +11,16 @@ export default function TacticalGrid({ events = [] }: { events?: RtaEvent[] }) {
     if (s.includes('usgs')) return 'hsl(0 85% 55% / 0.9)';
     if (s.includes('noaa')) return 'hsl(35 100% 50% / 0.9)';
     if (s.includes('gdacs')) return 'hsl(180 100% 50% / 0.9)';
-    if (s.includes('fema')) return 'hsl(150 80% 45% / 0.9)';
     return 'hsl(180 100% 50% / 0.6)';
   };
   const counters = {
     usgs: events.filter(e => String(e.source).toLowerCase().includes('usgs')).length,
     noaa: events.filter(e => String(e.source).toLowerCase().includes('noaa')).length,
     gdacs: events.filter(e => String(e.source).toLowerCase().includes('gdacs')).length,
-    fema: events.filter(e => String(e.source).toLowerCase().includes('fema')).length,
   };
   const usgsClusters = useMemo(() => topClusters(events.filter(e => String(e.source).toLowerCase().includes('usgs'))), [events]);
   const noaaClusters = useMemo(() => topClusters(events.filter(e => String(e.source).toLowerCase().includes('noaa'))), [events]);
   const gdacsClusters = useMemo(() => topClusters(events.filter(e => String(e.source).toLowerCase().includes('gdacs'))), [events]);
-  const femaClusters = useMemo(() => topClusters(events.filter(e => String(e.source).toLowerCase().includes('fema'))), [events]);
   return (
     <div className="clip-corner border border-primary/20 bg-secondary">
       <div className="relative h-[420px]">
@@ -60,9 +57,9 @@ export default function TacticalGrid({ events = [] }: { events?: RtaEvent[] }) {
                 </g>
               );
             })}
-            {[usgsClusters, noaaClusters, gdacsClusters, femaClusters].map((list, idx) => {
-              const c = idx===0?'hsl(0 85% 55% / 0.22)':idx===1?'hsl(35 100% 50% / 0.22)':idx===2?'hsl(180 100% 50% / 0.22)':'hsl(150 80% 45% / 0.22)';
-              const r = idx===0?8:idx===1?6:idx===2?10:5; // percent radii
+            {[usgsClusters, noaaClusters, gdacsClusters].map((list, idx) => {
+              const c = idx===0?'hsl(0 85% 55% / 0.22)':idx===1?'hsl(35 100% 50% / 0.22)':'hsl(180 100% 50% / 0.22)';
+              const r = idx===0?8:idx===1?6:10; // percent radii
               return list.map((cl, i) => (
                 <circle key={`${idx}-${i}`} cx={toX(cl.lon)} cy={toY(cl.lat)} r={`${r}%`} fill={c} />
               ));
@@ -70,13 +67,12 @@ export default function TacticalGrid({ events = [] }: { events?: RtaEvent[] }) {
           </svg>
         </div>
         <div className="absolute top-2 left-2 text-[11px] text-muted-foreground bg-background/60 px-2 py-1 clip-corner-sm border border-primary/20">
-          USGS {counters.usgs} • NOAA {counters.noaa} • GDACS {counters.gdacs} • FEMA {counters.fema}
+          USGS {counters.usgs} • NOAA {counters.noaa} • GDACS {counters.gdacs}
         </div>
         <div className="absolute bottom-2 right-2 text-[11px] text-muted-foreground bg-background/60 px-2 py-1 clip-corner-sm border border-primary/20">
           <span style={{ color: 'hsl(0 85% 55%)' }}>●</span> USGS
           <span className="ml-2" style={{ color: 'hsl(35 100% 50%)' }}>●</span> NOAA
           <span className="ml-2" style={{ color: 'hsl(180 100% 50%)' }}>●</span> GDACS
-          <span className="ml-2" style={{ color: 'hsl(150 80% 45%)' }}>●</span> FEMA
         </div>
       </div>
     </div>

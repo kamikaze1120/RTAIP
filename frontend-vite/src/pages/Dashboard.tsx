@@ -5,7 +5,7 @@ import MapComponent from '../components/MapComponent';
 import AlertList from '../components/AlertList';
 import SystemStats from '../components/SystemStats';
 import { Database, Users, ShieldAlert, Shield } from 'lucide-react';
-import { fetchUSGSAllDay, fetchNOAAAlerts, fetchGDACS, fetchHIFLDHospitals, fetchCensusCounties, fetchBackendEvents, getBackendBase, type RtaEvent, globalThreatScore, topClusters, typeProbabilities, fetchSupabaseEvents, getSupabaseConfig } from '../services/data';
+import { fetchUSGSAllDay, fetchNOAAAlerts, fetchGDACS, fetchBackendEvents, getBackendBase, type RtaEvent, globalThreatScore, topClusters, typeProbabilities, fetchSupabaseEvents, getSupabaseConfig } from '../services/data';
 import CommanderPanel from '../components/CommanderPanel';
 import ReadinessPanel from '../components/ReadinessPanel';
 
@@ -34,14 +34,12 @@ export default function Dashboard() {
       } else if (base) {
         try { backend = await fetchBackendEvents(); } catch {}
       }
-      const [usgs, noaa, gdacs, hifld, census] = await Promise.all([
+      const [usgs, noaa, gdacs] = await Promise.all([
         fetchUSGSAllDay(),
         fetchNOAAAlerts(),
         fetchGDACS(fromISO, toISO),
-        fetchHIFLDHospitals(),
-        fetchCensusCounties(),
       ]);
-      const all = [...backend, ...usgs, ...noaa, ...gdacs, ...hifld, ...census];
+      const all = [...backend, ...usgs, ...noaa, ...gdacs];
       if (!cancelled) setEvents(all);
 
       const genAlerts: { id: string; title: string; source: string; ago: string; severity: 'low'|'medium'|'high' }[] = [];

@@ -1,12 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { fetchBackendEvents, fetchUSGSAllDay, fetchGDACS, fetchFEMA, fetchHIFLDHospitals, fetchCensusCounties, fetchNOAAAlerts, type RtaEvent, correlationMatrix, eventSeverity, fetchSupabaseEvents, getSupabaseConfig } from '../services/data';
+import { fetchBackendEvents, fetchUSGSAllDay, fetchGDACS, fetchNOAAAlerts, type RtaEvent, correlationMatrix, eventSeverity, fetchSupabaseEvents, getSupabaseConfig } from '../services/data';
 import EventFeed from '../components/EventFeed';
 import CorrelationMatrix from '../components/CorrelationMatrix';
 
 export default function Timeline() {
   const [events, setEvents] = useState<RtaEvent[]>([]);
   const [autoplay, setAutoplay] = useState(false);
-  const [filters, setFilters] = useState({ usgs: true, noaa: true, gdacs: true, hifld: false, census: true });
+  const [filters, setFilters] = useState({ usgs: true, noaa: true, gdacs: true });
   const [minSev, setMinSev] = useState(0);
   const [query, setQuery] = useState('');
 
@@ -26,15 +26,12 @@ export default function Timeline() {
         const now = new Date();
         const fromISO = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
         const toISO = now.toISOString();
-        const [usgs, noaa, gdacs, fema, hifld, census] = await Promise.all([
+        const [usgs, noaa, gdacs] = await Promise.all([
           fetchUSGSAllDay(),
           fetchNOAAAlerts(),
           fetchGDACS(fromISO, toISO),
-          fetchFEMA(),
-          fetchHIFLDHospitals(),
-          fetchCensusCounties(),
         ]);
-        all = [...usgs, ...noaa, ...gdacs, ...fema, ...hifld, ...census];
+        all = [...usgs, ...noaa, ...gdacs];
       }
       all.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
       if (!cancelled) setEvents(all);
@@ -53,8 +50,7 @@ export default function Timeline() {
       if (s.includes('usgs') && !filters.usgs) return false;
       if (s.includes('noaa') && !filters.noaa) return false;
       if (s.includes('gdacs') && !filters.gdacs) return false;
-      if (s.includes('hifld') && !filters.hifld) return false;
-      if (s.includes('census') && !filters.census) return false;
+      
       const sev = eventSeverity(e);
       if (Math.round(sev * 100) < minSev) return false;
       if (query && !JSON.stringify(e.data || {}).toLowerCase().includes(query.toLowerCase())) return false;
@@ -97,8 +93,7 @@ export default function Timeline() {
               <label className="flex items-center gap-1"><input type="checkbox" checked={filters.usgs} onChange={e=>setFilters(f=>({ ...f, usgs: e.target.checked }))} /> USGS</label>
               <label className="flex items-center gap-1"><input type="checkbox" checked={filters.noaa} onChange={e=>setFilters(f=>({ ...f, noaa: e.target.checked }))} /> NOAA</label>
               <label className="flex items-center gap-1"><input type="checkbox" checked={filters.gdacs} onChange={e=>setFilters(f=>({ ...f, gdacs: e.target.checked }))} /> GDACS</label>
-              <label className="flex items-center gap-1"><input type="checkbox" checked={filters.hifld} onChange={e=>setFilters(f=>({ ...f, hifld: e.target.checked }))} /> HIFLD</label>
-              <label className="flex items-center gap-1"><input type="checkbox" checked={filters.census} onChange={e=>setFilters(f=>({ ...f, census: e.target.checked }))} /> Census</label>
+              
             </div>
             <div className="flex items-center gap-2">
               <span>Min severity</span>

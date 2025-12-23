@@ -1,7 +1,10 @@
 frontend-vite/dist/
 frontend-vite/node_modules/
 frontend-vite/.vite/
+.vercel/
 .DS_Store
 *.log
 *.tmp
 *.cache
+frontend-vite/.env*
+.env*

@@ -7,8 +7,6 @@ const iconFor = (src?: string) => {
   if (s.includes('usgs')) return '🌋';
   if (s.includes('noaa')) return '⛈️';
   if (s.includes('gdacs')) return '🛰️';
-  if (s.includes('fema')) return '🏛️';
-  if (s.includes('hifld')) return '🏥';
   if (s.includes('census')) return '🧭';
   return '📍';
 };

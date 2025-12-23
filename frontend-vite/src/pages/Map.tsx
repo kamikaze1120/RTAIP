@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getBackendBase, fetchBackendEvents, fetchUSGSAllDay, fetchNOAAAlerts, fetchGDACS, fetchFEMA, fetchHIFLDHospitals, fetchCensusCounties, type RtaEvent, predictedPoints } from '../services/data';
+import { getBackendBase, fetchBackendEvents, fetchUSGSAllDay, fetchNOAAAlerts, fetchGDACS, type RtaEvent, predictedPoints } from '../services/data';
 import MapComponent from '../components/MapComponent';
 import EventFeed from '../components/EventFeed';
 import AnalystPanel from '../components/AnalystPanel';
@@ -7,7 +7,7 @@ import AnalystPanel from '../components/AnalystPanel';
 export default function MapPage() {
   const [events, setEvents] = useState<RtaEvent[]>([]);
   const [selectedId, setSelectedId] = useState<string | undefined>(undefined);
-  const [sources, setSources] = useState({ usgs: true, noaa: true, gdacs: false, fema: false, hifld: false, census: false });
+  const [sources, setSources] = useState({ usgs: true, noaa: true, gdacs: false });
   const [hoursWindow, setHoursWindow] = useState(24);
   const [showPred, setShowPred] = useState(false);
   const [simRadiusKm, setSimRadiusKm] = useState<number | undefined>(undefined);
@@ -36,9 +36,6 @@ export default function MapPage() {
         if (sources.usgs) promises.push(fetchUSGSAllDay());
         if (sources.noaa) promises.push(fetchNOAAAlerts());
         if (sources.gdacs) promises.push(fetchGDACS(fromISO, toISO));
-        if (sources.fema) promises.push(fetchFEMA());
-        if (sources.hifld) promises.push(fetchHIFLDHospitals());
-        if (sources.census) promises.push(fetchCensusCounties());
         const results = await Promise.all(promises);
         all = results.flat();
       }
@@ -81,19 +78,17 @@ export default function MapPage() {
             <label className="text-xs flex items-center gap-1"><input type="checkbox" checked={sources.usgs} onChange={e=>setSources(s=>({ ...s, usgs: e.target.checked }))} /> USGS</label>
             <label className="text-xs flex items-center gap-1"><input type="checkbox" checked={sources.noaa} onChange={e=>setSources(s=>({ ...s, noaa: e.target.checked }))} /> NOAA</label>
             <label className="text-xs flex items-center gap-1"><input type="checkbox" checked={sources.gdacs} onChange={e=>setSources(s=>({ ...s, gdacs: e.target.checked }))} /> GDACS</label>
-            <label className="text-xs flex items-center gap-1"><input type="checkbox" checked={sources.fema} onChange={e=>setSources(s=>({ ...s, fema: e.target.checked }))} /> FEMA</label>
-            <label className="text-xs flex items-center gap-1"><input type="checkbox" checked={sources.hifld} onChange={e=>setSources(s=>({ ...s, hifld: e.target.checked }))} /> HIFLD</label>
-            <label className="text-xs flex items-center gap-1"><input type="checkbox" checked={sources.census} onChange={e=>setSources(s=>({ ...s, census: e.target.checked }))} /> Census</label>
+            
             <span className="mx-2">•</span>
             <label className="text-xs flex items-center gap-1"><input type="checkbox" checked={showPred} onChange={e=>setShowPred(e.target.checked)} /> Predictions</label>
-            <label className="text-xs flex items-center gap-1"><input type="checkbox" checked={showHospitals} onChange={e=>setShowHospitals(e.target.checked)} /> Hospitals</label>
+            
             <div className="text-xs ml-auto flex items-center gap-2">
               <span>Impact radius</span>
               <input type="range" min="10" max="250" value={simRadiusKm ?? 120} onChange={e=>setSimRadiusKm(Number(e.target.value))} />
               <span>{simRadiusKm ?? 120} km</span>
             </div>
           </div>
-          <MapComponent events={events} selectedId={selectedId} predictionPoints={predictedPoints(events)} showPredictions={showPred} simRadiusKm={simRadiusKm} showHospitals={showHospitals} />
+          <MapComponent events={events} selectedId={selectedId} predictionPoints={predictedPoints(events)} showPredictions={showPred} simRadiusKm={simRadiusKm} />
           <AnalystPanel events={events} onAsk={() => {}} />
         </div>
       </div>

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import StatCard from '../components/StatCard';
-import { Database, Satellite, ShieldAlert, Hospital, Landmark, CloudDrizzle } from 'lucide-react';
-import { fetchUSGSAllDay, fetchNOAAAlerts, fetchGDACS, fetchFEMA, fetchHIFLDHospitals, fetchCensusCounties } from '../services/data';
+import { Database, Satellite, CloudDrizzle, Users } from 'lucide-react';
+import { fetchUSGSAllDay, fetchNOAAAlerts, fetchGDACS, fetchGlobalPopulationByContinent } from '../services/data';
 import AlertList from '../components/AlertList';
 
 type SourceStat = { label: string; count: number; subtitle?: string; icon: React.ReactNode; variant?: 'default'|'warning'|'danger'|'success' };
@@ -11,11 +11,10 @@ export default function Sources() {
     { label: 'USGS Seismic', count: 0, subtitle: 'Fetching...', icon: <Database className="w-4 h-4" />, variant: 'warning' },
     { label: 'NOAA Weather', count: 0, subtitle: 'Fetching...', icon: <CloudDrizzle className="w-4 h-4" />, variant: 'success' },
     { label: 'GDACS Disasters', count: 0, subtitle: 'Fetching...', icon: <Satellite className="w-4 h-4" />, variant: 'danger' },
-    { label: 'FEMA Declarations', count: 0, subtitle: 'Fetching...', icon: <ShieldAlert className="w-4 h-4" />, variant: 'warning' },
-    { label: 'HIFLD Infrastructure', count: 0, subtitle: 'Fetching...', icon: <Hospital className="w-4 h-4" />, variant: 'default' },
-    { label: 'Census Counties', count: 0, subtitle: 'Fetching...', icon: <Landmark className="w-4 h-4" />, variant: 'default' },
+    { label: 'Global Population', count: 0, subtitle: 'Fetching...', icon: <Users className="w-4 h-4" />, variant: 'default' },
   ]);
   const [alerts, setAlerts] = useState<{ id: string; title: string; source: string; ago: string; severity: 'low'|'medium'|'high' }[]>([]);
+  const [popHover, setPopHover] = useState<string>('');
 
   useEffect(() => {
     let cancelled = false;
@@ -23,23 +22,30 @@ export default function Sources() {
       const now = new Date();
       const fromISO = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
       const toISO = now.toISOString();
-      const [usgs, noaa, gdacs, fema, hifld, census] = await Promise.all([
+      const [usgs, noaa, gdacs, pop] = await Promise.all([
         fetchUSGSAllDay(),
         fetchNOAAAlerts(),
         fetchGDACS(fromISO, toISO),
-        fetchFEMA(),
-        fetchHIFLDHospitals(),
-        fetchCensusCounties(),
+        fetchGlobalPopulationByContinent(),
       ]);
       if (cancelled) return;
+      const fmtB = (n: number) => `${(n / 1_000_000_000).toFixed(2)}B`;
       const items: SourceStat[] = [
         { label: 'USGS Seismic', count: usgs.length, subtitle: 'Earthquake feed (24h)', icon: <Database className="w-4 h-4" />, variant: 'warning' },
         { label: 'NOAA Weather', count: noaa.length, subtitle: 'Active alerts', icon: <CloudDrizzle className="w-4 h-4" />, variant: 'success' },
         { label: 'GDACS Disasters', count: gdacs.length, subtitle: 'Global disaster events', icon: <Satellite className="w-4 h-4" />, variant: 'danger' },
-        { label: 'FEMA Declarations', count: fema.length, subtitle: 'US incidents', icon: <ShieldAlert className="w-4 h-4" />, variant: 'warning' },
-        { label: 'HIFLD Infrastructure', count: hifld.length, subtitle: 'Hospitals', icon: <Hospital className="w-4 h-4" />, variant: 'default' },
-        { label: 'Census Counties', count: census.length, subtitle: 'Population geography', icon: <Landmark className="w-4 h-4" />, variant: 'default' },
+        { label: 'Global Population', count: pop.total, subtitle: 'Hover for continent breakdown', icon: <Users className="w-4 h-4" />, variant: 'default' },
       ];
+      const breakdown = pop && pop.continents ? [
+        `Africa ${fmtB(pop.continents['Africa']||0)}`,
+        `Asia ${fmtB(pop.continents['Asia']||0)}`,
+        `Europe ${fmtB(pop.continents['Europe']||0)}`,
+        `North America ${fmtB(pop.continents['North America']||0)}`,
+        `South America ${fmtB(pop.continents['South America']||0)}`,
+        `Oceania ${fmtB(pop.continents['Oceania']||0)}`,
+        `Antarctica ${fmtB(pop.continents['Antarctica']||0)}`,
+      ].join(' • ') : '';
+      setPopHover(breakdown);
       setStats(items);
 
       const genAlerts: { id: string; title: string; source: string; ago: string; severity: 'low'|'medium'|'high' }[] = [];
@@ -72,10 +78,12 @@ export default function Sources() {
       </div>
 
       <div className="grid md:grid-cols-3 gap-4">
-        {stats.map((s) => (
-          <StatCard key={s.label} title={s.label} value={s.count} subtitle={s.subtitle} icon={s.icon} variant={s.variant}
-          />
+        {stats.slice(0,3).map((s) => (
+          <StatCard key={s.label} title={s.label} value={s.count} subtitle={s.subtitle} icon={s.icon} variant={s.variant} />
         ))}
+        <div className="md:col-span-3" title={popHover}>
+          <StatCard title={stats[3].label} value={(stats[3].count as number).toLocaleString()} subtitle={stats[3].subtitle} icon={stats[3].icon} variant={stats[3].variant} align="center" />
+        </div>
       </div>
 
       <div className="clip-corner border border-primary/20">
@@ -95,7 +103,7 @@ export default function Sources() {
       <div className="clip-corner border border-primary/20 p-4">
         <div className="text-sm text-primary tracking-widest uppercase">Integration Notes</div>
         <div className="mt-2 text-sm text-muted-foreground">
-          Sources include seismic, weather, disaster management, critical infrastructure, and population datasets. These channels feed the map, timeline, and analyst brief to maintain situational awareness.
+          Sources include seismic, weather, and global population datasets. These channels feed the map, timeline, and analyst brief to maintain situational awareness.
         </div>
       </div>
     </div>

@@ -4,7 +4,7 @@ import { getBackendBase } from '../services/data';
 export default function Settings() {
   const [backendUrl, setBackendUrl] = useState('');
   const [refreshMs, setRefreshMs] = useState(60000);
-  const [enabledSources, setEnabledSources] = useState({ usgs: true, noaa: true, gdacs: false, fema: false, hifld: false, census: false });
+  const [enabledSources, setEnabledSources] = useState({ usgs: true, noaa: true, gdacs: false });
   const [healthPath, setHealthPath] = useState('/health');
   const [enablePredictions, setEnablePredictions] = useState(true);
   const [defaultImpactRadius, setDefaultImpactRadius] = useState(120);
