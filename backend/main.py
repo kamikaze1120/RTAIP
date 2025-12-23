@@ -179,6 +179,164 @@ def health(db: Session = Depends(get_db)):
     except Exception as e:
         return {"status": "error", "error": str(e)}
 
+# COP GeoJSON export (events → FeatureCollection)
+@app.get("/cop/geojson")
+def cop_geojson(hours: int = 168, db: Session = Depends(get_db)):
+    try:
+        now = datetime.utcnow()
+        start = now - timedelta(hours=max(1, hours))
+        evs = db.query(DataEvent).filter(DataEvent.timestamp >= start).all()
+        def geom_for(ev: DataEvent):
+            if ev.longitude is None or ev.latitude is None:
+                return None
+            return {"type": "Point", "coordinates": [ev.longitude, ev.latitude]}
+        def symbol_for(src: str):
+            s = (src or '').lower()
+            if 'usgs' in s:
+                return 'SEISMIC'
+            if 'noaa' in s:
+                return 'WEATHER'
+            if 'gdacs' in s or 'eonet' in s or 'nasa' in s:
+                return 'DISASTER'
+            if 'adsb' in s:
+                return 'AIRCRAFT'
+            if 'ais' in s:
+                return 'VESSEL'
+            return 'EVENT'
+        feats = []
+        for ev in evs:
+            g = geom_for(ev)
+            if not g:
+                continue
+            feats.append({
+                "type": "Feature",
+                "geometry": g,
+                "properties": {
+                    "id": ev.id,
+                    "source": ev.source,
+                    "timestamp": ev.timestamp.isoformat() if ev.timestamp else None,
+                    "confidence": ev.confidence,
+                    "symbol": symbol_for(ev.source or ''),
+                    "data": jsonable_encoder(ev.data)
+                }
+            })
+        return {"type": "FeatureCollection", "features": feats}
+    except Exception as e:
+        return {"type": "FeatureCollection", "features": [], "error": str(e)}
+
+# Optional API key enforcement for sensitive endpoints
+API_KEY = os.getenv("API_KEY")
+def require_api_key(headers: dict) -> bool:
+    if not API_KEY:
+        return True
+    try:
+        return headers.get("x-api-key") == API_KEY or headers.get("X-API-Key") == API_KEY
+    except Exception:
+        return False
+
+# ISR tasking recommendations based on event clusters
+@app.get("/isr/recommend")
+def isr_recommend(hours: int = 24, limit: int = 5, db: Session = Depends(get_db)):
+    try:
+        now = datetime.utcnow()
+        start = now - timedelta(hours=max(1, hours))
+        evs = db.query(DataEvent).filter(DataEvent.timestamp >= start).all()
+        grid = {}
+        for e in evs:
+            if e.latitude is None or e.longitude is None:
+                continue
+            latb = round(e.latitude)
+            lonb = round(e.longitude)
+            k = (latb, lonb)
+            grid[k] = grid.get(k, 0) + 1
+        cells = sorted(grid.items(), key=lambda x: -x[1])[:max(1, limit)]
+        out = []
+        for (latb, lonb), c in cells:
+            name = reverse_geocode(float(latb), float(lonb))
+            out.append({"lat": float(latb), "lon": float(lonb), "name": name, "priority": min(1.0, c/float(max(1, cells[0][1]))), "window_hours": hours})
+        return {"targets": out, "count": len(out)}
+    except Exception as e:
+        return {"targets": [], "error": str(e)}
+
+# COA analysis: risk along waypoints based on proximity to recent events
+class CoaRequest(BaseModel):
+    waypoints: List[List[float]]
+    hours: int = 24
+    radius_km: float = 50.0
+
+@app.post("/coa/analyze")
+def coa_analyze(req: CoaRequest, db: Session = Depends(get_db)):
+    try:
+        if not require_api_key(getattr(req, "__dict__", {})):
+            return {"status": "error", "error": "Missing or invalid API key"}
+        wps = req.waypoints or []
+        if len(wps) < 2:
+            return {"status": "error", "error": "At least two waypoints required"}
+        now = datetime.utcnow()
+        start = now - timedelta(hours=max(1, req.hours))
+        evs = db.query(DataEvent).filter(DataEvent.timestamp >= start).all()
+        def haversine(lat1, lon1, lat2, lon2):
+            from math import radians, sin, cos, sqrt, atan2
+            R = 6371.0
+            dlat = radians(lat2 - lat1)
+            dlon = radians(lon2 - lon1)
+            a = sin(dlat/2)**2 + cos(radians(lat1))*cos(radians(lat2))*sin(dlon/2)**2
+            c = 2*atan2(sqrt(a), sqrt(1-a))
+            return R*c
+        # Build segments
+        segs = [(wps[i][0], wps[i][1], wps[i+1][0], wps[i+1][1]) for i in range(len(wps)-1)]
+        hazards = []
+        total_dist = 0.0
+        for (lat1, lon1, lat2, lon2) in segs:
+            total_dist += haversine(lat1, lon1, lat2, lon2)
+            for e in evs:
+                if e.latitude is None or e.longitude is None:
+                    continue
+                # distance from event to segment endpoints (approx)
+                d1 = haversine(e.latitude, e.longitude, lat1, lon1)
+                d2 = haversine(e.latitude, e.longitude, lat2, lon2)
+                if min(d1, d2) <= req.radius_km:
+                    hazards.append({"source": e.source, "latitude": e.latitude, "longitude": e.longitude, "distance_km": min(d1, d2), "timestamp": e.timestamp.isoformat() if e.timestamp else None})
+        risk = min(1.0, len(hazards) / max(1.0, total_dist / 100.0))
+        # Suggest offset waypoint near top hazard
+        alt = None
+        if hazards:
+            h = sorted(hazards, key=lambda x: x["distance_km"])[0]
+            alt = [h["latitude"] + 0.5, h["longitude"] + 0.5]
+        summary = f"Route distance ~{int(total_dist)} km; hazards {len(hazards)}; risk {(risk*100):.0f}%"
+        return {"status": "ok", "risk": risk, "distance_km": total_dist, "hazards": hazards[:20], "alternative": alt, "summary": summary}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+# SPOTREP generation and UDP push stub
+class SpotrepIn(BaseModel):
+    lat: float
+    lon: float
+    source: str = "unknown"
+    text: Optional[str] = None
+
+@app.post("/c2/spotrep")
+def c2_spotrep(req: SpotrepIn):
+    try:
+        if API_KEY and not require_api_key(getattr(req, "__dict__", {})):
+            return {"status": "error", "error": "Missing or invalid API key"}
+        grid = f"{round(req.lat,4)},{round(req.lon,4)}"
+        msg = f"SPOTREP: SRC={req.source.upper()} GRID={grid} TIME={datetime.utcnow().isoformat()} TEXT={req.text or ''}"
+        host = os.getenv("C2_UDP_HOST")
+        port = int(os.getenv("C2_UDP_PORT", "0") or "0")
+        if host and port > 0:
+            try:
+                import socket
+                s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                s.sendto(msg.encode("utf-8"), (host, port))
+                s.close()
+                return {"status": "sent", "msg": msg, "udp": f"{host}:{port}"}
+            except Exception as e:
+                return {"status": "generated", "msg": msg, "error": str(e)}
+        return {"status": "generated", "msg": msg}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
 # Email notification request model
 class EmailRequest(BaseModel):
     subject: str
