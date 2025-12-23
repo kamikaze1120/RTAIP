@@ -147,6 +147,66 @@ export function MapComponent({ events, selectedId, predictionPoints = [], showPr
     }
   }, [selectedId]);
 
+  useEffect(() => {
+    const handler = (e: any) => {
+      const copLayer = copLayerRef.current;
+      if (!copLayer) return;
+      const s = copLayer.getSource();
+      s?.clear();
+      const feats = Array.isArray(e.detail?.features) ? e.detail.features : [];
+      feats.forEach((g: any) => {
+        const lon = Number(g?.coordinates?.[0]);
+        const lat = Number(g?.coordinates?.[1]);
+        if (!isFinite(lat) || !isFinite(lon)) return;
+        const f = new Feature({ geometry: new Point(fromLonLat([lon, lat])) });
+        s?.addFeature(f);
+      });
+    };
+    window.addEventListener('rtaip_cop_layer', handler as any);
+    return () => window.removeEventListener('rtaip_cop_layer', handler as any);
+  }, []);
+
+  useEffect(() => {
+    const handler = (e: any) => {
+      const mission = missionLayerRef.current;
+      if (!mission) return;
+      const s = mission.getSource();
+      s?.clear();
+      const targets = Array.isArray(e.detail?.targets) ? e.detail.targets : [];
+      targets.forEach((t: any) => {
+        const lat = Number(t?.lat);
+        const lon = Number(t?.lon);
+        if (!isFinite(lat) || !isFinite(lon)) return;
+        const f = new Feature({ geometry: new Point(fromLonLat([lon, lat])) });
+        f.setStyle(new CircleStyle({ radius: 10, fill: new Fill({ color: 'rgba(255, 215, 0, 0.12)' }), stroke: new Stroke({ color: 'rgba(255, 215, 0, 0.8)', width: 2 }) }) as any);
+        s?.addFeature(f);
+      });
+    };
+    window.addEventListener('rtaip_isr_targets', handler as any);
+    return () => window.removeEventListener('rtaip_isr_targets', handler as any);
+  }, []);
+
+  useEffect(() => {
+    const handler = (e: any) => {
+      const mission = missionLayerRef.current;
+      if (!mission) return;
+      const s = mission.getSource();
+      const line = Array.isArray(e.detail?.route) ? e.detail.route : [];
+      if (!line.length) return;
+      s?.clear();
+      line.forEach((pt: any) => {
+        const lat = Number(pt?.[0]);
+        const lon = Number(pt?.[1]);
+        if (!isFinite(lat) || !isFinite(lon)) return;
+        const f = new Feature({ geometry: new Point(fromLonLat([lon, lat])) });
+        f.setStyle(new CircleStyle({ radius: 5, fill: new Fill({ color: 'rgba(0, 200, 255, 0.5)' }), stroke: new Stroke({ color: 'rgba(255,255,255,0.8)', width: 2 }) }) as any);
+        s?.addFeature(f);
+      });
+    };
+    window.addEventListener('rtaip_coa_route', handler as any);
+    return () => window.removeEventListener('rtaip_coa_route', handler as any);
+  }, []);
+
   function radiusKmForSource(src?: string) {
     const s = String(src || '').toLowerCase();
     if (s.includes('usgs')) return 120;
@@ -203,62 +263,3 @@ export function MapComponent({ events, selectedId, predictionPoints = [], showPr
 }
 
 export default MapComponent;
-  useEffect(() => {
-    const handler = (e: any) => {
-      const copLayer = copLayerRef.current;
-      if (!copLayer) return;
-      const s = copLayer.getSource();
-      s?.clear();
-      const feats = Array.isArray(e.detail?.features) ? e.detail.features : [];
-      feats.forEach((g: any, i: number) => {
-        const lon = Number(g?.coordinates?.[0]);
-        const lat = Number(g?.coordinates?.[1]);
-        if (!isFinite(lat) || !isFinite(lon)) return;
-        const f = new Feature({ geometry: new Point(fromLonLat([lon, lat])) });
-        s?.addFeature(f);
-      });
-    };
-    window.addEventListener('rtaip_cop_layer', handler as any);
-    return () => window.removeEventListener('rtaip_cop_layer', handler as any);
-  }, []);
-
-  useEffect(() => {
-    const handler = (e: any) => {
-      const mission = missionLayerRef.current;
-      if (!mission) return;
-      const s = mission.getSource();
-      s?.clear();
-      const targets = Array.isArray(e.detail?.targets) ? e.detail.targets : [];
-      targets.forEach((t: any) => {
-        const lat = Number(t?.lat);
-        const lon = Number(t?.lon);
-        if (!isFinite(lat) || !isFinite(lon)) return;
-        const f = new Feature({ geometry: new Point(fromLonLat([lon, lat])) });
-        f.setStyle(new CircleStyle({ radius: 10, fill: new Fill({ color: 'rgba(255, 215, 0, 0.12)' }), stroke: new Stroke({ color: 'rgba(255, 215, 0, 0.8)', width: 2 }) }) as any);
-        s?.addFeature(f);
-      });
-    };
-    window.addEventListener('rtaip_isr_targets', handler as any);
-    return () => window.removeEventListener('rtaip_isr_targets', handler as any);
-  }, []);
-
-  useEffect(() => {
-    const handler = (e: any) => {
-      const mission = missionLayerRef.current;
-      if (!mission) return;
-      const s = mission.getSource();
-      const line = Array.isArray(e.detail?.route) ? e.detail.route : [];
-      if (!line.length) return;
-      s?.clear();
-      line.forEach((pt: any) => {
-        const lat = Number(pt?.[0]);
-        const lon = Number(pt?.[1]);
-        if (!isFinite(lat) || !isFinite(lon)) return;
-        const f = new Feature({ geometry: new Point(fromLonLat([lon, lat])) });
-        f.setStyle(new CircleStyle({ radius: 5, fill: new Fill({ color: 'rgba(0, 200, 255, 0.5)' }), stroke: new Stroke({ color: 'rgba(255,255,255,0.8)', width: 2 }) }) as any);
-        s?.addFeature(f);
-      });
-    };
-    window.addEventListener('rtaip_coa_route', handler as any);
-    return () => window.removeEventListener('rtaip_coa_route', handler as any);
-  }, []);
