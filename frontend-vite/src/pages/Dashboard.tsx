@@ -130,7 +130,11 @@ export default function Dashboard() {
         <div>
           <div className="text-sm text-primary tracking-widest uppercase mb-2">Tactical Overview</div>
           <div className="clip-corner border border-primary/20 bg-secondary">
-            <MapComponent events={events} showPredictions={false} showHospitals={false} onSelect={() => {}} />
+            <MapComponent events={events.filter(e => {
+              const t = new Date(e.timestamp).getTime();
+              const cutoff = Date.now() - 7 * 24 * 3600000;
+              return !isNaN(t) && t >= cutoff && e.latitude != null && e.longitude != null;
+            })} showPredictions={false} onSelect={() => {}} />
           </div>
         </div>
         <div className="space-y-4">

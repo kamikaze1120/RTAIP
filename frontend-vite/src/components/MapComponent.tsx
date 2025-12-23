@@ -8,7 +8,7 @@ import OSM from 'ol/source/OSM';
 import VectorLayer from 'ol/layer/Vector';
 import Heatmap from 'ol/layer/Heatmap';
 import VectorSource from 'ol/source/Vector';
-import { Circle as CircleStyle, Fill, Stroke } from 'ol/style';
+import { Circle as CircleStyle, Fill, Stroke, Text, Style } from 'ol/style';
 import { fromLonLat } from 'ol/proj';
 import Feature from 'ol/Feature';
 import Point from 'ol/geom/Point';
@@ -30,11 +30,21 @@ export function MapComponent({ events, selectedId, predictionPoints = [], showPr
       source: vector,
       style: (f: any) => {
         const isFocus = f.get('id') === selectedId;
-        return new CircleStyle({
+        const src = String(f.get('source') || '').toLowerCase();
+        const emoji = src.includes('usgs') ? '🌋' : src.includes('noaa') ? '⛈️' : src.includes('gdacs') ? '🛰️' : '📍';
+        const circle = new CircleStyle({
           radius: isFocus ? 10 : 6,
           fill: new Fill({ color: isFocus ? 'rgba(255, 215, 0, 0.65)' : 'rgba(255,255,255,0.12)' }),
           stroke: new Stroke({ color: isFocus ? 'rgba(255, 215, 0, 0.9)' : 'rgba(255,255,255,0.25)', width: isFocus ? 3 : 2 }),
         }) as any;
+        const text = new Style({
+          text: new Text({
+            text: emoji,
+            font: '16px system-ui',
+            offsetY: -14,
+          }),
+        });
+        return [circle, text] as any;
       },
     });
     const focusLayer = new VectorLayer({
@@ -74,7 +84,18 @@ export function MapComponent({ events, selectedId, predictionPoints = [], showPr
       onSelect?.(id);
     };
     map.on('singleclick', handler);
-    return () => { map.un('singleclick', handler as any); };
+    const hover = (evt: any) => {
+      const pixel = map.getEventPixel(evt.originalEvent);
+      const feature = map.forEachFeatureAtPixel(pixel, (f: any) => f);
+      if (!feature) { setDetail(null); return; }
+      const id = feature.get('id');
+      const z = map.getView().getZoom();
+      const zoom = typeof z === 'number' && isFinite(z) ? z : 2;
+      const [x, y] = pixel as [number, number];
+      setDetail({ id, x, y, zoom });
+    };
+    map.on('pointermove', hover);
+    return () => { map.un('singleclick', handler as any); map.un('pointermove', hover as any); };
   }, [onSelect]);
 
   useEffect(() => {
@@ -111,7 +132,7 @@ export function MapComponent({ events, selectedId, predictionPoints = [], showPr
       const s = focusLayer.getSource();
       s?.clear();
       const src = String(f.get('source') || '').toLowerCase();
-    const km = typeof simRadiusKm === 'number' ? simRadiusKm : radiusKmForSource(src);
+      const km = typeof simRadiusKm === 'number' ? simRadiusKm : radiusKmForSource(src);
       const circle = new CircleGeom(center, km * 1000);
       const outline = new Feature(circle);
       outline.setStyle(new CircleStyle({
