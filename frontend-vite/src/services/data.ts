@@ -279,11 +279,10 @@ export async function fetchSupabaseEvents(): Promise<RtaEvent[]> {
     const events: RtaEvent[] = rows.map((row: any) => ({
       id: String(row.id ?? `${row.source}-${row.timestamp}`),
       source: row.source ?? 'supabase',
-      lat: Number(row.lat ?? row.latitude ?? 0),
-      lon: Number(row.lon ?? row.longitude ?? 0),
       timestamp: row.timestamp ?? row.created_at ?? new Date().toISOString(),
-      confidence: Number(row.confidence ?? 0.6),
-      severity: Number(row.severity ?? 0.2),
+      latitude: typeof row.lat === 'number' ? row.lat : (typeof row.latitude === 'number' ? row.latitude : null),
+      longitude: typeof row.lon === 'number' ? row.lon : (typeof row.longitude === 'number' ? row.longitude : null),
+      confidence: typeof row.confidence === 'number' ? row.confidence : 0.6,
       data: row
     }));
     return events;
