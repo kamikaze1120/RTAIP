@@ -9,6 +9,7 @@ import VectorLayer from 'ol/layer/Vector';
 import Heatmap from 'ol/layer/Heatmap';
 import VectorSource from 'ol/source/Vector';
 import { Circle as CircleStyle, Fill, Stroke, Text, Style } from 'ol/style';
+import RegularShape from 'ol/style/RegularShape';
 import { fromLonLat } from 'ol/proj';
 import Feature from 'ol/Feature';
 import Point from 'ol/geom/Point';
@@ -21,6 +22,8 @@ export function MapComponent({ events, selectedId, predictionPoints = [], showPr
   const focusLayerRef = useRef<VectorLayer<VectorSource> | null>(null);
   const heatLayerRef = useRef<Heatmap | null>(null);
   const infraLayerRef = useRef<VectorLayer<VectorSource> | null>(null);
+  const copLayerRef = useRef<VectorLayer<VectorSource> | null>(null);
+  const missionLayerRef = useRef<VectorLayer<VectorSource> | null>(null);
   const [detail, setDetail] = useState<{ id: string; x: number; y: number; zoom: number } | null>(null);
 
   useEffect(() => {
@@ -31,20 +34,15 @@ export function MapComponent({ events, selectedId, predictionPoints = [], showPr
       style: (f: any) => {
         const isFocus = f.get('id') === selectedId;
         const src = String(f.get('source') || '').toLowerCase();
-        const emoji = src.includes('usgs') ? '🌋' : src.includes('noaa') ? '⛈️' : src.includes('gdacs') ? '🛰️' : '📍';
-        const circle = new CircleStyle({
-          radius: isFocus ? 10 : 6,
-          fill: new Fill({ color: isFocus ? 'rgba(255, 215, 0, 0.65)' : 'rgba(255,255,255,0.12)' }),
-          stroke: new Stroke({ color: isFocus ? 'rgba(255, 215, 0, 0.9)' : 'rgba(255,255,255,0.25)', width: isFocus ? 3 : 2 }),
-        }) as any;
-        const text = new Style({
-          text: new Text({
-            text: emoji,
-            font: '16px system-ui',
-            offsetY: -14,
-          }),
-        });
-        return [circle, text] as any;
+        const shape = src.includes('usgs')
+          ? new RegularShape({ points: 3, radius: isFocus ? 10 : 7, fill: new Fill({ color: 'rgba(255,0,0,0.6)' }), stroke: new Stroke({ color: 'rgba(255,255,255,0.8)', width: 2 }) })
+          : src.includes('noaa')
+          ? new RegularShape({ points: 4, radius: isFocus ? 10 : 7, angle: Math.PI / 4, fill: new Fill({ color: 'rgba(255,165,0,0.6)' }), stroke: new Stroke({ color: 'rgba(255,255,255,0.8)', width: 2 }) })
+          : src.includes('gdacs')
+          ? new RegularShape({ points: 5, radius: isFocus ? 10 : 7, fill: new Fill({ color: 'rgba(0,200,255,0.6)' }), stroke: new Stroke({ color: 'rgba(255,255,255,0.8)', width: 2 }) })
+          : new CircleStyle({ radius: isFocus ? 10 : 6, fill: new Fill({ color: 'rgba(255,255,255,0.12)' }), stroke: new Stroke({ color: 'rgba(255,255,255,0.25)', width: isFocus ? 3 : 2 }) });
+        const label = new Style({ text: new Text({ text: src.includes('usgs') ? 'SEI' : src.includes('noaa') ? 'WX' : src.includes('gdacs') ? 'DIS' : 'EVT', font: '11px JetBrains Mono, monospace', offsetY: -14 }) });
+        return [shape as any, label];
       },
     });
     const focusLayer = new VectorLayer({
@@ -56,9 +54,11 @@ export function MapComponent({ events, selectedId, predictionPoints = [], showPr
       radius: 8,
     });
     const infraLayer = new VectorLayer({ source: new VectorSource() });
+    const copLayer = new VectorLayer({ source: new VectorSource() });
+    const missionLayer = new VectorLayer({ source: new VectorSource() });
     const map = new Map({
       target: ref.current,
-      layers: [new TileLayer({ source: new OSM() }), layer, heatLayer, infraLayer, focusLayer],
+      layers: [new TileLayer({ source: new OSM() }), layer, heatLayer, infraLayer, copLayer, missionLayer, focusLayer],
       view: new View({ center: fromLonLat([0, 0]), zoom: 2 }),
     });
     mapRef.current = map;
@@ -66,6 +66,8 @@ export function MapComponent({ events, selectedId, predictionPoints = [], showPr
     focusLayerRef.current = focusLayer;
     heatLayerRef.current = heatLayer;
     infraLayerRef.current = infraLayer;
+    copLayerRef.current = copLayer;
+    missionLayerRef.current = missionLayer;
     return () => { map.setTarget(undefined); };
   }, []);
 
@@ -200,3 +202,62 @@ export function MapComponent({ events, selectedId, predictionPoints = [], showPr
 }
 
 export default MapComponent;
+  useEffect(() => {
+    const handler = (e: any) => {
+      const copLayer = copLayerRef.current;
+      if (!copLayer) return;
+      const s = copLayer.getSource();
+      s?.clear();
+      const feats = Array.isArray(e.detail?.features) ? e.detail.features : [];
+      feats.forEach((g: any, i: number) => {
+        const lon = Number(g?.coordinates?.[0]);
+        const lat = Number(g?.coordinates?.[1]);
+        if (!isFinite(lat) || !isFinite(lon)) return;
+        const f = new Feature({ geometry: new Point(fromLonLat([lon, lat])) });
+        s?.addFeature(f);
+      });
+    };
+    window.addEventListener('rtaip_cop_layer', handler as any);
+    return () => window.removeEventListener('rtaip_cop_layer', handler as any);
+  }, []);
+
+  useEffect(() => {
+    const handler = (e: any) => {
+      const mission = missionLayerRef.current;
+      if (!mission) return;
+      const s = mission.getSource();
+      s?.clear();
+      const targets = Array.isArray(e.detail?.targets) ? e.detail.targets : [];
+      targets.forEach((t: any) => {
+        const lat = Number(t?.lat);
+        const lon = Number(t?.lon);
+        if (!isFinite(lat) || !isFinite(lon)) return;
+        const f = new Feature({ geometry: new Point(fromLonLat([lon, lat])) });
+        f.setStyle(new CircleStyle({ radius: 10, fill: new Fill({ color: 'rgba(255, 215, 0, 0.12)' }), stroke: new Stroke({ color: 'rgba(255, 215, 0, 0.8)', width: 2 }) }) as any);
+        s?.addFeature(f);
+      });
+    };
+    window.addEventListener('rtaip_isr_targets', handler as any);
+    return () => window.removeEventListener('rtaip_isr_targets', handler as any);
+  }, []);
+
+  useEffect(() => {
+    const handler = (e: any) => {
+      const mission = missionLayerRef.current;
+      if (!mission) return;
+      const s = mission.getSource();
+      const line = Array.isArray(e.detail?.route) ? e.detail.route : [];
+      if (!line.length) return;
+      s?.clear();
+      line.forEach((pt: any) => {
+        const lat = Number(pt?.[0]);
+        const lon = Number(pt?.[1]);
+        if (!isFinite(lat) || !isFinite(lon)) return;
+        const f = new Feature({ geometry: new Point(fromLonLat([lon, lat])) });
+        f.setStyle(new CircleStyle({ radius: 5, fill: new Fill({ color: 'rgba(0, 200, 255, 0.5)' }), stroke: new Stroke({ color: 'rgba(255,255,255,0.8)', width: 2 }) }) as any);
+        s?.addFeature(f);
+      });
+    };
+    window.addEventListener('rtaip_coa_route', handler as any);
+    return () => window.removeEventListener('rtaip_coa_route', handler as any);
+  }, []);
