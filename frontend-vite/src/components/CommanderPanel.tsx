@@ -55,6 +55,7 @@ export default function CommanderPanel({ events }: { events: RtaEvent[] }) {
                 const r = await fetch(`${base.replace(/\/$/, '')}/coa/analyze`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ waypoints: wps, hours: 24, radius_km: 50 }) });
                 const jd = await r.json();
                 setCoaOut(JSON.stringify(jd, null, 2));
+                try { window.dispatchEvent(new CustomEvent('rtaip_coa_route', { detail: { route: wps } })); } catch {}
               } catch (e) { setCoaOut(String(e)); }
             }}>Analyze</button>
           </div>
@@ -71,6 +72,7 @@ export default function CommanderPanel({ events }: { events: RtaEvent[] }) {
                 const r = await fetch(`${base.replace(/\/$/, '')}/isr/recommend?hours=24&limit=5`);
                 const jd = await r.json();
                 setIsrOut(JSON.stringify(jd, null, 2));
+                try { window.dispatchEvent(new CustomEvent('rtaip_isr_targets', { detail: { targets: jd.targets || [] } })); } catch {}
               } catch (e) { setIsrOut(String(e)); }
             }}>Recommend</button>
           </div>
