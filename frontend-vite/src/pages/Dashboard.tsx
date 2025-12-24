@@ -7,6 +7,8 @@ import SystemStats from '../components/SystemStats';
 import { Database, Users, ShieldAlert, Shield } from 'lucide-react';
 import { fetchUSGSAllDay, fetchNOAAAlerts, fetchGDACS, fetchBackendEvents, getBackendBase, type RtaEvent, globalThreatScore, topClusters, typeProbabilities, fetchSupabaseEvents, getSupabaseConfig } from '../services/data';
 import CommanderPanel from '../components/CommanderPanel';
+import ISRAssetsPanel from '../components/ISRAssetsPanel';
+import COAComparePanel from '../components/COAComparePanel';
 import ReadinessPanel from '../components/ReadinessPanel';
 
 export default function Dashboard() {
@@ -150,6 +152,8 @@ export default function Dashboard() {
             <div className="mt-3 text-xs text-muted-foreground">Type probabilities (72h): weather {probs.weather||0}% • seismic {probs.seismic||0}% • disaster {probs.disaster||0}%</div>
           </div>
           <CommanderPanel events={events} />
+          <ISRAssetsPanel />
+          <COAComparePanel />
           <ReadinessPanel events={events} />
         </div>
       </div>
