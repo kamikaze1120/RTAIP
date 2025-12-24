@@ -10,6 +10,7 @@ import Heatmap from 'ol/layer/Heatmap';
 import VectorSource from 'ol/source/Vector';
 import { Circle as CircleStyle, Fill, Stroke, Text, Style } from 'ol/style';
 import RegularShape from 'ol/style/RegularShape';
+import { milStyleFor } from '../utils/milstd';
 import { fromLonLat } from 'ol/proj';
 import Feature from 'ol/Feature';
 import Point from 'ol/geom/Point';
@@ -35,16 +36,7 @@ export function MapComponent({ events, selectedId, predictionPoints = [], showPr
       style: (f: any) => {
         const isFocus = f.get('id') === selectedId;
         const src = String(f.get('source') || '').toLowerCase();
-        const shapeImg = src.includes('usgs')
-          ? new RegularShape({ points: 3, radius: isFocus ? 10 : 7, fill: new Fill({ color: 'rgba(255,0,0,0.6)' }), stroke: new Stroke({ color: 'rgba(255,255,255,0.8)', width: 2 }) })
-          : src.includes('noaa')
-          ? new RegularShape({ points: 4, radius: isFocus ? 10 : 7, angle: Math.PI / 4, fill: new Fill({ color: 'rgba(255,165,0,0.6)' }), stroke: new Stroke({ color: 'rgba(255,255,255,0.8)', width: 2 }) })
-          : src.includes('gdacs')
-          ? new RegularShape({ points: 5, radius: isFocus ? 10 : 7, fill: new Fill({ color: 'rgba(0,200,255,0.6)' }), stroke: new Stroke({ color: 'rgba(255,255,255,0.8)', width: 2 }) })
-          : new CircleStyle({ radius: isFocus ? 10 : 6, fill: new Fill({ color: 'rgba(255,255,255,0.12)' }), stroke: new Stroke({ color: 'rgba(255,255,255,0.25)', width: isFocus ? 3 : 2 }) });
-        const marker = new Style({ image: shapeImg });
-        const label = new Style({ text: new Text({ text: src.includes('usgs') ? 'SEI' : src.includes('noaa') ? 'WX' : src.includes('gdacs') ? 'DIS' : 'EVT', font: '11px JetBrains Mono, monospace', offsetY: -14 }) });
-        return [marker, label];
+        return milStyleFor(src, isFocus);
       },
     });
     const focusLayer = new VectorLayer({
