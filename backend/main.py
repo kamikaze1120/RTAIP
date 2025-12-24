@@ -337,6 +337,50 @@ def c2_spotrep(req: SpotrepIn):
     except Exception as e:
         return {"status": "error", "error": str(e)}
 
+# COP UDP push: send FeatureCollection to UDP host/port
+@app.post("/cop/push_udp")
+def cop_push_udp(hours: int = 24):
+    try:
+        host = os.getenv("C2_UDP_HOST")
+        port = int(os.getenv("C2_UDP_PORT", "0") or "0")
+        if not host or port <= 0:
+            return {"status": "error", "error": "C2_UDP_HOST/C2_UDP_PORT not set"}
+        fc = cop_geojson(hours)
+        import socket, json as pyjson
+        payload = pyjson.dumps(fc).encode("utf-8")
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.sendto(payload, (host, port))
+        s.close()
+        return {"status": "sent", "bytes": len(payload), "udp": f"{host}:{port}"}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+# ISR asset registry (in-memory)
+ASSETS = []
+
+class AssetIn(BaseModel):
+    name: str
+    type: str
+    lat: float
+    lon: float
+    status: str = "available"
+
+@app.get("/isr/assets")
+def list_assets():
+    return {"assets": ASSETS}
+
+@app.post("/isr/assets")
+def add_asset(a: AssetIn):
+    item = {"id": len(ASSETS)+1, "name": a.name, "type": a.type, "lat": a.lat, "lon": a.lon, "status": a.status}
+    ASSETS.append(item)
+    return {"id": item["id"]}
+
+@app.delete("/isr/assets/{asset_id}")
+def delete_asset(asset_id: int):
+    global ASSETS
+    ASSETS = [x for x in ASSETS if x.get("id") != asset_id]
+    return {"status": "deleted"}
+
 # Email notification request model
 class EmailRequest(BaseModel):
     subject: str

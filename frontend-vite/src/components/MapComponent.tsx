@@ -14,6 +14,7 @@ import { fromLonLat } from 'ol/proj';
 import Feature from 'ol/Feature';
 import Point from 'ol/geom/Point';
 import CircleGeom from 'ol/geom/Circle';
+import LineString from 'ol/geom/LineString';
 
 export function MapComponent({ events, selectedId, predictionPoints = [], showPredictions = false, simRadiusKm, showHospitals = false, onSelect }: { events: RtaEvent[]; selectedId?: string; predictionPoints?: Array<{ lat: number; lon: number; weight: number }>; showPredictions?: boolean; simRadiusKm?: number; showHospitals?: boolean; onSelect?: (id: string) => void }) {
   const ref = useRef<HTMLDivElement | null>(null);
@@ -202,9 +203,40 @@ export function MapComponent({ events, selectedId, predictionPoints = [], showPr
         f.setStyle(new CircleStyle({ radius: 5, fill: new Fill({ color: 'rgba(0, 200, 255, 0.5)' }), stroke: new Stroke({ color: 'rgba(255,255,255,0.8)', width: 2 }) }) as any);
         s?.addFeature(f);
       });
+      try {
+        const coords = line.map((pt: any) => fromLonLat([Number(pt?.[1]), Number(pt?.[0])]));
+        if (coords.length >= 2) {
+          const ls = new LineString(coords);
+          const lf = new Feature({ geometry: ls });
+          lf.setStyle(new Style({ stroke: new Stroke({ color: 'rgba(0,200,255,0.6)', width: 3 }) }));
+          s?.addFeature(lf);
+        }
+      } catch {}
     };
     window.addEventListener('rtaip_coa_route', handler as any);
     return () => window.removeEventListener('rtaip_coa_route', handler as any);
+  }, []);
+
+  useEffect(() => {
+    const handler = (e: any) => {
+      const mission = missionLayerRef.current;
+      if (!mission) return;
+      const s = mission.getSource();
+      s?.clear();
+      const line = Array.isArray(e.detail?.phaseLine) ? e.detail.phaseLine : [];
+      if (!line.length) return;
+      try {
+        const coords = line.map((pt: any) => fromLonLat([Number(pt?.[1]), Number(pt?.[0])]));
+        if (coords.length >= 2) {
+          const ls = new LineString(coords);
+          const lf = new Feature({ geometry: ls });
+          lf.setStyle(new Style({ stroke: new Stroke({ color: 'rgba(255,165,0,0.8)', width: 4 }) }));
+          s?.addFeature(lf);
+        }
+      } catch {}
+    };
+    window.addEventListener('rtaip_phase_lines', handler as any);
+    return () => window.removeEventListener('rtaip_phase_lines', handler as any);
   }, []);
 
   function radiusKmForSource(src?: string) {

@@ -7,6 +7,7 @@ export default function CommanderPanel({ events }: { events: RtaEvent[] }) {
   const [coaInput, setCoaInput] = useState<string>('[[34.05,-118.24],[36.17,-115.14]]');
   const [coaOut, setCoaOut] = useState<string>('');
   const [isrOut, setIsrOut] = useState<string>('');
+  const [phaseInput, setPhaseInput] = useState<string>('[[33.9,-118.4],[34.2,-118.1],[34.4,-117.9]]');
   useEffect(() => {
     const base = getBackendBase();
     const gts = globalThreatScore(events);
@@ -77,6 +78,16 @@ export default function CommanderPanel({ events }: { events: RtaEvent[] }) {
             }}>Recommend</button>
           </div>
           {isrOut && <pre className="mt-2 whitespace-pre-wrap">{isrOut}</pre>}
+        </div>
+        <div className="clip-corner-sm border border-primary/20 p-2 text-xs">
+          <div className="text-primary uppercase tracking-widest mb-1">Operational Graphics</div>
+          <div className="text-muted-foreground mb-1">Phase Line waypoints (JSON [lat,lon])</div>
+          <textarea className="w-full h-24 px-2 py-1 bg-secondary border border-primary/20" value={phaseInput} onChange={e=>setPhaseInput(e.target.value)} />
+          <div className="mt-2 flex gap-2">
+            <button className="px-2 py-1 clip-corner-sm bg-primary/20 text-primary border border-primary/30" onClick={()=>{
+              try { const points = JSON.parse(phaseInput); window.dispatchEvent(new CustomEvent('rtaip_phase_lines', { detail: { phaseLine: points } })); } catch {}
+            }}>Draw Phase Line</button>
+          </div>
         </div>
       </div>
     </div>
