@@ -26,6 +26,7 @@ export function MapComponent({ events, selectedId, predictionPoints = [], showPr
   const infraLayerRef = useRef<VectorLayer<VectorSource> | null>(null);
   const copLayerRef = useRef<VectorLayer<VectorSource> | null>(null);
   const missionLayerRef = useRef<VectorLayer<VectorSource> | null>(null);
+  const overlayLayerRef = useRef<VectorLayer<VectorSource> | null>(null);
   const [detail, setDetail] = useState<{ id: string; x: number; y: number; zoom: number } | null>(null);
 
   useEffect(() => {
@@ -50,9 +51,10 @@ export function MapComponent({ events, selectedId, predictionPoints = [], showPr
     const infraLayer = new VectorLayer({ source: new VectorSource() });
     const copLayer = new VectorLayer({ source: new VectorSource() });
     const missionLayer = new VectorLayer({ source: new VectorSource() });
+    const overlayLayer = new VectorLayer({ source: new VectorSource() });
     const map = new Map({
       target: ref.current,
-      layers: [new TileLayer({ source: new OSM() }), layer, heatLayer, infraLayer, copLayer, missionLayer, focusLayer],
+      layers: [new TileLayer({ source: new OSM() }), layer, heatLayer, infraLayer, copLayer, missionLayer, overlayLayer, focusLayer],
       view: new View({ center: fromLonLat([0, 0]), zoom: 2 }),
     });
     mapRef.current = map;
@@ -62,6 +64,7 @@ export function MapComponent({ events, selectedId, predictionPoints = [], showPr
     infraLayerRef.current = infraLayer;
     copLayerRef.current = copLayer;
     missionLayerRef.current = missionLayer;
+    overlayLayerRef.current = overlayLayer;
     return () => { map.setTarget(undefined); };
   }, []);
 
@@ -70,6 +73,17 @@ export function MapComponent({ events, selectedId, predictionPoints = [], showPr
     if (!map) return;
     const handler = (evt: any) => {
       const pixel = map.getEventPixel(evt.originalEvent);
+      const coordinate = map.getCoordinateFromPixel(pixel);
+      const lonLat = map.getView().getProjection().getExtent() ? 
+        map.getView().getProjection().getExtent().slice(0, 2).map((c: number, i: number) => 
+          coordinate[i] - c
+        ) : coordinate;
+      
+      const clickEvent = new CustomEvent('rtaip_map_click', {
+        detail: { lon: lonLat[0], lat: lonLat[1], pixel, coordinate }
+      });
+      window.dispatchEvent(clickEvent);
+      
       const feature = map.forEachFeatureAtPixel(pixel, (f: any) => f);
       if (!feature) { setDetail(null); return; }
       const id = feature.get('id');
@@ -229,6 +243,72 @@ export function MapComponent({ events, selectedId, predictionPoints = [], showPr
     };
     window.addEventListener('rtaip_phase_lines', handler as any);
     return () => window.removeEventListener('rtaip_phase_lines', handler as any);
+  }, []);
+
+  useEffect(() => {
+    const handler = (e: any) => {
+      const overlayLayer = overlayLayerRef.current;
+      if (!overlayLayer) return;
+      const s = overlayLayer.getSource();
+      s?.clear();
+      const overlays = Array.isArray(e.detail?.overlays) ? e.detail.overlays : [];
+      overlays.forEach((overlay: any) => {
+        if (!Array.isArray(overlay.coordinates) || !overlay.coordinates.length) return;
+        
+        try {
+          const coords = overlay.coordinates.map((pt: any) => {
+            if (Array.isArray(pt) && pt.length >= 2) {
+              return fromLonLat([Number(pt[0]), Number(pt[1])]);
+            }
+            return null;
+          }).filter(Boolean);
+          
+          if (coords.length === 0) return;
+          
+          if (overlay.type === 'phase_line' || overlay.type === 'route') {
+            if (coords.length >= 2) {
+              const ls = new LineString(coords);
+              const lf = new Feature({ geometry: ls });
+              lf.setStyle(new Style({ 
+                stroke: new Stroke({ 
+                  color: overlay.color || 'rgba(255,165,0,0.8)', 
+                  width: overlay.type === 'phase_line' ? 4 : 3 
+                }) 
+              }));
+              s?.addFeature(lf);
+            }
+          } else {
+            coords.forEach((coord: any) => {
+              const f = new Feature({ geometry: new Point(coord) });
+              f.setStyle(new Style({
+                image: new CircleStyle({
+                  radius: 8,
+                  fill: new Fill({ color: overlay.color || 'rgba(255,0,0,0.6)' }),
+                  stroke: new Stroke({ color: 'rgba(255,255,255,0.8)', width: 2 })
+                })
+              }));
+              s?.addFeature(f);
+            });
+            
+            if (coords.length >= 2 && (overlay.type === 'obstacle' || overlay.type === 'killbox' || overlay.type === 'named_area')) {
+              const ls = new LineString(coords);
+              const lf = new Feature({ geometry: ls });
+              lf.setStyle(new Style({ 
+                stroke: new Stroke({ 
+                  color: overlay.color || 'rgba(255,0,0,0.6)', 
+                  width: 2,
+                  lineDash: overlay.type === 'killbox' ? [10, 5] : undefined
+                }),
+                fill: new Fill({ color: overlay.color || 'rgba(255,0,0,0.3)' })
+              }));
+              s?.addFeature(lf);
+            }
+          }
+        } catch {}
+      });
+    };
+    window.addEventListener('rtaip_overlays_changed', handler as any);
+    return () => window.removeEventListener('rtaip_overlays_changed', handler as any);
   }, []);
 
   function radiusKmForSource(src?: string) {

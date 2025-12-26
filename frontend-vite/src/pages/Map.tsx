@@ -4,6 +4,7 @@ import MapComponent from '../components/MapComponent';
 import EventFeed from '../components/EventFeed';
 import AnalystPanel from '../components/AnalystPanel';
 
+
 export default function MapPage() {
   const [events, setEvents] = useState<RtaEvent[]>([]);
   const [selectedId, setSelectedId] = useState<string | undefined>(undefined);
@@ -90,6 +91,7 @@ export default function MapPage() {
           </div>
           <MapComponent events={events} selectedId={selectedId} predictionPoints={predictedPoints(events)} showPredictions={showPred} simRadiusKm={simRadiusKm} />
           <AnalystPanel events={events} onAsk={() => {}} />
+          
         </div>
       </div>
     </div>

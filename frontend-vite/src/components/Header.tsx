@@ -9,6 +9,7 @@ const navItems = [
   { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
   { label: 'Map', path: '/map', icon: Map },
   { label: 'Timeline', path: '/timeline', icon: Clock },
+  { label: 'Security', path: '/security', icon: Settings },
   
 ];
 

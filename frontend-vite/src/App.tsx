@@ -5,6 +5,7 @@ import MapPage from './pages/Map';
 import Dashboard from './pages/Dashboard';
 import Sources from './pages/Sources';
 import Timeline from './pages/Timeline';
+import SecurityPanel from './components/SecurityPanel';
  
 import { getBackendBase, getHealthPaths, checkSupabaseHealth, getSupabaseConfig } from './services/data';
 
@@ -75,6 +76,7 @@ export default function App() {
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/map" element={<MapPage />} />
           <Route path="/timeline" element={<Timeline />} />
+          <Route path="/security" element={<SecurityPanel />} />
           
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
