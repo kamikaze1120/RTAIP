@@ -18,9 +18,13 @@ import threading
 from ingestion import schedule_ingestion
 from anomaly import schedule_detection
 from datetime import datetime
+import os
+import json
+import socket
+import struct
 # New imports for email notifications
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import timedelta
 import os
 import smtplib
@@ -364,6 +368,22 @@ class AssetIn(BaseModel):
     lat: float
     lon: float
     status: str = "available"
+    metadata: Optional[dict] = None
+    tasking: Optional[dict] = None
+
+class AssetUpdate(BaseModel):
+    name: Optional[str] = None
+    type: Optional[str] = None
+    lat: Optional[float] = None
+    lon: Optional[float] = None
+    status: Optional[str] = None
+    metadata: Optional[dict] = None
+    tasking: Optional[dict] = None
+
+class TaskingRequest(BaseModel):
+    target: dict
+    description: str = ""
+    priority: str = "medium"
 
 @app.get("/isr/assets")
 def list_assets():
@@ -371,9 +391,52 @@ def list_assets():
 
 @app.post("/isr/assets")
 def add_asset(a: AssetIn):
-    item = {"id": len(ASSETS)+1, "name": a.name, "type": a.type, "lat": a.lat, "lon": a.lon, "status": a.status}
+    item = {
+        "id": len(ASSETS)+1, 
+        "name": a.name, 
+        "type": a.type, 
+        "lat": a.lat, 
+        "lon": a.lon, 
+        "status": a.status,
+        "metadata": a.metadata,
+        "tasking": a.tasking
+    }
     ASSETS.append(item)
     return {"id": item["id"]}
+
+@app.put("/isr/assets/{asset_id}")
+def update_asset(asset_id: int, update: AssetUpdate):
+    for asset in ASSETS:
+        if asset.get("id") == asset_id:
+            if update.name is not None:
+                asset["name"] = update.name
+            if update.type is not None:
+                asset["type"] = update.type
+            if update.lat is not None:
+                asset["lat"] = update.lat
+            if update.lon is not None:
+                asset["lon"] = update.lon
+            if update.status is not None:
+                asset["status"] = update.status
+            if update.metadata is not None:
+                asset["metadata"] = update.metadata
+            if update.tasking is not None:
+                asset["tasking"] = update.tasking
+            return asset
+    return {"error": "Asset not found"}
+
+@app.post("/isr/assets/{asset_id}/task")
+def assign_tasking(asset_id: int, tasking: TaskingRequest):
+    for asset in ASSETS:
+        if asset.get("id") == asset_id:
+            asset["tasking"] = {
+                "target": tasking.target,
+                "description": tasking.description,
+                "priority": tasking.priority
+            }
+            asset["status"] = "tasked"
+            return {"status": "tasked"}
+    return {"error": "Asset not found"}
 
 @app.delete("/isr/assets/{asset_id}")
 def delete_asset(asset_id: int):
@@ -871,3 +934,289 @@ def summary(window: str = "24h", bbox: Optional[str] = None, db: Session = Depen
 def migrate():
     ok, msg = ensure_schema()
     return {"ok": ok, "message": msg}
+
+# C2 Adapter Models
+class DISPDU(BaseModel):
+    exercise_id: int = 1
+    timestamp: datetime
+    entity_id: str
+    entity_type: str
+    location: Dict[str, float]
+    velocity: Optional[Dict[str, float]] = None
+    orientation: Optional[Dict[str, float]] = None
+    force_id: int = 1
+    marking: str = ""
+
+class HLAPDU(BaseModel):
+    federation_name: str = "RTAIP_FED"
+    object_name: str
+    object_class: str
+    attributes: Dict[str, Any]
+    timestamp: datetime
+
+class SPOTREP(BaseModel):
+    unit: str
+    datetime: datetime
+    location: Dict[str, float]
+    event_type: str
+    description: str
+    priority: str = "routine"
+    status: str = "confirmed"
+
+class SITREP(BaseModel):
+    unit: str
+    datetime: datetime
+    operational_status: str
+    significant_activities: List[str]
+    enemy_activity: str = "none reported"
+    friendly_forces: str = "all accounted for"
+    logistics_status: str = "adequate"
+
+# DIS Protocol Adapter (IEEE 1278.1)
+@app.post("/c2/dis/entity")
+def dis_entity_update(pdu: DISPDU):
+    try:
+        # Convert to DIS PDU format (simplified)
+        pdu_data = {
+            "protocol_version": 6,  # IEEE 1278.1-1995
+            "exercise_id": pdu.exercise_id,
+            "pdu_type": 1,  # Entity State PDU
+            "protocol_family": 1,
+            "timestamp": int(pdu.timestamp.timestamp()),
+            "length": 144,  # Standard Entity State PDU length
+            "entity_id": {
+                "site": 1,
+                "application": 1,
+                "entity": int(pdu.entity_id.split("-")[2]) if "-" in pdu.entity_id else 1
+            },
+            "force_id": pdu.force_id,
+            "entity_type": {
+                "kind": 1,  # Platform
+                "domain": 1,  # Land
+                "country": 225,  # USA
+                "category": 1,
+                "subcategory": 1,
+                "specific": 0,
+                "extra": 0
+            },
+            "alternative_entity_type": {
+                "kind": 0,
+                "domain": 0,
+                "country": 0,
+                "category": 0,
+                "subcategory": 0,
+                "specific": 0,
+                "extra": 0
+            },
+            "entity_location": {
+                "x": pdu.location.get("x", 0),
+                "y": pdu.location.get("y", 0),
+                "z": pdu.location.get("z", 0)
+            },
+            "entity_orientation": {
+                "psi": pdu.orientation.get("psi", 0) if pdu.orientation else 0,
+                "theta": pdu.orientation.get("theta", 0) if pdu.orientation else 0,
+                "phi": pdu.orientation.get("phi", 0) if pdu.orientation else 0
+            },
+            "entity_appearance": {
+                "paint_scheme": 0,
+                "mobility": 0,
+                "fire_power": 0,
+                "damage": 0,
+                "smoke": 0,
+                "trailing_effects": 0,
+                "hatch": 0,
+                "headlights": 0,
+                "tail_lights": 0,
+                "brake_lights": 0,
+                "flaming": 0,
+                "launcher": 0,
+                "camouflage_type": 0,
+                "concealed": 0,
+                "frozen_status": 0,
+                "power_plant_status": 0,
+                "state": 0,
+                "spot_lights": 0,
+                "interior_lights": 0
+            },
+            "dead_reckoning_parameters": {
+                "dead_reckoning_algorithm": 0,
+                "other_parameters": [0] * 15,
+                "linear_acceleration": {"x": 0, "y": 0, "z": 0},
+                "angular_velocity": {"x": 0, "y": 0, "z": 0}
+            },
+            "marking": pdu.marking[:11] if pdu.marking else "RTAIP_ENTITY",
+            "entity_capabilities": 0
+        }
+        
+        # Send to DIS network (stub implementation)
+        dis_host = os.getenv("DIS_HOST", "localhost")
+        dis_port = int(os.getenv("DIS_PORT", "3000"))
+        
+        if dis_host and dis_port > 0:
+            # In a real implementation, this would send actual DIS PDUs
+            # For now, we log and return success
+            import socket
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            try:
+                # Simplified DIS PDU simulation
+                pdu_bytes = struct.pack('>BBHI', 6, 1, pdu.exercise_id, int(pdu.timestamp.timestamp()))
+                sock.sendto(pdu_bytes, (dis_host, dis_port))
+            except Exception as e:
+                print(f"DIS send failed: {e}")
+            finally:
+                sock.close()
+        
+        return {"status": "forwarded", "pdu_type": "EntityState", "dis_host": dis_host, "dis_port": dis_port}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+# HLA Adapter (IEEE 1516)
+@app.post("/c2/hla/object")
+def hla_object_update(pdu: HLAPDU):
+    try:
+        # Convert to HLA Object Model format
+        hla_data = {
+            "federation_execution": pdu.federation_name,
+            "object_instance": {
+                "object_name": pdu.object_name,
+                "object_class_handle": pdu.object_class,
+                "attribute_values": pdu.attributes,
+                "timestamp": pdu.timestamp.isoformat()
+            },
+            "federate": {
+                "federate_name": "RTAIP_Federate",
+                "federate_type": "C2Adapter",
+                "federate_handle": 1
+            }
+        }
+        
+        # Send to HLA RTI (stub implementation)
+        hla_rti_host = os.getenv("HLA_RTI_HOST", "localhost")
+        hla_rti_port = int(os.getenv("HLA_RTI_PORT", "8989"))
+        
+        if hla_rti_host and hla_rti_port > 0:
+            # In a real implementation, this would connect to HLA RTI
+            # For now, we log and return success
+            import socket
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            try:
+                sock.connect((hla_rti_host, hla_rti_port))
+                sock.send(json.dumps(hla_data).encode('utf-8'))
+            except Exception as e:
+                print(f"HLA RTI send failed: {e}")
+            finally:
+                sock.close()
+        
+        return {"status": "forwarded", "federation": pdu.federation_name, "object": pdu.object_name}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+# Enhanced SPOTREP (Spot Report)
+@app.post("/c2/spotrep")
+def submit_spotrep(rep: SPOTREP, push_udp: bool = False):
+    try:
+        # Generate SPOTREP format
+        spotrep_data = {
+            "msg_type": "SPOTREP",
+            "unit": rep.unit,
+            "datetime": rep.datetime.isoformat(),
+            "grid_reference": f"{rep.location.get('lat', 0):.4f},{rep.location.get('lon', 0):.4f}",
+            "event_type": rep.event_type,
+            "description": rep.description,
+            "priority": rep.priority,
+            "status": rep.status,
+            "report_id": f"SPOT{int(rep.datetime.timestamp())}",
+            "classification": "UNCLASSIFIED"
+        }
+        
+        # Store in database
+        db = next(get_db())
+        try:
+            event = DataEvent(
+                source="spotrep",
+                timestamp=rep.datetime,
+                latitude=rep.location.get('lat', 0),
+                longitude=rep.location.get('lon', 0),
+                data=spotrep_data
+            )
+            db.add(event)
+            db.commit()
+            db.refresh(event)
+        finally:
+            db.close()
+        
+        # Optional UDP push
+        if push_udp:
+            try:
+                host = os.getenv("C2_UDP_HOST")
+                port = int(os.getenv("C2_UDP_PORT", "0") or "0")
+                if host and port > 0:
+                    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                    sock.sendto(json.dumps(spotrep_data).encode('utf-8'), (host, port))
+                    sock.close()
+            except Exception as e:
+                print(f"SPOTREP UDP push failed: {e}")
+        
+        return {"status": "submitted", "report_id": spotrep_data["report_id"]}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+# Enhanced SITREP (Situation Report)
+@app.post("/c2/sitrep")
+def submit_sitrep(rep: SITREP, push_udp: bool = False):
+    try:
+        # Generate SITREP format
+        sitrep_data = {
+            "msg_type": "SITREP",
+            "unit": rep.unit,
+            "datetime": rep.datetime.isoformat(),
+            "operational_status": rep.operational_status,
+            "significant_activities": rep.significant_activities,
+            "enemy_activity": rep.enemy_activity,
+            "friendly_forces": rep.friendly_forces,
+            "logistics_status": rep.logistics_status,
+            "report_id": f"SIT{int(rep.datetime.timestamp())}",
+            "classification": "UNCLASSIFIED"
+        }
+        
+        # Store in database
+        db = next(get_db())
+        try:
+            event = DataEvent(
+                source="sitrep",
+                timestamp=rep.datetime,
+                data=sitrep_data
+            )
+            db.add(event)
+            db.commit()
+            db.refresh(event)
+        finally:
+            db.close()
+        
+        # Optional UDP push
+        if push_udp:
+            try:
+                host = os.getenv("C2_UDP_HOST")
+                port = int(os.getenv("C2_UDP_PORT", "0") or "0")
+                if host and port > 0:
+                    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                    sock.sendto(json.dumps(sitrep_data).encode('utf-8'), (host, port))
+                    sock.close()
+            except Exception as e:
+                print(f"SITREP UDP push failed: {e}")
+        
+        return {"status": "submitted", "report_id": sitrep_data["report_id"]}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+# C2 Status and Configuration
+@app.get("/c2/status")
+def c2_status():
+    return {
+        "dis_enabled": bool(os.getenv("DIS_HOST") and int(os.getenv("DIS_PORT", "0")) > 0),
+        "hla_enabled": bool(os.getenv("HLA_RTI_HOST") and int(os.getenv("HLA_RTI_PORT", "0")) > 0),
+        "udp_enabled": bool(os.getenv("C2_UDP_HOST") and int(os.getenv("C2_UDP_PORT", "0")) > 0),
+        "spotrep_count": len([e for e in DataEvent.query.all() if e.source == "spotrep"]) if hasattr(DataEvent, 'query') else 0,
+        "sitrep_count": len([e for e in DataEvent.query.all() if e.source == "sitrep"]) if hasattr(DataEvent, 'query') else 0
+    }
