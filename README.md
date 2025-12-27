@@ -97,10 +97,3 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 For any inquiries or feedback, please reach out to:
 - **Maintainer**: Mujtaba Hussain Mohammed
 - **Email**: info@nexumcloud.co.site
-
-```
-
-### Instructions for Use:
-- Replace placeholders like `Your Name` and `your.email@example.com` with actual information.
-- Add any additional sections or details specific to your project as needed.
-- Ensure that links to external resources (like Node.js and Python) are functioning. 
