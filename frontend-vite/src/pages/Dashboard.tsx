@@ -7,6 +7,7 @@ import SystemStats from '../components/SystemStats';
 import { Database, Users, ShieldAlert, Shield } from 'lucide-react';
 import { fetchUSGSAllDay, fetchNOAAAlerts, fetchGDACS, fetchBackendEvents, getBackendBase, type RtaEvent, globalThreatScore, topClusters, typeProbabilities, fetchSupabaseEvents, getSupabaseConfig } from '../services/data';
 import CommanderPanel from '../components/CommanderPanel';
+import RightPanel from '../components/RightPanel';
 import ISRAssetsPanel from '../components/ISRAssetsPanel';
 
 import ReadinessPanel from '../components/ReadinessPanel';
@@ -14,7 +15,8 @@ import ReadinessPanel from '../components/ReadinessPanel';
 
 export default function Dashboard() {
   const [events, setEvents] = useState<RtaEvent[]>([]);
-  const [alerts, setAlerts] = useState<{ id: string; title: string; source: string; ago: string; severity: 'low'|'medium'|'high' }[]>([]);
+  const [alerts, setAlerts] = useState<any[]>([]);
+  const [mapFocus, setMapFocus] = useState<RtaEvent | null>(null);
   const stats = useMemo(() => ([
     { label: 'CPU load', value: 34 },
     { label: 'Memory', value: 67 },
@@ -54,14 +56,20 @@ export default function Dashboard() {
       usgs.slice(0, 3).forEach((e, i) => {
         const mag = (e.data as any)?.mag;
         const sev = mag >= 5 ? 'high' : mag >= 3 ? 'medium' : 'low';
-        genAlerts.push({ id: `u-${i}`, title: `Seismic ${mag != null ? `M${mag}` : 'activity'} detected`, source: 'USGS', ago: toAgo(e.timestamp), severity: sev });
+        genAlerts.push({ event: e, id: `u-${i}`, title: `Seismic ${mag != null ? `M${mag}` : 'activity'} detected`, source: 'USGS', ago: toAgo(e.timestamp), severity: sev });
       });
       noaa.slice(0, 2).forEach((e, i) => {
         const ev = (e.data as any)?.event || 'Weather alert';
         const sev = /warning|watch/i.test(String(ev)) ? 'medium' : 'low';
-        genAlerts.push({ id: `n-${i}`, title: ev, source: 'NOAA', ago: toAgo(e.timestamp), severity: sev });
+        genAlerts.push({ event: e, id: `n-${i}`, title: ev, source: 'NOAA', ago: toAgo(e.timestamp), severity: sev });
       });
       if (!cancelled) setAlerts(genAlerts);
+
+    const handleSelect = (event: RtaEvent) => {
+      if (event.latitude != null && event.longitude != null) {
+        setMapFocus(event);
+      }
+    };
     }
     load();
     const r = Number(window.localStorage.getItem('refreshMs') || '60000');
@@ -137,27 +145,10 @@ export default function Dashboard() {
               const t = new Date(e.timestamp).getTime();
               const cutoff = Date.now() - 7 * 24 * 3600000;
               return !isNaN(t) && t >= cutoff && e.latitude != null && e.longitude != null;
-            })} showPredictions={false} onSelect={() => {}} />
+            })} showPredictions={false} onSelect={() => {}} focus={mapFocus} />
           </div>
         </div>
-        <div className="space-y-4">
-          <AlertList alerts={alerts} />
-          <SystemStats stats={stats} />
-          <div className="clip-corner border border-primary/20 p-3">
-            <div className="text-xs text-primary tracking-widest uppercase mb-2">Top Emerging Threat Clusters</div>
-            <ul className="text-xs space-y-1">
-              {clusters.map((c, i) => (
-                <li key={i} className="flex items-center justify-between"><span>({c.lat.toFixed(2)}, {c.lon.toFixed(2)})</span><span className="text-muted-foreground">score {Math.round(c.score*100)}</span></li>
-              ))}
-            </ul>
-            <div className="mt-3 text-xs text-muted-foreground">Type probabilities (72h): weather {probs.weather||0}% • seismic {probs.seismic||0}% • disaster {probs.disaster||0}%</div>
-          </div>
-          <CommanderPanel events={events} />
-          
-          <ISRAssetsPanel />
-          
-          <ReadinessPanel events={events} />
-        </div>
+        <RightPanel alerts={alerts} stats={stats} events={events} onSelect={(alert) => handleSelect(alert.event)} />
       </div>
     </div>
   );

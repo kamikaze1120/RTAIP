@@ -17,7 +17,7 @@ import Point from 'ol/geom/Point';
 import CircleGeom from 'ol/geom/Circle';
 import LineString from 'ol/geom/LineString';
 
-export function MapComponent({ events, selectedId, predictionPoints = [], showPredictions = false, simRadiusKm, showHospitals = false, onSelect }: { events: RtaEvent[]; selectedId?: string; predictionPoints?: Array<{ lat: number; lon: number; weight: number }>; showPredictions?: boolean; simRadiusKm?: number; showHospitals?: boolean; onSelect?: (id: string) => void }) {
+export function MapComponent({ events, selectedId, predictionPoints = [], showPredictions = false, simRadiusKm, showHospitals = false, onSelect, focus }: { events: RtaEvent[]; selectedId?: string; predictionPoints?: Array<{ lat: number; lon: number; weight: number }>; showPredictions?: boolean; simRadiusKm?: number; showHospitals?: boolean; onSelect?: (id: string) => void; focus?: RtaEvent | null }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<Map | null>(null);
   const layerRef = useRef<VectorLayer<VectorSource> | null>(null);
@@ -153,6 +153,16 @@ export function MapComponent({ events, selectedId, predictionPoints = [], showPr
       s?.addFeature(outline);
     }
   }, [selectedId]);
+
+  useEffect(() => {
+    if (!focus) return;
+    const map = mapRef.current;
+    if (!map) return;
+    if (focus.latitude != null && focus.longitude != null) {
+      const center = fromLonLat([focus.longitude, focus.latitude]);
+      map.getView().animate({ center, zoom: 8, duration: 600 });
+    }
+  }, [focus]);
 
   useEffect(() => {
     const handler = (e: any) => {
