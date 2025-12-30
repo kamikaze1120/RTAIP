@@ -9,6 +9,7 @@ export default function Timeline() {
   const [filters, setFilters] = useState({ usgs: true, noaa: true, gdacs: true });
   const [minSev, setMinSev] = useState(0);
   const [query, setQuery] = useState('');
+  const [focus, setFocus] = useState<RtaEvent | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -109,7 +110,7 @@ export default function Timeline() {
         {events.length === 0 ? (
           <div className="px-4 pb-4 text-xs text-muted-foreground">No events available yet. Try again shortly or check backend ingestion.</div>
         ) : (
-          <EventFeed events={filtered} onSelect={() => {}} />
+          <EventFeed events={filtered} onSelect={(e) => setFocus(f => f?.id === e.id ? null : e)} focus={focus} />
         )}
       </div>
       <div className="clip-corner border border-primary/20 p-4">

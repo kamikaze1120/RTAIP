@@ -17,6 +17,14 @@ export default function Dashboard() {
   const [events, setEvents] = useState<RtaEvent[]>([]);
   const [alerts, setAlerts] = useState<any[]>([]);
   const [mapFocus, setMapFocus] = useState<RtaEvent | null>(null);
+
+  const handleSelect = (event: RtaEvent) => {
+    if (mapFocus && mapFocus.id === event.id) {
+      setMapFocus(null);
+    } else if (event.latitude != null && event.longitude != null) {
+      setMapFocus(event);
+    }
+  };
   const stats = useMemo(() => ([
     { label: 'CPU load', value: 34 },
     { label: 'Memory', value: 67 },
@@ -64,13 +72,8 @@ export default function Dashboard() {
         genAlerts.push({ event: e, id: `n-${i}`, title: ev, source: 'NOAA', ago: toAgo(e.timestamp), severity: sev });
       });
       if (!cancelled) setAlerts(genAlerts);
-
-    const handleSelect = (event: RtaEvent) => {
-      if (event.latitude != null && event.longitude != null) {
-        setMapFocus(event);
-      }
-    };
     }
+
     load();
     const r = Number(window.localStorage.getItem('refreshMs') || '60000');
     const id = setInterval(load, Math.max(30000, r));
@@ -148,7 +151,7 @@ export default function Dashboard() {
             })} showPredictions={false} onSelect={() => {}} focus={mapFocus} />
           </div>
         </div>
-        <RightPanel alerts={alerts} stats={stats} events={events} onSelect={(alert) => handleSelect(alert.event)} />
+        <RightPanel alerts={alerts} stats={stats} events={events} onSelect={(alert) => handleSelect(alert.event)} mapFocus={mapFocus} />
       </div>
     </div>
   );
