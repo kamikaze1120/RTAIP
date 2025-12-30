@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { getBackendBase } from '../services/data';
 import { Button, TextField, Card, CardContent, CardHeader, Typography, Select, MenuItem, FormControl, InputLabel, SelectChangeEvent, Box } from '@mui/material';
 import { MapPin, Trash2, Edit3, Save, X, Target } from 'lucide-react';
+import { ThemeProvider } from '@mui/material/styles';
+import theme from '../theme';
 
 export interface ISRAsset {
   id: number;
@@ -206,6 +208,7 @@ export default function ISRAssetsPanel() {
   };
 
   return (
+    <ThemeProvider theme={theme}>
     <Card>
       <CardHeader
         title="ISR Asset Manager"
@@ -392,5 +395,6 @@ export default function ISRAssetsPanel() {
         </Box>
       </CardContent>
     </Card>
+    </ThemeProvider>
   );
 }

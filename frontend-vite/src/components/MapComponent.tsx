@@ -155,13 +155,18 @@ export function MapComponent({ events, selectedId, predictionPoints = [], showPr
   }, [selectedId]);
 
   useEffect(() => {
-    if (!focus) return;
     const map = mapRef.current;
     if (!map) return;
-    if (focus.latitude != null && focus.longitude != null) {
+
+    if (focus && focus.latitude != null && focus.longitude != null) {
       const center = fromLonLat([focus.longitude, focus.latitude]);
-      map.getView().animate({ center, zoom: 8, duration: 600 });
+      map.getView().setCenter(center);
+      map.getView().setZoom(8);
+    } else {
+      map.getView().setCenter(fromLonLat([0, 0]));
+      map.getView().setZoom(2);
     }
+    map.render();
   }, [focus]);
 
   useEffect(() => {

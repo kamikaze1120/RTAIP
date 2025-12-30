@@ -27,9 +27,22 @@ const summarizeEvent = (e: RtaEvent) => {
   return `${(e.source || 'Event').toString()} at ${ts}`;
 };
 
-export function EventFeed({ events, onSelect }: { events: RtaEvent[]; onSelect?: (id: string) => void }) {
+export function EventFeed({ events, onSelect, focus }: { events: RtaEvent[]; onSelect?: (event: RtaEvent) => void; focus?: RtaEvent | null }) {
   const seen = new Set<string>();
   const clean = events.filter(e => { const key = `${String(e.source).toLowerCase()}-${e.id}`; if (seen.has(key)) return false; seen.add(key); return true; });
+
+  if (focus) {
+    return (
+      <div className="p-4">
+        <div className="flex items-center justify-between">
+          <div className="text-primary">Event Detail</div>
+          <button className="px-2 py-1 text-xs clip-corner-sm bg-primary/20 text-primary border border-primary/30" onClick={() => onSelect?.(focus)}>Unfocus</button>
+        </div>
+        <div className="mt-2 bg-secondary/50 p-2 clip-corner-sm text-xs whitespace-pre-wrap">{JSON.stringify(focus, null, 2)}</div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-2">
       <div className="border-b border-primary/20 px-2 py-1 flex items-center justify-between">
@@ -54,7 +67,7 @@ export function EventFeed({ events, onSelect }: { events: RtaEvent[]; onSelect?:
                   <div className="text-xs text-muted-foreground">Conf: {confPct}% • Severity: {sevPct}%</div>
                 </div>
                 <div className="flex justify-end">
-                  <button className="px-2 py-1 text-xs clip-corner-sm bg-primary/20 text-primary border border-primary/30" onClick={() => onSelect?.(event.id)}>Focus</button>
+                  <button className="px-2 py-1 text-xs clip-corner-sm bg-primary/20 text-primary border border-primary/30" onClick={() => onSelect?.(event)}>Focus</button>
                 </div>
               </div>
             </li>
