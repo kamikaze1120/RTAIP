@@ -1,6 +1,5 @@
 import React from 'react';
 import { Info, AlertTriangle } from 'lucide-react';
-import { cn } from '../lib/utils';
 
 import { RtaEvent } from '../services/data';
 
@@ -9,7 +8,7 @@ type Alert = { event: RtaEvent, id: string; title: string; source: string; ago: 
 export default function AlertList({ alerts, onSelect }: { alerts: Alert[], onSelect: (alert: Alert) => void }) {
   const severityIcon = {
     low: <Info className="text-blue-400" />,
-    medium: <Warning className="text-yellow-400" />,
+    medium: <AlertTriangle className="text-yellow-400" />,
     high: <AlertTriangle className="text-red-400" />,
   }
   return (

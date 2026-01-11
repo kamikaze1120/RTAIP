@@ -1,21 +1,15 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import StatCard from '../components/StatCard';
-import TacticalGrid from '../components/TacticalGrid';
 import MapComponent from '../components/MapComponent';
 import AlertList from '../components/AlertList';
-import SystemStats from '../components/SystemStats';
-import { Database, Users, ShieldAlert, Shield } from 'lucide-react';
+import { ShieldAlert, Activity, TrendingUp, Globe } from 'lucide-react';
 import { fetchUSGSAllDay, fetchNOAAAlerts, fetchGDACS, fetchBackendEvents, getBackendBase, type RtaEvent, globalThreatScore, topClusters, typeProbabilities, fetchSupabaseEvents, getSupabaseConfig } from '../services/data';
-import CommanderPanel from '../components/CommanderPanel';
-import RightPanel from '../components/RightPanel';
-import ISRAssetsPanel from '../components/ISRAssetsPanel';
-
-import ReadinessPanel from '../components/ReadinessPanel';
+import { NewHeader } from '../components/NewHeader';
 
 
 export default function Dashboard() {
   const [events, setEvents] = useState<RtaEvent[]>([]);
-  const [alerts, setAlerts] = useState<any[]>([]);
+  const [alerts, setAlerts] = useState<{ event: RtaEvent, id: string; title: string; source: string; ago: string; severity: 'low'|'medium'|'high' }[]>([]);
   const [mapFocus, setMapFocus] = useState<RtaEvent | null>(null);
 
   const handleSelect = (event: RtaEvent) => {
@@ -25,13 +19,7 @@ export default function Dashboard() {
       setMapFocus(event);
     }
   };
-  const stats = useMemo(() => ([
-    { label: 'CPU load', value: 34 },
-    { label: 'Memory', value: 67 },
-    { label: 'Network', value: 61, color: 'hsl(35 100% 50% / 0.8)' },
-    { label: 'Security', value: 22, color: 'hsl(0 85% 55% / 0.8)' },
-    { label: 'Power', value: 12 },
-  ]), []);
+  
 
   useEffect(() => {
     let cancelled = false;
@@ -55,19 +43,19 @@ export default function Dashboard() {
       const all = [...backend, ...usgs, ...noaa, ...gdacs];
       if (!cancelled) setEvents(all);
 
-      const genAlerts: { id: string; title: string; source: string; ago: string; severity: 'low'|'medium'|'high' }[] = [];
+      const genAlerts: { event: RtaEvent, id: string; title: string; source: string; ago: string; severity: 'low'|'medium'|'high' }[] = [];
       const toAgo = (ts: string) => {
         const d = new Date(ts).getTime();
         const mins = Math.max(1, Math.round((Date.now() - d) / 60000));
         return `${mins} min ago`;
       };
       usgs.slice(0, 3).forEach((e, i) => {
-        const mag = (e.data as any)?.mag;
+        const mag = (e.data as { mag?: number })?.mag || 0;
         const sev = mag >= 5 ? 'high' : mag >= 3 ? 'medium' : 'low';
         genAlerts.push({ event: e, id: `u-${i}`, title: `Seismic ${mag != null ? `M${mag}` : 'activity'} detected`, source: 'USGS', ago: toAgo(e.timestamp), severity: sev });
       });
       noaa.slice(0, 2).forEach((e, i) => {
-        const ev = (e.data as any)?.event || 'Weather alert';
+        const ev = (e.data as { event?: string })?.event || 'Weather alert';
         const sev = /warning|watch/i.test(String(ev)) ? 'medium' : 'low';
         genAlerts.push({ event: e, id: `n-${i}`, title: ev, source: 'NOAA', ago: toAgo(e.timestamp), severity: sev });
       });
@@ -90,11 +78,11 @@ export default function Dashboard() {
     return events.reduce((acc, e) => {
       const src = String(e.source || '').toLowerCase();
       if (src === 'usgs_seismic') {
-        const mag = (e.data as any)?.mag;
+        const mag = (e.data as { mag?: number })?.mag || 0;
         if (mag >= 5) return acc + 1;
       }
       if (src === 'noaa_weather') {
-        const ev = (e.data as any)?.event || '';
+        const ev = (e.data as { event?: string })?.event || '';
         if (/warning/i.test(String(ev))) return acc + 1;
       }
       return acc;
@@ -102,9 +90,9 @@ export default function Dashboard() {
   }, [events]);
 
   const gts = useMemo(() => globalThreatScore(events), [events]);
-  const clusters = useMemo(() => topClusters(events), [events]);
-  const probs = useMemo(() => typeProbabilities(events), [events]);
-  const lastUpdated = useMemo(() => {
+  useMemo(() => topClusters(events), [events]);
+  useMemo(() => typeProbabilities(events), [events]);
+  useMemo(() => {
     const t = events.map(e => new Date(e.timestamp).getTime()).filter(t=>!isNaN(t)).sort((a,b)=>b-a)[0];
     return t ? new Date(t).toLocaleString() : '—';
   }, [events]);
@@ -118,39 +106,60 @@ export default function Dashboard() {
     const sign = delta > 0 ? `↑ ${delta}%` : delta < 0 ? `↓ ${Math.abs(delta)}%` : 'stable';
     return sign;
   }, [events]);
-  const backendStatus = useMemo(() => (typeof window !== 'undefined' ? window.localStorage.getItem('backendStatus') : null) || 'offline', []);
+  useMemo(() => (typeof window !== 'undefined' ? window.localStorage.getItem('backendStatus') : null) || 'offline', []);
 
-  const securityLevel = useMemo(() => {
+  useMemo(() => {
     return highThreats > 3 ? 'ALPHA' : highThreats > 0 ? 'BRAVO' : 'NORMAL';
   }, [highThreats]);
 
   return (
     <div className="bg-black text-white min-h-screen">
-      <div className="container mx-auto px-6 py-8 space-y-8">
-
-      <div className="grid md:grid-cols-4 gap-4">
-        <StatCard title="Global Threat Score" value={gts} subtitle={`${gts>700?'CRITICAL':gts>450?'HIGH':gts>250?'ELEVATED':'LOW'} • ${trend}`} icon={<ShieldAlert className="w-4 h-4" />} variant={gts>700?'danger':gts>450?'warning':'default'} />
-        <StatCard title="Active Sources" value={activeSources} subtitle="Synced" icon={<Database className="w-4 h-4" />} />
-        <StatCard title="Events Processed" value={events.length} subtitle="Last 7 days" icon={<Users className="w-4 h-4" />} />
-        <StatCard title="Security Level" value={securityLevel} subtitle={securityLevel==='ALPHA'?'Elevated':'Nominal'} icon={<Shield className="w-4 h-4" />} variant={securityLevel==='ALPHA'?'danger':'default'} />
-      </div>
-
-      <div className="grid lg:grid-cols-[1fr_360px] gap-8">
-        <div className="bg-white/10 backdrop-blur-md rounded-lg p-4 shadow-lg">
-          <MapComponent 
-            events={events.filter(e => {
-              const t = new Date(e.timestamp).getTime();
-              const cutoff = Date.now() - 7 * 24 * 3600000;
-              return !isNaN(t) && t >= cutoff && e.latitude != null && e.longitude != null;
-            })} 
-            showPredictions={false} 
-            onSelect={() => {}} 
-            focus={mapFocus} 
-          />
+      <NewHeader />
+      <main className="pt-20">
+        <div className="container mx-auto p-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+            <StatCard 
+              title="Global Threat Score"
+              value={gts}
+              icon={<Globe />}
+              variant={gts > 75 ? 'danger' : gts > 50 ? 'warning' : 'default'}
+            />
+            <StatCard 
+              title="Threat Trend"
+              value={trend}
+              icon={<TrendingUp />}
+              variant={trend.startsWith('↑') ? 'warning' : trend.startsWith('↓') ? 'success' : 'default'}
+            />
+            <StatCard 
+              title="Active Sources"
+              value={activeSources}
+              icon={<Activity />}
+            />
+            <StatCard 
+              title="High-Threat Events"
+              value={highThreats}
+              icon={<ShieldAlert />}
+              variant={highThreats > 0 ? 'danger' : 'success'}
+            />
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+            <div className="lg:col-span-3 bg-white/10 backdrop-blur-md rounded-lg p-4 shadow-lg">
+              <MapComponent 
+                events={events.filter(e => {
+                  const t = new Date(e.timestamp).getTime();
+                  const cutoff = Date.now() - 7 * 24 * 3600000;
+                  return !isNaN(t) && t >= cutoff && e.latitude != null && e.longitude != null;
+                })} 
+                focus={mapFocus} 
+              />
+            </div>
+            <div className="bg-white/10 backdrop-blur-md rounded-lg p-4 shadow-lg">
+              <h2 className="text-xl font-bold mb-4">Alerts</h2>
+              <AlertList alerts={alerts} onSelect={(alert) => handleSelect(alert.event)} />
+            </div>
+          </div>
         </div>
-        <RightPanel alerts={alerts} stats={stats} events={events} onSelect={(alert) => handleSelect(alert.event)} mapFocus={mapFocus} />
-      </div>
-      </div>
+      </main>
     </div>
   );
 }

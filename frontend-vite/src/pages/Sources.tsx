@@ -1,7 +1,9 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { type RtaEvent } from '../services/data';
 import StatCard from '../components/StatCard';
 import { Database, Satellite, CloudDrizzle, Users, Shield, Building } from 'lucide-react';
 import AlertList from '../components/AlertList';
+import { NewHeader } from '../components/NewHeader';
 
 type SourceStat = { label: string; count: number; subtitle?: string; icon: React.ReactNode; variant?: 'default'|'warning'|'danger'|'success' };
 
@@ -17,31 +19,38 @@ const newSources: SourceStat[] = [
 ];
 
 export default function Sources() {
-  const [stats, setStats] = useState<SourceStat[]>(newSources);
-  const [alerts, setAlerts] = useState<{ id: string; title: string; source: string; ago: string; severity: 'low'|'medium'|'high' }[]>([]);
+  const [stats, ] = useState<SourceStat[]>(newSources);
+  const [alerts, setAlerts] = useState<{ event: RtaEvent, id: string; title: string; source: string; ago: string; severity: 'low'|'medium'|'high' }[]>([]);
 
   useEffect(() => {
     // TODO: Replace with actual data fetching from new sources
     const mockAlerts = [
-      { id: '1', title: 'New equipment added to ODIN', source: 'ODIN', ago: '2h ago', severity: 'low' as 'low', event: {} as any },
-      { id: '2', title: 'DTIC report on UAVs published', source: 'DTIC', ago: '5h ago', severity: 'medium' as 'medium', event: {} as any },
-      { id: '3', title: 'NGA Tearline update on regional activity', source: 'NGA Tearline', ago: '1d ago', severity: 'high' as 'high', event: {} as any },
+      { id: '1', title: 'New equipment added to ODIN', source: 'ODIN', ago: '2h ago', severity: 'low' as const, event: {} as RtaEvent },
+      { id: '2', title: 'DTIC report on UAVs published', source: 'DTIC', ago: '5h ago', severity: 'medium' as const, event: {} as RtaEvent },
+      { id: '3', title: 'NGA Tearline update on regional activity', source: 'NGA Tearline', ago: '1d ago', severity: 'high' as const, event: {} as RtaEvent },
     ];
     setAlerts(mockAlerts);
   }, []);
 
   return (
     <div className="bg-black text-white min-h-screen">
-      <div className="container mx-auto px-6 py-8 space-y-8">
-        <div className="grid md:grid-cols-4 gap-4">
+      <NewHeader />
+      <div className="p-4 lg:p-6">
+        <div className="mb-8">
+          <h1 className="text-4xl font-bold">Data Sources</h1>
+          <p className="text-gray-400">Live monitoring of integrated data sources and new alerts.</p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {stats.map((s) => (
             <StatCard key={s.label} title={s.label} value={s.count} subtitle={s.subtitle} icon={s.icon} variant={s.variant} />
           ))}
         </div>
 
-        <AlertList alerts={alerts} onSelect={() => {}} />
+        <div className="mt-8">
+          <AlertList alerts={alerts} onSelect={() => {}} />
+        </div>
 
-        <div className="bg-white/10 backdrop-blur-md rounded-lg p-6 shadow-lg">
+        <div className="mt-8 bg-white/10 backdrop-blur-md rounded-lg p-6 shadow-lg">
           <h2 className="text-xl font-bold text-white mb-4">Integration Notes</h2>
           <p className="text-gray-400">
             Sources now include a range of government and military public databases, providing access to unclassified defense information, geospatial intelligence, and logistics data. These channels are critical for maintaining a comprehensive operational picture.

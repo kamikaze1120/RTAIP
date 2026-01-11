@@ -1,6 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { RtaEvent } from '../services/data';
-import { getBackendBase, topClusters, estimatePopulationNear, callGemini } from '../services/data';
+import { getBackendBase } from '../services/data';
 
 function brief(events: RtaEvent[]) {
   const now = new Date();
@@ -54,24 +54,16 @@ export default function AnalystPanel({ events, onAsk }: { events: RtaEvent[]; on
     setBusy(true);
     const baseUrl = getBackendBase();
     const aiPath = typeof window !== 'undefined' ? (window.localStorage.getItem('aiEndpointPath') || '/api/ai-analyst') : '/api/ai-analyst';
-    const lower = q.toLowerCase();
-    if (lower.includes('population')) {
-      const cluster = topClusters(events)[0];
-      if (cluster) {
-        const est = await estimatePopulationNear(cluster.lat, cluster.lon);
-        const pop = est?.population != null ? est?.population : 'unknown';
-        setAnswer(a => (a ? a + '\n' : '') + `Estimated population near ${est?.place || 'target area'}: ${pop}`);
-      }
-    }
-    const provider = (import.meta as any)?.env?.VITE_AI_PROVIDER || 'backend';
+    
+    const provider = (import.meta as { env: Record<string, string> })?.env?.VITE_AI_PROVIDER || 'backend';
     if (provider === 'gemini') {
-      const ctx = brief(events);
-      const res = await callGemini(q, ctx);
-      if (res) {
-        setAnswer(a => (a ? a + '\n' : '') + res);
-        setBusy(false);
-        return;
-      }
+      // const ctx = brief(events);
+      // const res = await callGemini(q, ctx);
+      // if (res) {
+      //   setAnswer(a => (a ? a + '\n' : '') + res);
+      //   setBusy(false);
+      //   return;
+      // }
     }
     if (!baseUrl) {
       const local = `No backend configured. Based on current telemetry: ${brief(events)}\nFocus: Monitor top source; watch for new anomaly flags.`;
