@@ -13,6 +13,7 @@ export default function MapPage() {
   const [showPred, setShowPred] = useState(false);
   const [simRadiusKm, setSimRadiusKm] = useState<number | undefined>(undefined);
   const [showHospitals, setShowHospitals] = useState(false);
+  const [mapFocus, setMapFocus] = useState<RtaEvent | null>(null);
 
   useEffect(() => {
     const ep = window.localStorage.getItem('enablePredictions');
@@ -71,7 +72,7 @@ export default function MapPage() {
             const t = new Date(e.timestamp).getTime();
             const cutoff = Date.now() - hoursWindow*3600000;
             return !isNaN(t) && t >= cutoff;
-          })} onSelect={(id) => setSelectedId(id)} />
+          })} onSelect={(e) => setMapFocus(f => f?.id === e.id ? null : e)} focus={mapFocus} />
         </div>
         <div className="border border-primary/20 clip-corner">
           <div className="px-3 py-2 border-b border-primary/20 flex flex-wrap gap-2">
@@ -89,7 +90,7 @@ export default function MapPage() {
               <span>{simRadiusKm ?? 120} km</span>
             </div>
           </div>
-          <MapComponent events={events} selectedId={selectedId} predictionPoints={predictedPoints(events)} showPredictions={showPred} simRadiusKm={simRadiusKm} />
+          <MapComponent events={events} selectedId={selectedId} predictionPoints={predictedPoints(events)} showPredictions={showPred} simRadiusKm={simRadiusKm} focus={mapFocus} />
           <AnalystPanel events={events} onAsk={() => {}} />
           
         </div>

@@ -125,13 +125,8 @@ export default function Dashboard() {
   }, [highThreats]);
 
   return (
-    <div className="px-6 pt-20 space-y-6">
-      <div className="space-y-1">
-        <div className="text-xs tracking-widest text-muted-foreground uppercase">Real-Time Tactical Analysis Intelligence Platform</div>
-        <div className="text-4xl font-bold">Command <span className="text-primary">Center</span></div>
-        <div className="text-sm text-muted-foreground">{backendStatus==='offline'?'Data may be degraded. Confidence reduced.':'Advanced situational awareness and threat monitoring.'}</div>
-        <div className="text-[11px] text-muted-foreground">Last updated: {lastUpdated}</div>
-      </div>
+    <div className="bg-black text-white min-h-screen">
+      <div className="container mx-auto px-6 py-8 space-y-8">
 
       <div className="grid md:grid-cols-4 gap-4">
         <StatCard title="Global Threat Score" value={gts} subtitle={`${gts>700?'CRITICAL':gts>450?'HIGH':gts>250?'ELEVATED':'LOW'} • ${trend}`} icon={<ShieldAlert className="w-4 h-4" />} variant={gts>700?'danger':gts>450?'warning':'default'} />
@@ -140,18 +135,21 @@ export default function Dashboard() {
         <StatCard title="Security Level" value={securityLevel} subtitle={securityLevel==='ALPHA'?'Elevated':'Nominal'} icon={<Shield className="w-4 h-4" />} variant={securityLevel==='ALPHA'?'danger':'default'} />
       </div>
 
-      <div className="grid lg:grid-cols-[1fr_360px] gap-4">
-        <div>
-          <div className="text-sm text-primary tracking-widest uppercase mb-2">Tactical Overview</div>
-          <div className="clip-corner border border-primary/20 bg-secondary">
-            <MapComponent events={events.filter(e => {
+      <div className="grid lg:grid-cols-[1fr_360px] gap-8">
+        <div className="bg-white/10 backdrop-blur-md rounded-lg p-4 shadow-lg">
+          <MapComponent 
+            events={events.filter(e => {
               const t = new Date(e.timestamp).getTime();
               const cutoff = Date.now() - 7 * 24 * 3600000;
               return !isNaN(t) && t >= cutoff && e.latitude != null && e.longitude != null;
-            })} showPredictions={false} onSelect={() => {}} focus={mapFocus} />
-          </div>
+            })} 
+            showPredictions={false} 
+            onSelect={() => {}} 
+            focus={mapFocus} 
+          />
         </div>
         <RightPanel alerts={alerts} stats={stats} events={events} onSelect={(alert) => handleSelect(alert.event)} mapFocus={mapFocus} />
+      </div>
       </div>
     </div>
   );
