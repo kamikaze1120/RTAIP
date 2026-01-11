@@ -1,12 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { fetchBackendEvents, fetchUSGSAllDay, fetchGDACS, fetchNOAAAlerts, type RtaEvent, eventSeverity, fetchSupabaseEvents, getSupabaseConfig } from '../services/data';
+import { fetchBackendEvents, fetchGDACS, type RtaEvent, eventSeverity, fetchSupabaseEvents, getSupabaseConfig } from '../services/data';
 import { NewHeader } from '../components/NewHeader';
 import EventFeed from '../components/EventFeed';
 
 export default function Timeline() {
   const [events, setEvents] = useState<RtaEvent[]>([]);
   const [autoplay, setAutoplay] = useState(false);
-  const [filters, setFilters] = useState({ usgs: true, noaa: true, gdacs: true });
+  const [filters, setFilters] = useState({ gdacs: true });
   const [minSev, setMinSev] = useState(0);
   const [query, setQuery] = useState('');
   const [focus, setFocus] = useState<RtaEvent | null>(null);
@@ -27,12 +27,10 @@ export default function Timeline() {
         const now = new Date();
         const fromISO = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
         const toISO = now.toISOString();
-        const [usgs, noaa, gdacs] = await Promise.all([
-          fetchUSGSAllDay(),
-          fetchNOAAAlerts(),
+        const [gdacs] = await Promise.all([
           fetchGDACS(fromISO, toISO),
         ]);
-        all = [...usgs, ...noaa, ...gdacs];
+        all = [...gdacs];
       }
       all.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
       if (!cancelled) setEvents(all);
@@ -48,8 +46,6 @@ export default function Timeline() {
       const t = new Date(e.timestamp).getTime();
       if (isNaN(t) || t < cutoff) return false;
       const s = String(e.source || '').toLowerCase();
-      if (s.includes('usgs') && !filters.usgs) return false;
-      if (s.includes('noaa') && !filters.noaa) return false;
       if (s.includes('gdacs') && !filters.gdacs) return false;
       
       const sev = eventSeverity(e);
@@ -87,8 +83,6 @@ export default function Timeline() {
                 <div>
                   <div className="text-xs text-gray-300 tracking-widest uppercase mb-2">Sources</div>
                   <div className="flex flex-wrap gap-3 text-xs">
-                    <label className="flex items-center gap-1"><input type="checkbox" checked={filters.usgs} onChange={e => setFilters(f => ({ ...f, usgs: e.target.checked }))} /> USGS</label>
-                    <label className="flex items-center gap-1"><input type="checkbox" checked={filters.noaa} onChange={e => setFilters(f => ({ ...f, noaa: e.target.checked }))} /> NOAA</label>
                     <label className="flex items-center gap-1"><input type="checkbox" checked={filters.gdacs} onChange={e => setFilters(f => ({ ...f, gdacs: e.target.checked }))} /> GDACS</label>
                   </div>
                 </div>

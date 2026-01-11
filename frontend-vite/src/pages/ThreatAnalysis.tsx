@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import MapComponent from '../components/MapComponent';
-import { getGtdEvents } from '../services/threat';
+import { getGtdEvents, getOdinThreats, getDticThreats } from '../services/threat';
 import { NewHeader } from '../components/NewHeader';
+import { Shield, Zap, WifiOff, Satellite, Skull, Crosshair } from 'lucide-react';
 
 interface ThreatEvent {
+  [key: string]: any;
   id: number;
   date: string;
   title: string;
@@ -14,7 +16,27 @@ interface ThreatEvent {
   description: string;
   threat_level: 'Low' | 'Medium' | 'High' | 'Critical';
   group: string;
+  type: 'Conventional' | 'Asymmetric' | 'Cyber' | 'Reconnaissance' | 'Electronic Warfare' | 'Strategic';
 }
+
+const ThreatIcon = ({ type }: { type: ThreatEvent['type'] }) => {
+  switch (type) {
+    case 'Conventional':
+      return <Shield className="w-4 h-4 mr-2" />;
+    case 'Asymmetric':
+      return <Skull className="w-4 h-4 mr-2" />;
+    case 'Cyber':
+      return <Zap className="w-4 h-4 mr-2" />;
+    case 'Reconnaissance':
+      return <Crosshair className="w-4 h-4 mr-2" />;
+    case 'Electronic Warfare':
+      return <WifiOff className="w-4 h-4 mr-2" />;
+    case 'Strategic':
+        return <Satellite className="w-4 h-4 mr-2" />;
+    default:
+      return null;
+  }
+};
 
 const ThreatAnalysis = () => {
   const [events, setEvents] = useState<ThreatEvent[]>([]);
@@ -26,8 +48,13 @@ const ThreatAnalysis = () => {
   useEffect(() => {
     const loadEvents = async () => {
       setLoading(true);
-      const gtdEvents = await getGtdEvents() as ThreatEvent[];
-      const sortedEvents = gtdEvents.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      const [gtdEvents, odinThreats, dticThreats] = await Promise.all([
+        getGtdEvents(),
+        getOdinThreats(),
+        getDticThreats(),
+      ]);
+      const allEvents = [...gtdEvents, ...odinThreats, ...dticThreats] as ThreatEvent[];
+      const sortedEvents = allEvents.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       setEvents(sortedEvents);
       setLoading(false);
       if (sortedEvents.length > 0) {
@@ -69,8 +96,11 @@ const ThreatAnalysis = () => {
                     className={`bg-black/20 p-4 rounded-lg cursor-pointer border-2 mb-4 ${selectedEvent?.id === event.id ? 'border-blue-500' : 'border-transparent hover:border-gray-700'}`}
                     onClick={() => setSelectedEvent(event)}
                   >
-                    <h3 className="text-lg font-bold truncate">{event.title}</h3>
-                    <p className="text-sm text-gray-400">{event.group} - {event.date}</p>
+                    <div className="flex items-center">
+                      <ThreatIcon type={event.type} />
+                      <h3 className="text-lg font-bold truncate">{event.title}</h3>
+                    </div>
+                    <p className="text-sm text-gray-400 mt-1">{event.group} - {event.date}</p>
                     <div className="flex items-center mt-2">
                       <span className={`px-2 py-1 text-xs font-bold rounded-full ${
                         event.threat_level === 'Critical' ? 'bg-red-700' :

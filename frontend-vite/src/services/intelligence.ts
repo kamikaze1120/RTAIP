@@ -43,6 +43,78 @@ const odinData = [
   }
 ];
 
+const usaceData = [
+  {
+    id: 5,
+    title: 'Infrastructure Resilience Study: Coastal Regions',
+    source: 'USACE',
+    date: '2023-07-19',
+    summary: 'Analysis of critical infrastructure vulnerabilities in coastal areas due to climate change and seismic activity. Provides recommendations for structural hardening and disaster response planning.',
+    report_url: '/mock-report-usace-1.pdf',
+    classification: 'UNCLASSIFIED'
+  }
+];
+
+const publogData = [
+  {
+    id: 6,
+    title: 'Global Logistics Chain Analysis: Q3 2023',
+    source: 'PUB LOG',
+    date: '2023-10-05',
+    summary: 'A quarterly report on the status of global public logistics chains, highlighting potential disruptions, chokepoints, and efficiency metrics for major shipping routes.',
+    report_url: '/mock-report-publog-1.pdf',
+    classification: 'UNCLASSIFIED'
+  }
+];
+
+const ngaData = [
+  {
+    id: 7,
+    title: 'Geospatial Analysis of Contested Zone',
+    source: 'NGA Tearline',
+    date: '2023-11-10',
+    summary: 'High-resolution imagery and geospatial intelligence analysis of a contested region, detailing force dispositions, infrastructure changes, and patterns of life.',
+    report_url: '/mock-report-nga-1.pdf',
+    classification: 'FOR OFFICIAL USE ONLY'
+  }
+];
+
+const periscopeData = [
+  {
+    id: 8,
+    title: 'Next-Generation Fighter Jet Capabilities',
+    source: 'Military Periscope',
+    date: '2023-06-22',
+    summary: 'A comparative analysis of emerging 5th and 6th generation fighter aircraft, focusing on stealth, avionics, and weapon systems.',
+    report_url: '/mock-report-periscope-1.pdf',
+    classification: 'UNCLASSIFIED'
+  }
+];
+
+const janesData = [
+  {
+    id: 9,
+    title: 'Defense Spending Trends in East Asia',
+    source: 'Janes',
+    date: '2023-09-28',
+    summary: 'An intelligence briefing on defense budget allocations and procurement priorities for key nations in the East Asian region.',
+    report_url: '/mock-report-janes-1.pdf',
+    classification: 'UNCLASSIFIED'
+  }
+];
+
+const gtdbData = [
+  {
+    id: 10,
+    title: 'Global Terrorism Index: 2023 Report',
+    source: 'Global Terrorism DB',
+    date: '2023-05-15',
+    summary: 'A statistical overview of global terrorism trends, including attack frequency, target types, and perpetrator profiles from the last calendar year.',
+    report_url: '/mock-report-gtdb-1.pdf',
+    classification: 'UNCLASSIFIED'
+  }
+];
+
 export const searchDtic = async (term: string) => {
   console.log(`Searching DTIC for: ${term}`);
   await new Promise(resolve => setTimeout(resolve, 500));
@@ -55,4 +127,46 @@ export const searchOdin = async (term: string) => {
   await new Promise(resolve => setTimeout(resolve, 500));
   if (!term) return odinData;
   return odinData.filter(d => d.title.toLowerCase().includes(term.toLowerCase()) || d.summary.toLowerCase().includes(term.toLowerCase()));
+};
+
+export const searchUsace = async (term: string) => {
+  console.log(`Searching USACE for: ${term}`);
+  await new Promise(resolve => setTimeout(resolve, 500));
+  if (!term) return usaceData;
+  return usaceData.filter(d => d.title.toLowerCase().includes(term.toLowerCase()) || d.summary.toLowerCase().includes(term.toLowerCase()));
+};
+
+export const searchPublog = async (term: string) => {
+  console.log(`Searching PUB LOG for: ${term}`);
+  await new Promise(resolve => setTimeout(resolve, 500));
+  if (!term) return publogData;
+  return publogData.filter(d => d.title.toLowerCase().includes(term.toLowerCase()) || d.summary.toLowerCase().includes(term.toLowerCase()));
+};
+
+export const searchNga = async (term: string) => {
+  console.log(`Searching NGA Tearline for: ${term}`);
+  await new Promise(resolve => setTimeout(resolve, 500));
+  if (!term) return ngaData;
+  return ngaData.filter(d => d.title.toLowerCase().includes(term.toLowerCase()) || d.summary.toLowerCase().includes(term.toLowerCase()));
+};
+
+export const searchPeriscope = async (term: string) => {
+  console.log(`Searching Military Periscope for: ${term}`);
+  await new Promise(resolve => setTimeout(resolve, 500));
+  if (!term) return periscopeData;
+  return periscopeData.filter(d => d.title.toLowerCase().includes(term.toLowerCase()) || d.summary.toLowerCase().includes(term.toLowerCase()));
+};
+
+export const searchJanes = async (term: string) => {
+  console.log(`Searching Janes for: ${term}`);
+  await new Promise(resolve => setTimeout(resolve, 500));
+  if (!term) return janesData;
+  return janesData.filter(d => d.title.toLowerCase().includes(term.toLowerCase()) || d.summary.toLowerCase().includes(term.toLowerCase()));
+};
+
+export const searchGtdb = async (term: string) => {
+  console.log(`Searching Global Terrorism DB for: ${term}`);
+  await new Promise(resolve => setTimeout(resolve, 500));
+  if (!term) return gtdbData;
+  return gtdbData.filter(d => d.title.toLowerCase().includes(term.toLowerCase()) || d.summary.toLowerCase().includes(term.toLowerCase()));
 };

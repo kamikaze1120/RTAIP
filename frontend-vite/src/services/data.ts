@@ -64,12 +64,12 @@ export async function fetchBackendEvents(): Promise<RtaEvent[]> {
     const arr: Record<string, unknown>[] = Array.isArray(jd) ? jd : [];
     return arr.map((e: Record<string, unknown>, i) => ({
       id: String(e.id ?? i),
-      timestamp: e.timestamp ?? new Date().toISOString(),
+      timestamp: (e.timestamp as string) ?? new Date().toISOString(),
       source: String(e.source || 'unknown'),
       latitude: typeof e.latitude === 'number' ? e.latitude : null,
       longitude: typeof e.longitude === 'number' ? e.longitude : null,
       confidence: typeof e.confidence === 'number' ? e.confidence : 0.5,
-      data: e.data || {},
+      data: (e.data as Record<string, unknown>) || {},
     }));
   } catch {
     return [];
@@ -213,17 +213,17 @@ export async function runConnectivityDiagnostics(): Promise<ConnectivityDiagnost
       out.health.push({ path: p, ok: r.ok, status: r.status });
       if (r.ok) return out;
     } catch (e: unknown) {
-      out.health.push({ path: p, ok: false, error: String(e?.message || e) });
+      out.health.push({ path: p, ok: false, error: String((e as Error).message || e) });
     }
   }
   try {
     const r = await fetchWithTimeout(b, { timeoutMs: 6000 });
     out.root = { ok: r.ok, status: r.status };
-  } catch (e: unknown) { out.root = { ok: false, error: String(e?.message || e) }; }
+  } catch (e: unknown) { out.root = { ok: false, error: String((e as Error).message || e) }; }
   try {
     const r = await fetchWithTimeout(`${b}/events`, { timeoutMs: 6000 });
     out.events = { ok: r.ok, status: r.status };
-  } catch (e: unknown) { out.events = { ok: false, error: String(e?.message || e) }; }
+  } catch (e: unknown) { out.events = { ok: false, error: String((e as Error).message || e) }; }
   return out;
 }
 
@@ -277,8 +277,8 @@ export async function fetchSupabaseEvents(): Promise<RtaEvent[]> {
     const rows: Record<string, unknown>[] = await r.json();
     const events: RtaEvent[] = rows.map((row: Record<string, unknown>) => ({
       id: String(row.id ?? `${row.source}-${row.timestamp}`),
-      source: row.source ?? 'supabase',
-      timestamp: row.timestamp ?? row.created_at ?? new Date().toISOString(),
+      source: (row.source as string) ?? 'supabase',
+      timestamp: (row.timestamp as string) ?? (row.created_at as string) ?? new Date().toISOString(),
       latitude: typeof row.lat === 'number' ? row.lat : (typeof row.latitude === 'number' ? row.latitude : null),
       longitude: typeof row.lon === 'number' ? row.lon : (typeof row.longitude === 'number' ? row.longitude : null),
       confidence: typeof row.confidence === 'number' ? row.confidence : 0.6,
@@ -301,7 +301,7 @@ export async function callGemini(query: string, context?: string): Promise<strin
     };
     const r = await fetchWithTimeout(url, { timeoutMs: 12000, method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     if (!r.ok) return null;
-    const jd: unknown = await r.json();
+    const jd: any = await r.json();
     const text = jd?.candidates?.[0]?.content?.parts?.[0]?.text;
     return typeof text === 'string' ? text : JSON.stringify(jd);
   } catch { return null; }
@@ -327,66 +327,14 @@ export async function runSupabaseDiagnostics(): Promise<SupabaseDiagnostics> {
       try { out.error = await r.text(); } catch {}
     }
   } catch (e: unknown) {
-    out.ok = false; out.error = String(e?.message || e);
+    out.ok = false; out.error = String((e as Error).message || e);
   }
   return out;
 }
 
-export async function fetchUSGSAllDay(): Promise<RtaEvent[]> {
-  try {
-    const r = await fetchWithTimeout('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson');
-    const jd: { features?: Record<string, unknown>[] } = await r.json(); const feats: Record<string, unknown>[] = Array.isArray(jd?.features) ? jd.features : [];
-    return feats.map((f: Record<string, unknown>, idx: number) => {
-      const c = Array.isArray(f.geometry?.coordinates) ? f.geometry.coordinates : [];
-      const lon = typeof c[0] === 'number' ? c[0] : null;
-      const lat = typeof c[1] === 'number' ? c[1] : null;
-      const ts = typeof f.properties?.time === 'number' ? new Date(f.properties.time).toISOString() : new Date().toISOString();
-      return {
-        id: String(f.id || `usgs-${idx}`),
-        timestamp: ts,
-        source: 'usgs_seismic',
-        latitude: lat,
-        longitude: lon,
-        confidence: 1,
-        data: { mag: f.properties?.mag, place: f.properties?.place },
-      };
-    });
-  } catch {
-    return [];
-  }
-}
 
-export async function fetchNOAAAlerts(): Promise<RtaEvent[]> {
-  try {
-    const r = await fetchWithTimeout('https://api.weather.gov/alerts/active', { timeoutMs: 12000, headers: { 'Accept': 'application/geo+json, application/json', 'User-Agent': 'RTAIP/1.0' } });
-    const jd: { features?: Record<string, unknown>[] } = await r.json(); const feats: Record<string, unknown>[] = Array.isArray(jd?.features) ? jd.features : [];
-    return feats.map((f: Record<string, unknown>, idx: number) => {
-      const geom = f.geometry;
-      let lon: number | null = null, lat: number | null = null;
-      try {
-        if (geom && geom.type === 'Polygon') {
-          const coords = geom.coordinates?.[0] || [];
-          if (coords.length > 0) {
-            const sum = coords.reduce((acc: { lon: number, lat: number }, p: number[]) => ({ lon: acc.lon + (p?.[0]||0), lat: acc.lat + (p?.[1]||0) }), { lon: 0, lat: 0 });
-            lon = sum.lon / coords.length; lat = sum.lat / coords.length;
-          }
-        }
-      } catch {}
-      const ts = f.properties?.effective || f.properties?.sent || f.properties?.onset || new Date().toISOString();
-      return {
-        id: String(f.id || `noaa-${idx}`),
-        timestamp: ts,
-        source: 'noaa_weather',
-        latitude: lat,
-        longitude: lon,
-        confidence: 1,
-        data: { headline: f.properties?.headline, event: f.properties?.event },
-      };
-    });
-  } catch {
-    return [];
-  }
-}
+
+
 
 export async function fetchGDACS(fromISO: string, toISO: string): Promise<RtaEvent[]> {
   try {
@@ -433,10 +381,10 @@ export async function fetchFEMA(): Promise<RtaEvent[]> {
     return feats.map((f: Record<string, unknown>, idx: number) => {
       const attr = f.attributes || {};
       const geom = f.geometry || {};
-      const tsNum = typeof attr.declarationDate === 'number' ? attr.declarationDate : null;
+      const tsNum = typeof (attr as any).declarationDate === 'number' ? (attr as any).declarationDate : null;
       const ts = tsNum ? new Date(tsNum).toISOString() : new Date().toISOString();
-      const lon = typeof geom.x === 'number' ? geom.x : null;
-      const lat = typeof geom.y === 'number' ? geom.y : null;
+      const lon = typeof (geom as any).x === 'number' ? (geom as any).x : null;
+      const lat = typeof (geom as any).y === 'number' ? (geom as any).y : null;
       return {
         id: String(attr.disasterNumber || `fema-${idx}`),
         timestamp: ts,
@@ -485,8 +433,8 @@ export async function fetchCensusCounties(): Promise<RtaEvent[]> {
     const jd: { features?: Record<string, unknown>[] } = await r.json(); const feats: Record<string, unknown>[] = Array.isArray(jd?.features) ? jd.features : [];
     return feats.map((f: Record<string, unknown>, idx: number) => {
       const attr = f.attributes || {};
-  const lat = attr.INTPTLAT != null ? parseFloat(attr.INTPTLAT) : null;
-  const lon = attr.INTPTLON != null ? parseFloat(attr.INTPTLON) : null;
+  const lat = (attr as any).INTPTLAT != null ? parseFloat((attr as any).INTPTLAT) : null;
+  const lon = (attr as any).INTPTLON != null ? parseFloat((attr as any).INTPTLON) : null;
   return {
     id: String(attr.GEOID || `census-${idx}`),
     timestamp: new Date().toISOString(),

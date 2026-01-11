@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { type RtaEvent } from '../services/data';
+import React, { useEffect, useState, useMemo } from 'react';
+import { type RtaEvent, fetchSupabaseEvents, getSupabaseConfig, fetchGDACS, fetchBackendEvents, getBackendBase } from '../services/data';
 import StatCard from '../components/StatCard';
 import { Database, Satellite, CloudDrizzle, Users, Shield, Building } from 'lucide-react';
 import AlertList from '../components/AlertList';
@@ -19,18 +19,58 @@ const newSources: SourceStat[] = [
 ];
 
 export default function Sources() {
-  const [stats, ] = useState<SourceStat[]>(newSources);
+  const [stats, setStats] = useState<SourceStat[]>(newSources);
   const [alerts, setAlerts] = useState<{ event: RtaEvent, id: string; title: string; source: string; ago: string; severity: 'low'|'medium'|'high' }[]>([]);
+  const [events, setEvents] = useState<RtaEvent[]>([]);
 
   useEffect(() => {
-    // TODO: Replace with actual data fetching from new sources
-    const mockAlerts = [
-      { id: '1', title: 'New equipment added to ODIN', source: 'ODIN', ago: '2h ago', severity: 'low' as const, event: {} as RtaEvent },
-      { id: '2', title: 'DTIC report on UAVs published', source: 'DTIC', ago: '5h ago', severity: 'medium' as const, event: {} as RtaEvent },
-      { id: '3', title: 'NGA Tearline update on regional activity', source: 'NGA Tearline', ago: '1d ago', severity: 'high' as const, event: {} as RtaEvent },
-    ];
-    setAlerts(mockAlerts);
+    let cancelled = false;
+    async function load() {
+      const now = new Date();
+      const fromISO = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      const toISO = now.toISOString();
+      const base = getBackendBase();
+      let backend: RtaEvent[] = [];
+      const supa = getSupabaseConfig();
+      if (supa.url && supa.anon) {
+        try { backend = await fetchSupabaseEvents(); } catch {}
+      } else if (base) {
+        try { backend = await fetchBackendEvents(); } catch {}
+      }
+      const [gdacs] = await Promise.all([
+        fetchGDACS(fromISO, toISO),
+      ]);
+      const all = [...backend, ...gdacs];
+      if (!cancelled) setEvents(all);
+    }
+
+    load();
+    const r = Number(window.localStorage.getItem('refreshMs') || '60000');
+    const id = setInterval(load, Math.max(30000, r));
+    return () => { cancelled = true; clearInterval(id); };
   }, []);
+
+  const sourceCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    newSources.forEach(s => counts.set(s.label, 0));
+    events.forEach(e => {
+      if (e.source) {
+        // Normalize source names
+        const sourceName = e.source.toLowerCase();
+        for (const s of newSources) {
+          if (s.label.toLowerCase() === sourceName) {
+            counts.set(s.label, (counts.get(s.label) || 0) + 1);
+            break;
+          }
+        }
+      }
+    });
+    return counts;
+  }, [events]);
+
+  useEffect(() => {
+    setStats(newSources.map(s => ({ ...s, count: sourceCounts.get(s.label) || 0 })));
+  }, [sourceCounts]);
 
   return (
     <div className="bg-black text-white min-h-screen">

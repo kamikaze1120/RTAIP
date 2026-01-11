@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { searchDtic, searchOdin } from '../services/intelligence';
+import { searchDtic, searchOdin, searchUsace, searchPublog, searchNga, searchPeriscope, searchJanes, searchGtdb } from '../services/intelligence';
 import { NewHeader } from '../components/NewHeader';
 
 interface SearchResult {
@@ -22,11 +22,17 @@ const Intelligence = () => {
     e.preventDefault();
     setLoading(true);
     setSelectedResult(null); // Clear selection on new search
-    const [dticResults, odinResults] = await Promise.all([
+    const [dticResults, odinResults, usaceResults, publogResults, ngaResults, periscopeResults, janesResults, gtdbResults] = await Promise.all([
       searchDtic(searchTerm),
       searchOdin(searchTerm),
+      searchUsace(searchTerm),
+      searchPublog(searchTerm),
+      searchNga(searchTerm),
+      searchPeriscope(searchTerm),
+      searchJanes(searchTerm),
+      searchGtdb(searchTerm),
     ]);
-    const combinedResults = [...dticResults, ...odinResults].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    const combinedResults = [...dticResults, ...odinResults, ...usaceResults, ...publogResults, ...ngaResults, ...periscopeResults, ...janesResults, ...gtdbResults].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     setResults(combinedResults);
     setLoading(false);
     if (combinedResults.length > 0) {
@@ -37,11 +43,17 @@ const Intelligence = () => {
   useEffect(() => {
     const loadInitialData = async () => {
       setLoading(true);
-      const [dticResults, odinResults] = await Promise.all([
+      const [dticResults, odinResults, usaceResults, publogResults, ngaResults, periscopeResults, janesResults, gtdbResults] = await Promise.all([
         searchDtic(''),
         searchOdin(''),
+        searchUsace(''),
+        searchPublog(''),
+        searchNga(''),
+        searchPeriscope(''),
+        searchJanes(''),
+        searchGtdb(''),
       ]);
-      const combinedResults = [...dticResults, ...odinResults].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      const combinedResults = [...dticResults, ...odinResults, ...usaceResults, ...publogResults, ...ngaResults, ...periscopeResults, ...janesResults, ...gtdbResults].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       setResults(combinedResults);
       setLoading(false);
       if (combinedResults.length > 0) {
