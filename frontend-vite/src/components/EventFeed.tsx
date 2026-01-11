@@ -1,5 +1,9 @@
 import React from 'react';
-declare const puter: any;
+declare const puter: {
+  ai: {
+    chat: (prompt: string, options: { model: string }) => Promise<string>;
+  }
+};
 import type { RtaEvent } from '../services/data';
 import { eventSeverity } from '../services/data';
 
@@ -16,13 +20,13 @@ const summarizeEvent = (e: RtaEvent) => {
   const src = String(e.source || 'unknown').toLowerCase();
   const ts = new Date(e.timestamp).toLocaleString() || '—';
   if (src === 'usgs_seismic') {
-    const m = (e.data as any)?.mag;
-    const place = (e.data as any)?.place;
+    const m = (e.data as { mag?: number })?.mag;
+    const place = (e.data as { place?: string })?.place;
     const magLine = m != null ? `M${m}` : 'seismic activity';
     return `${magLine}${place ? ` near ${place}` : ''}. ${ts}`;
   }
   if (src === 'noaa_weather') {
-    const h = (e.data as any)?.headline; const ev = (e.data as any)?.event;
+    const h = (e.data as { headline?: string })?.headline; const ev = (e.data as { event?: string })?.event;
     return `${ev || 'Weather alert'}${h ? ` — ${h}` : ''}. ${ts}`;
   }
   return `${(e.source || 'Event').toString()} at ${ts}`;
@@ -41,7 +45,7 @@ export function EventFeed({ events, onSelect, focus }: { events: RtaEvent[]; onS
             <button className="px-3 py-1 text-xs rounded-md bg-blue-600/50 text-white" onClick={() => onSelect?.(focus)}>Unfocus</button>
             <button className="px-3 py-1 text-xs rounded-md bg-green-600/50 text-white" onClick={() => {
               const prompt = `Analyze this emergency event data and provide a summary of the situation and potential impact: ${JSON.stringify(focus, null, 2)}`;
-              puter.ai.chat(prompt, { model: 'gemini-3-flash-preview' }).then((response: any) => {
+              puter.ai.chat(prompt, { model: 'gemini-3-flash-preview' }).then((response: string) => {
                 alert(response);
               });
             }}>Ask Gemini</button>

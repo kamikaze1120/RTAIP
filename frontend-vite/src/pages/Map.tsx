@@ -1,25 +1,23 @@
 import React, { useEffect, useState } from 'react';
-import { getBackendBase, fetchBackendEvents, fetchUSGSAllDay, fetchNOAAAlerts, fetchGDACS, type RtaEvent, predictedPoints } from '../services/data';
+import { getBackendBase, fetchBackendEvents, fetchUSGSAllDay, fetchNOAAAlerts, fetchGDACS, type RtaEvent } from '../services/data';
 import MapComponent from '../components/MapComponent';
 import EventFeed from '../components/EventFeed';
-import AnalystPanel from '../components/AnalystPanel';
+import { NewHeader } from '../components/NewHeader';
 
 
 export default function MapPage() {
   const [events, setEvents] = useState<RtaEvent[]>([]);
-  const [selectedId, setSelectedId] = useState<string | undefined>(undefined);
+  
   const [sources, setSources] = useState({ usgs: true, noaa: true, gdacs: false });
   const [hoursWindow, setHoursWindow] = useState(24);
   const [showPred, setShowPred] = useState(false);
-  const [simRadiusKm, setSimRadiusKm] = useState<number | undefined>(undefined);
-  const [showHospitals, setShowHospitals] = useState(false);
+  
   const [mapFocus, setMapFocus] = useState<RtaEvent | null>(null);
 
   useEffect(() => {
     const ep = window.localStorage.getItem('enablePredictions');
     if (ep) setShowPred(ep === 'true');
-    const dir = window.localStorage.getItem('defaultImpactRadius');
-    if (dir) setSimRadiusKm(Number(dir));
+    
   }, []);
 
   useEffect(() => {
@@ -58,41 +56,86 @@ export default function MapPage() {
   }, []);
 
   return (
-    <div className="px-6 pt-20">
-      <div className="grid md:grid-cols-[280px_1fr] gap-4">
-        <div className="border border-primary/20 clip-corner">
-          <div className="px-2 py-2 border-b border-primary/20">
-            <div className="flex items-center justify-between">
-              <div className="text-xs text-primary tracking-widest uppercase">Time Window</div>
-              <div className="text-xs text-muted-foreground">{hoursWindow}h</div>
-            </div>
-            <input type="range" min="1" max="168" value={hoursWindow} onChange={(e)=>setHoursWindow(Number(e.target.value))} className="w-full" />
-          </div>
-          <EventFeed events={events.filter(e => {
-            const t = new Date(e.timestamp).getTime();
-            const cutoff = Date.now() - hoursWindow*3600000;
-            return !isNaN(t) && t >= cutoff;
-          })} onSelect={(e) => setMapFocus(f => f?.id === e.id ? null : e)} focus={mapFocus} />
-        </div>
-        <div className="border border-primary/20 clip-corner">
-          <div className="px-3 py-2 border-b border-primary/20 flex flex-wrap gap-2">
-            <div className="text-xs text-primary tracking-widest uppercase">Source Toggles</div>
-            <label className="text-xs flex items-center gap-1"><input type="checkbox" checked={sources.usgs} onChange={e=>setSources(s=>({ ...s, usgs: e.target.checked }))} /> USGS</label>
-            <label className="text-xs flex items-center gap-1"><input type="checkbox" checked={sources.noaa} onChange={e=>setSources(s=>({ ...s, noaa: e.target.checked }))} /> NOAA</label>
-            <label className="text-xs flex items-center gap-1"><input type="checkbox" checked={sources.gdacs} onChange={e=>setSources(s=>({ ...s, gdacs: e.target.checked }))} /> GDACS</label>
-            
-            <span className="mx-2">•</span>
-            <label className="text-xs flex items-center gap-1"><input type="checkbox" checked={showPred} onChange={e=>setShowPred(e.target.checked)} /> Predictions</label>
-            
-            <div className="text-xs ml-auto flex items-center gap-2">
-              <span>Impact radius</span>
-              <input type="range" min="10" max="250" value={simRadiusKm ?? 120} onChange={e=>setSimRadiusKm(Number(e.target.value))} />
-              <span>{simRadiusKm ?? 120} km</span>
-            </div>
-          </div>
-          <MapComponent events={events} selectedId={selectedId} predictionPoints={predictedPoints(events)} showPredictions={showPred} simRadiusKm={simRadiusKm} focus={mapFocus} />
-          <AnalystPanel events={events} onAsk={() => {}} />
+    <div className="bg-black text-white min-h-screen">
+      <NewHeader />
+      <div className="p-4 lg:p-6">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           
+          {/* Sidebar */}
+          <div className="lg:col-span-1 space-y-6">
+            <div className="bg-white/10 backdrop-blur-md rounded-lg shadow-lg p-4">
+              <h2 className="text-lg font-bold mb-4">Controls</h2>
+              
+              {/* Time Window */}
+              <div className="mb-4">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="font-medium">Time Window</span>
+                  <span className="text-gray-400">{hoursWindow}h</span>
+                </div>
+                <input 
+                  type="range" 
+                  min="1" 
+                  max="168" 
+                  value={hoursWindow} 
+                  onChange={(e) => setHoursWindow(Number(e.target.value))} 
+                  className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                />
+              </div>
+
+              {/* Source Toggles */}
+              <div className="mb-4">
+                <h3 className="text-md font-semibold mb-2">Sources</h3>
+                <div className="flex flex-col space-y-2 text-sm">
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input type="checkbox" checked={sources.usgs} onChange={e => setSources(s => ({ ...s, usgs: e.target.checked }))} className="form-checkbox h-4 w-4 text-blue-600 bg-gray-800 border-gray-600 rounded" />
+                    <span>USGS</span>
+                  </label>
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input type="checkbox" checked={sources.noaa} onChange={e => setSources(s => ({ ...s, noaa: e.target.checked }))} className="form-checkbox h-4 w-4 text-blue-600 bg-gray-800 border-gray-600 rounded" />
+                    <span>NOAA</span>
+                  </label>
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input type="checkbox" checked={sources.gdacs} onChange={e => setSources(s => ({ ...s, gdacs: e.target.checked }))} className="form-checkbox h-4 w-4 text-blue-600 bg-gray-800 border-gray-600 rounded" />
+                    <span>GDACS</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Other Options */}
+              <div>
+                <h3 className="text-md font-semibold mb-2">Options</h3>
+                <div className="flex flex-col space-y-2 text-sm">
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input type="checkbox" checked={showPred} onChange={e => setShowPred(e.target.checked)} className="form-checkbox h-4 w-4 text-blue-600 bg-gray-800 border-gray-600 rounded" />
+                    <span>Show Predictions</span>
+                  </label>
+                </div>
+              </div>
+              
+            </div>
+
+            {/* Event Feed */}
+            <EventFeed 
+              events={events.filter(e => {
+                const t = new Date(e.timestamp).getTime();
+                const cutoff = Date.now() - hoursWindow * 3600000;
+                return !isNaN(t) && t >= cutoff;
+              })} 
+              onSelect={(e) => setMapFocus(f => f?.id === e.id ? null : e)} 
+              focus={mapFocus} 
+            />
+          </div>
+
+          {/* Main Content */}
+          <div className="lg:col-span-3">
+            <div className="bg-white/10 backdrop-blur-md rounded-lg shadow-lg h-[calc(100vh-120px)]">
+              <MapComponent 
+                events={events} 
+                focus={mapFocus} 
+              />
+            </div>
+          </div>
+
         </div>
       </div>
     </div>

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { searchDtic, searchOdin } from '../services/intelligence';
+import { NewHeader } from '../components/NewHeader';
 
 interface SearchResult {
   id: number;
@@ -52,47 +53,49 @@ const Intelligence = () => {
 
   return (
     <div className="bg-black text-white min-h-screen">
-      <div className="container mx-auto px-6 py-8 space-y-8">
+      <NewHeader />
+      <div className="container mx-auto px-6 py-24 space-y-8">
         <h1 className="text-4xl font-bold">Intelligence & Research</h1>
         
-        <div className="bg-white/10 backdrop-blur-md rounded-lg shadow-lg p-6">
-          <form onSubmit={handleSearch}>
-            <div className="flex space-x-4">
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search DTIC, ODIN, and other sources..."
-                className="flex-grow bg-black/20 text-white placeholder-gray-500 border border-gray-700 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg" disabled={loading}>
-                {loading ? 'Searching...' : 'Search'}
-              </button>
-            </div>
-          </form>
-        </div>
-
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-1 space-y-4 h-[60vh] overflow-y-auto pr-4">
-            {loading ? (
-              <div className="text-center">
-                <p>Loading...</p>
-              </div>
-            ) : (
-              results.map(result => (
-                <div 
-                  key={result.id} 
-                  className={`bg-black/20 p-4 rounded-lg cursor-pointer border-2 ${selectedResult?.id === result.id ? 'border-blue-500' : 'border-transparent'}`}
-                  onClick={() => setSelectedResult(result)}
-                >
-                  <h3 className="text-lg font-bold truncate">{result.title}</h3>
-                  <p className="text-sm text-gray-400">{result.source} - {result.date}</p>
+          <div className="lg:col-span-1 space-y-4">
+            <div className="bg-white/10 backdrop-blur-md rounded-lg shadow-lg p-4">
+              <form onSubmit={handleSearch}>
+                <div className="flex space-x-4">
+                  <input
+                    type="text"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    placeholder="Search sources..."
+                    className="flex-grow bg-black/20 text-white placeholder-gray-500 border border-gray-700 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg" disabled={loading}>
+                    {loading ? '...' : 'Go'}
+                  </button>
                 </div>
-              ))
-            )}
+              </form>
+            </div>
+            <div className="bg-white/10 backdrop-blur-md rounded-lg shadow-lg p-4 h-[70vh] overflow-y-auto pr-2">
+              {loading ? (
+                <div className="text-center p-8">
+                  <p>Loading...</p>
+                </div>
+              ) : (
+                results.map(result => (
+                  <div 
+                    key={result.id} 
+                    className={`bg-black/20 p-4 rounded-lg cursor-pointer border-2 mb-4 ${selectedResult?.id === result.id ? 'border-blue-500' : 'border-transparent hover:border-gray-700'}`}
+                    onClick={() => setSelectedResult(result)}
+                  >
+                    <h3 className="text-lg font-bold truncate">{result.title}</h3>
+                    <p className="text-sm text-gray-400">{result.source} - {result.date}</p>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
 
-          <div className="lg:col-span-2 bg-white/10 backdrop-blur-md rounded-lg shadow-lg p-6 h-[60vh] overflow-y-auto">
+          <div className="lg:col-span-2 bg-white/10 backdrop-blur-md rounded-lg shadow-lg p-6 h-[80vh] overflow-y-auto">
             {selectedResult ? (
               <div>
                 <h2 className="text-3xl font-bold">{selectedResult.title}</h2>
