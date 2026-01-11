@@ -57,11 +57,23 @@
 
 @layer base {
   * { @apply border-border; }
-  html { font-family: "JetBrains Mono", monospace; }
-  body { @apply bg-background text-foreground antialiased; }
+  html { font-family: "JetBrains Mono", monospace; scroll-behavior: smooth; }
+  body {
+    @apply text-foreground antialiased;
+    background-color: hsl(var(--background));
+    background-image: radial-gradient(circle at 10% 10%, hsl(var(--accent) / 0.05) 0%, transparent 30%),
+                      radial-gradient(circle at 90% 80%, hsl(var(--primary) / 0.05) 0%, transparent 30%);
+    background-size: 200% 200%;
+    animation: move-bg 30s ease-in-out infinite;
+  }
 }
 
 @layer utilities {
+  @keyframes move-bg {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
   .text-glow { text-shadow: 0 0 20px hsl(180 100% 50% / 0.5); }
   .box-glow { box-shadow: 0 0 20px hsl(180 100% 50% / 0.5); }
   .clip-corner { clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px)); }

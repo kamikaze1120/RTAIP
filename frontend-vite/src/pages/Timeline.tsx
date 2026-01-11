@@ -1,12 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { fetchBackendEvents, fetchGDACS, type RtaEvent, eventSeverity, fetchSupabaseEvents, getSupabaseConfig } from '../services/data';
+import { fetchBackendEvents, type RtaEvent, eventSeverity, fetchSupabaseEvents, getSupabaseConfig } from '../services/data';
 import { NewHeader } from '../components/NewHeader';
 import EventFeed from '../components/EventFeed';
 
 export default function Timeline() {
   const [events, setEvents] = useState<RtaEvent[]>([]);
   const [autoplay, setAutoplay] = useState(false);
-  const [filters, setFilters] = useState({ gdacs: true });
+  const [filters, setFilters] = useState({});
   const [minSev, setMinSev] = useState(0);
   const [query, setQuery] = useState('');
   const [focus, setFocus] = useState<RtaEvent | null>(null);
@@ -14,29 +14,30 @@ export default function Timeline() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      const backend = getBackendBase();
       const supa = getSupabaseConfig();
-      let all: RtaEvent[] = [];
-      if (supa.url && supa.anon) {
-        try { all = await fetchSupabaseEvents(); } catch {}
-      } else {
-        const backend = await fetchBackendEvents();
-        all = backend;
-      }
       const fallback = (window.localStorage.getItem('useOpenFallback') || 'true') === 'true';
+      let all: RtaEvent[] = [];
+      if (backend) {
+        all = await fetchBackendEvents();
+      } else if (supa.url && supa.anon) {
+        all = await fetchSupabaseEvents();
+      }
+      
       if (all.length === 0 && fallback) {
         const now = new Date();
         const fromISO = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
         const toISO = now.toISOString();
-        const [gdacs] = await Promise.all([
-          fetchGDACS(fromISO, toISO),
-        ]);
-        all = [...gdacs];
+        const promises: Promise<RtaEvent[]>[] = [];
+
+        const results = await Promise.all(promises);
+        all = results.flat();
       }
       all.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
       if (!cancelled) setEvents(all);
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [filters, getBackendBase]);
 
   const count = useMemo(() => events.length, [events]);
   const [replayHours, setReplayHours] = useState(12);
@@ -46,14 +47,14 @@ export default function Timeline() {
       const t = new Date(e.timestamp).getTime();
       if (isNaN(t) || t < cutoff) return false;
       const s = String(e.source || '').toLowerCase();
-      if (s.includes('gdacs') && !filters.gdacs) return false;
+
       
       const sev = eventSeverity(e);
       if (Math.round(sev * 100) < minSev) return false;
       if (query && !JSON.stringify(e.data || {}).toLowerCase().includes(query.toLowerCase())) return false;
       return true;
     });
-  }, [events, replayHours]);
+  }, [events, replayHours, filters, minSev, query]);
   
 
   useEffect(() => {
@@ -83,7 +84,7 @@ export default function Timeline() {
                 <div>
                   <div className="text-xs text-gray-300 tracking-widest uppercase mb-2">Sources</div>
                   <div className="flex flex-wrap gap-3 text-xs">
-                    <label className="flex items-center gap-1"><input type="checkbox" checked={filters.gdacs} onChange={e => setFilters(f => ({ ...f, gdacs: e.target.checked }))} /> GDACS</label>
+
                   </div>
                 </div>
                 <div>

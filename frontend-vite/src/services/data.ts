@@ -79,10 +79,7 @@ export async function fetchBackendEvents(): Promise<RtaEvent[]> {
 export function eventSeverity(e: RtaEvent): number {
   const src = String(e.source || '').toLowerCase();
   let sev = 0.3;
-  if (src.includes('gdacs')) {
-    const lvl = String(e.data?.['alertlevel'] || '').toLowerCase();
-    sev = lvl === 'red' ? 0.9 : lvl === 'orange' ? 0.7 : 0.5;
-  }
+
   const conf = typeof e.confidence === 'number' ? e.confidence : 0.5;
   return Math.max(0, Math.min(1, sev * (0.6 + 0.4 * conf)));
 }
@@ -122,7 +119,7 @@ export function typeProbabilities(events: RtaEvent[]): Record<string, number> {
   const byType: Record<string, number> = {};
   recent.forEach(e => {
     const s = String(e.source || '').toLowerCase();
-    const type = s.includes('gdacs') ? 'disaster' : 'other';
+    const type = 'other';
     byType[type] = (byType[type] || 0) + eventSeverity(e);
   });
   const total = Object.values(byType).reduce((a, b) => a + b, 0) || 1;
@@ -143,7 +140,7 @@ export function predictedPoints(events: RtaEvent[]): Array<{ lat: number; lon: n
 }
 
 export function correlationMatrix(events: RtaEvent[]): Record<string, Record<string, number>> {
-  const sources = ['gdacs', 'hifld'];
+  const sources = ['hifld'];
   const mat: Record<string, Record<string, number>> = {};
   sources.forEach(a => { mat[a] = {}; sources.forEach(b => { mat[a][b] = 0; }); });
   const pts = events.filter(e => e.latitude != null && e.longitude != null);
@@ -336,42 +333,7 @@ export async function runSupabaseDiagnostics(): Promise<SupabaseDiagnostics> {
 
 
 
-export async function fetchGDACS(fromISO: string, toISO: string): Promise<RtaEvent[]> {
-  try {
-    const r = await fetchWithTimeout(`https://www.gdacs.org/gdacsapi/api/events/geteventlist/SEARCH?eventlist=EQ;TC;FL;WF;VO;DR&fromdate=${fromISO}&todate=${toISO}`);
-    const jd: { features?: Record<string, unknown>[] } = await r.json(); const feats: Record<string, unknown>[] = Array.isArray(jd?.features) ? jd.features : [];
-    return feats.map((f: Record<string, unknown>, idx: number) => {
-      let lon: number | null = null, lat: number | null = null;
-      const geom = f.geometry;
-      try {
-        if (geom && geom.type === 'Point' && Array.isArray(geom.coordinates)) {
-          lon = typeof geom.coordinates[0] === 'number' ? geom.coordinates[0] : null;
-          lat = typeof geom.coordinates[1] === 'number' ? geom.coordinates[1] : null;
-        } else if (geom && geom.type === 'Polygon') {
-          const coords = geom.coordinates?.[0] || [];
-          if (coords.length > 0) {
-            const sum = coords.reduce((acc: { lon: number, lat: number }, p: number[]) => ({ lon: acc.lon + (p?.[0]||0), lat: acc.lat + (p?.[1]||0) }), { lon: 0, lat: 0 });
-            lon = sum.lon / coords.length; lat = sum.lat / coords.length;
-          }
-        }
-      } catch {}
-      const p = f.properties || {};
-      const ts = p.fromdate || p.todate || new Date().toISOString();
-      const id = p.eventid && p.episodeid ? `${p.eventid}-${p.episodeid}` : String(p.eventid || `gdacs-${idx}`);
-      return {
-        id,
-        timestamp: ts,
-        source: 'gdacs_disasters',
-        latitude: lat,
-        longitude: lon,
-        confidence: 1,
-        data: { title: p.name || p.description || 'GDACS Event', type: p.eventtype, alertlevel: p.alertlevel },
-      };
-    });
-  } catch {
-    return [];
-  }
-}
+
 
 export async function fetchFEMA(): Promise<RtaEvent[]> {
   try {
