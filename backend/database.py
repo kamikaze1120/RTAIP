@@ -66,6 +66,16 @@ class PerfMetric(Base):
     zoom = Column(Integer)
     device = Column(String)
 
+class User(Base):
+    __tablename__ = 'users'
+
+    id = Column(Integer, primary_key=True)
+    username = Column(String, unique=True, nullable=False)
+    email = Column(String, unique=True, nullable=False)
+    hashed_password = Column(String, nullable=False)
+    role = Column(String, default='user')
+    created_at = Column(DateTime, default=datetime.utcnow)
+
 # Create tables: prefer DIRECT_URL (Supabase 5432) for DDL, otherwise use runtime engine
 try:
     if DIRECT_URL and DIRECT_URL.startswith('postgresql'):
@@ -138,3 +148,5 @@ def ensure_schema():
         return True, "schema ensured via runtime engine"
     except Exception as e:
         return False, str(e)
+
+ensure_schema()

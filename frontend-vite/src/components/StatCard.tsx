@@ -9,23 +9,24 @@ export function StatCard({ title, value, subtitle, icon, variant = 'default', al
   variant?: 'default' | 'warning' | 'danger' | 'success';
   align?: 'left' | 'center';
 }) {
-  const border = {
-    default: 'border-primary/20',
-    warning: 'border-warning/30',
-    danger: 'border-destructive/30',
-    success: 'border-success/30',
-  }[variant];
-  const layout = align === 'center' ? 'px-4 py-3 flex items-center justify-center text-center' : 'px-4 py-3 flex items-center justify-between';
+  const colors = {
+    default: 'text-blue-400',
+    warning: 'text-yellow-400',
+    danger: 'text-red-400',
+    success: 'text-green-400',
+  };
+
   return (
-    <div className={cn('clip-corner border bg-card/30', border)}>
-      <div className={layout}>
-        <div className="flex items-center gap-3">
-          {icon && <div className="text-primary">{icon}</div>}
-          <div>
-            <div className="text-xs tracking-widest text-muted-foreground uppercase">{title}</div>
-            <div className="text-2xl font-bold text-primary">{value}</div>
-            {subtitle && <div className="text-xs text-muted-foreground">{subtitle}</div>}
-          </div>
+    <div className={cn(
+      'bg-white/10 backdrop-blur-md rounded-lg p-6 shadow-lg',
+      align === 'center' ? 'text-center' : ''
+    )}>
+      <div className="flex items-center gap-4">
+        {icon && <div className={cn('text-3xl', colors[variant])}>{icon}</div>}
+        <div>
+          <div className="text-sm font-semibold text-gray-300 uppercase tracking-wider">{title}</div>
+          <div className={cn('text-4xl font-bold', colors[variant])}>{value}</div>
+          {subtitle && <div className="text-sm text-gray-400">{subtitle}</div>}
         </div>
       </div>
     </div>

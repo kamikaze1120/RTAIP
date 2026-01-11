@@ -1,4 +1,5 @@
 import React from 'react';
+declare const puter: any;
 import type { RtaEvent } from '../services/data';
 import { eventSeverity } from '../services/data';
 
@@ -33,41 +34,48 @@ export function EventFeed({ events, onSelect, focus }: { events: RtaEvent[]; onS
 
   if (focus) {
     return (
-      <div className="p-4">
+      <div className="bg-white/10 backdrop-blur-md rounded-lg p-4 shadow-lg">
         <div className="flex items-center justify-between">
-          <div className="text-primary">Event Detail</div>
-          <button className="px-2 py-1 text-xs clip-corner-sm bg-primary/20 text-primary border border-primary/30" onClick={() => onSelect?.(focus)}>Unfocus</button>
+          <div className="text-lg font-bold text-white">Event Detail</div>
+          <div className="flex gap-2">
+            <button className="px-3 py-1 text-xs rounded-md bg-blue-600/50 text-white" onClick={() => onSelect?.(focus)}>Unfocus</button>
+            <button className="px-3 py-1 text-xs rounded-md bg-green-600/50 text-white" onClick={() => {
+              const prompt = `Analyze this emergency event data and provide a summary of the situation and potential impact: ${JSON.stringify(focus, null, 2)}`;
+              puter.ai.chat(prompt, { model: 'gemini-3-flash-preview' }).then((response: any) => {
+                alert(response);
+              });
+            }}>Ask Gemini</button>
+          </div>
         </div>
-        <div className="mt-2 bg-secondary/50 p-2 clip-corner-sm text-xs whitespace-pre-wrap">{JSON.stringify(focus, null, 2)}</div>
+        <div className="mt-2 bg-black/20 p-3 rounded-md text-xs whitespace-pre-wrap text-gray-300">{JSON.stringify(focus, null, 2)}</div>
       </div>
     );
   }
 
   return (
-    <div className="p-2">
-      <div className="border-b border-primary/20 px-2 py-1 flex items-center justify-between">
-        <div className="text-primary">Event Feed</div>
+    <div className="bg-white/10 backdrop-blur-md rounded-lg p-2 shadow-lg">
+      <div className="border-b border-white/20 px-2 py-1 flex items-center justify-between">
+        <div className="text-lg font-bold text-white">Event Feed</div>
       </div>
-      <ul className="divide-y divide-primary/10 max-h-[420px] overflow-y-auto">
+      <ul className="divide-y divide-white/10 max-h-[420px] overflow-y-auto">
         {clean.map((event) => {
           const icon = iconFor(event.source);
           const summary = summarizeEvent(event);
           const confPct = typeof event.confidence === 'number' ? Math.round(event.confidence * 100) : '—';
           const sevPct = Math.round(eventSeverity(event) * 100);
           return (
-            <li key={event.id} className="px-2 py-2">
-              <div className="grid grid-cols-[6px_auto_80px] gap-2 items-center">
-                <div className="bg-primary/60 rounded" />
+            <li key={event.id} className="px-2 py-3">
+              <div className="grid grid-cols-[auto_80px] gap-4 items-center">
                 <div className="grid gap-1">
                   <div className="flex items-center gap-2">
                     <span className="text-lg">{icon}</span>
-                    <span className="text-xs tracking-widest text-muted-foreground">{(event.source || 'UNKNOWN').toUpperCase()}</span>
+                    <span className="text-xs tracking-widest text-gray-400">{(event.source || 'UNKNOWN').toUpperCase()}</span>
                   </div>
-                  <div className="text-sm">{summary}</div>
-                  <div className="text-xs text-muted-foreground">Conf: {confPct}% • Severity: {sevPct}%</div>
+                  <div className="text-sm text-gray-300">{summary}</div>
+                  <div className="text-xs text-gray-400">Conf: {confPct}% • Severity: {sevPct}%</div>
                 </div>
                 <div className="flex justify-end">
-                  <button className="px-2 py-1 text-xs clip-corner-sm bg-primary/20 text-primary border border-primary/30" onClick={() => onSelect?.(event)}>Focus</button>
+                  <button className="px-3 py-1 text-xs rounded-md bg-blue-600/50 text-white" onClick={() => onSelect?.(event)}>Focus</button>
                 </div>
               </div>
             </li>

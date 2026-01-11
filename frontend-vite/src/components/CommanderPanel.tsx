@@ -39,16 +39,16 @@ export default function CommanderPanel({ events }: { events: RtaEvent[] }) {
     }
   }, [events]);
   return (
-    <div className="clip-corner border border-primary/20 p-3">
-      <div className="text-xs text-primary tracking-widest uppercase">RTAIP Recommendation Engine</div>
-      <pre className="mt-2 text-xs whitespace-pre-wrap">{rec}</pre>
-      <div className="mt-3 grid md:grid-cols-2 gap-3">
-        <div className="clip-corner-sm border border-primary/20 p-2 text-xs">
-          <div className="text-primary uppercase tracking-widest mb-1">COA Analysis</div>
-          <div className="text-muted-foreground mb-1">Waypoints (JSON [lat,lon])</div>
-          <textarea className="w-full h-24 px-2 py-1 bg-secondary border border-primary/20" value={coaInput} onChange={e=>setCoaInput(e.target.value)} />
+    <div className="bg-white/10 backdrop-blur-md rounded-lg p-6 shadow-lg">
+      <div className="text-sm text-gray-300 tracking-widest uppercase">RTAIP Recommendation Engine</div>
+      <pre className="mt-2 text-xs whitespace-pre-wrap text-gray-400">{rec}</pre>
+      <div className="mt-4 grid md:grid-cols-1 gap-4">
+        <div className="bg-black/20 rounded-lg p-4 text-xs">
+          <div className="text-gray-300 uppercase tracking-widest mb-2">COA Analysis</div>
+          <div className="text-gray-400 mb-2">Waypoints (JSON [lat,lon])</div>
+          <textarea className="w-full h-24 px-2 py-1 bg-black/30 border border-gray-700 rounded-md text-gray-300" value={coaInput} onChange={e=>setCoaInput(e.target.value)} />
           <div className="mt-2 flex gap-2">
-            <button className="px-2 py-1 clip-corner-sm bg-primary/20 text-primary border border-primary/30" onClick={async()=>{
+            <button className="px-3 py-1 rounded-md bg-blue-600/50 text-white hover:bg-blue-500/50 border border-blue-500/50" onClick={async()=>{
               try {
                 const base = getBackendBase();
                 if (!base) return;
@@ -60,13 +60,13 @@ export default function CommanderPanel({ events }: { events: RtaEvent[] }) {
               } catch (e) { setCoaOut(String(e)); }
             }}>Analyze</button>
           </div>
-          {coaOut && <pre className="mt-2 whitespace-pre-wrap">{coaOut}</pre>}
+          {coaOut && <pre className="mt-2 whitespace-pre-wrap text-gray-400">{coaOut}</pre>}
         </div>
-        <div className="clip-corner-sm border border-primary/20 p-2 text-xs">
-          <div className="text-primary uppercase tracking-widest mb-1">ISR Tasking</div>
-          <div className="text-muted-foreground mb-1">Recommendations (top clusters)</div>
+        <div className="bg-black/20 rounded-lg p-4 text-xs">
+          <div className="text-gray-300 uppercase tracking-widest mb-2">ISR Tasking</div>
+          <div className="text-gray-400 mb-2">Recommendations (top clusters)</div>
           <div className="flex gap-2">
-            <button className="px-2 py-1 clip-corner-sm bg-primary/20 text-primary border border-primary/30" onClick={async()=>{
+            <button className="px-3 py-1 rounded-md bg-blue-600/50 text-white hover:bg-blue-500/50 border border-blue-500/50" onClick={async()=>{
               try {
                 const base = getBackendBase();
                 if (!base) return;
@@ -77,14 +77,14 @@ export default function CommanderPanel({ events }: { events: RtaEvent[] }) {
               } catch (e) { setIsrOut(String(e)); }
             }}>Recommend</button>
           </div>
-          {isrOut && <pre className="mt-2 whitespace-pre-wrap">{isrOut}</pre>}
+          {isrOut && <pre className="mt-2 whitespace-pre-wrap text-gray-400">{isrOut}</pre>}
         </div>
-        <div className="clip-corner-sm border border-primary/20 p-2 text-xs">
-          <div className="text-primary uppercase tracking-widest mb-1">Operational Graphics</div>
-          <div className="text-muted-foreground mb-1">Phase Line waypoints (JSON [lat,lon])</div>
-          <textarea className="w-full h-24 px-2 py-1 bg-secondary border border-primary/20" value={phaseInput} onChange={e=>setPhaseInput(e.target.value)} />
+        <div className="bg-black/20 rounded-lg p-4 text-xs">
+          <div className="text-gray-300 uppercase tracking-widest mb-2">Operational Graphics</div>
+          <div className="text-gray-400 mb-2">Phase Line waypoints (JSON [lat,lon])</div>
+          <textarea className="w-full h-24 px-2 py-1 bg-black/30 border border-gray-700 rounded-md text-gray-300" value={phaseInput} onChange={e=>setPhaseInput(e.target.value)} />
           <div className="mt-2 flex gap-2">
-            <button className="px-2 py-1 clip-corner-sm bg-primary/20 text-primary border border-primary/30" onClick={()=>{
+            <button className="px-3 py-1 rounded-md bg-blue-600/50 text-white hover:bg-blue-500/50 border border-blue-500/50" onClick={()=>{
               try { const points = JSON.parse(phaseInput); window.dispatchEvent(new CustomEvent('rtaip_phase_lines', { detail: { phaseLine: points } })); } catch {}
             }}>Draw Phase Line</button>
           </div>

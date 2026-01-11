@@ -16,6 +16,7 @@ import Feature from 'ol/Feature';
 import Point from 'ol/geom/Point';
 import CircleGeom from 'ol/geom/Circle';
 import LineString from 'ol/geom/LineString';
+import MapLayers from './MapLayers';
 
 export function MapComponent({ events, selectedId, predictionPoints = [], showPredictions = false, simRadiusKm, showHospitals = false, onSelect, focus }: { events: RtaEvent[]; selectedId?: string; predictionPoints?: Array<{ lat: number; lon: number; weight: number }>; showPredictions?: boolean; simRadiusKm?: number; showHospitals?: boolean; onSelect?: (id: string) => void; focus?: RtaEvent | null }) {
   const ref = useRef<HTMLDivElement | null>(null);
@@ -27,7 +28,32 @@ export function MapComponent({ events, selectedId, predictionPoints = [], showPr
   const copLayerRef = useRef<VectorLayer<VectorSource> | null>(null);
   const missionLayerRef = useRef<VectorLayer<VectorSource> | null>(null);
   const overlayLayerRef = useRef<VectorLayer<VectorSource> | null>(null);
+  const usaceLayerRef = useRef<VectorLayer<VectorSource> | null>(null);
+  const ngaLayerRef = useRef<VectorLayer<VectorSource> | null>(null);
+  const gtdLayerRef = useRef<VectorLayer<VectorSource> | null>(null);
   const [detail, setDetail] = useState<{ id: string; x: number; y: number; zoom: number } | null>(null);
+
+  const [layers, setLayers] = useState({
+    heatmap: false,
+    infra: false,
+    cop: false,
+    mission: false,
+    overlay: false,
+    usace: false,
+    nga: false,
+    gtd: false,
+  });
+
+  const handleLayerChange = (layer: string, enabled: boolean) => {
+    setLayers(prev => ({ ...prev, [layer]: enabled }));
+  };
+
+  const radiusKmForSource = (src: string) => {
+    if (src.includes('usgs')) return 50;
+    if (src.includes('noaa')) return 100;
+    if (src.includes('gdacs')) return 200;
+    return 20;
+  };
 
   useEffect(() => {
     if (!ref.current) return;
@@ -52,9 +78,12 @@ export function MapComponent({ events, selectedId, predictionPoints = [], showPr
     const copLayer = new VectorLayer({ source: new VectorSource() });
     const missionLayer = new VectorLayer({ source: new VectorSource() });
     const overlayLayer = new VectorLayer({ source: new VectorSource() });
+    const usaceLayer = new VectorLayer({ source: new VectorSource() });
+    const ngaLayer = new VectorLayer({ source: new VectorSource() });
+    const gtdLayer = new VectorLayer({ source: new VectorSource() });
     const map = new Map({
       target: ref.current,
-      layers: [new TileLayer({ source: new OSM() }), layer, heatLayer, infraLayer, copLayer, missionLayer, overlayLayer, focusLayer],
+      layers: [new TileLayer({ source: new OSM() }), layer, heatLayer, infraLayer, copLayer, missionLayer, overlayLayer, focusLayer, usaceLayer, ngaLayer, gtdLayer],
       view: new View({ center: fromLonLat([0, 0]), zoom: 2 }),
     });
     mapRef.current = map;
@@ -65,6 +94,9 @@ export function MapComponent({ events, selectedId, predictionPoints = [], showPr
     copLayerRef.current = copLayer;
     missionLayerRef.current = missionLayer;
     overlayLayerRef.current = overlayLayer;
+    usaceLayerRef.current = usaceLayer;
+    ngaLayerRef.current = ngaLayer;
+    gtdLayerRef.current = gtdLayer;
     return () => { map.setTarget(undefined); };
   }, []);
 
@@ -93,11 +125,41 @@ export function MapComponent({ events, selectedId, predictionPoints = [], showPr
       setDetail({ id, x, y, zoom });
       onSelect?.(id);
     };
+    window.addEventListener('rtaip_cop_update', handler);
+    return () => window.removeEventListener('rtaip_cop_update', handler);
+  }, []);
+
+  useEffect(() => {
+    heatLayerRef.current?.setVisible(layers.heatmap);
+    infraLayerRef.current?.setVisible(layers.infra);
+    copLayerRef.current?.setVisible(layers.cop);
+    missionLayerRef.current?.setVisible(layers.mission);
+    overlayLayerRef.current?.setVisible(layers.overlay);
+    usaceLayerRef.current?.setVisible(layers.usace);
+    ngaLayerRef.current?.setVisible(layers.nga);
+    gtdLayerRef.current?.setVisible(layers.gtd);
+  }, [layers]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !onSelect) return;
+
+    const handler = (evt: any) => {
+      const feature = map.forEachFeatureAtPixel(evt.pixel, (f: any) => f);
+      if (feature) {
+        const id = feature.get('id');
+        onSelect(id);
+      }
+    };
     map.on('singleclick', handler);
+
     const hover = (evt: any) => {
       const pixel = map.getEventPixel(evt.originalEvent);
       const feature = map.forEachFeatureAtPixel(pixel, (f: any) => f);
-      if (!feature) { setDetail(null); return; }
+      if (!feature) {
+        setDetail(null);
+        return;
+      }
       const id = feature.get('id');
       const z = map.getView().getZoom();
       const zoom = typeof z === 'number' && isFinite(z) ? z : 2;
@@ -105,8 +167,25 @@ export function MapComponent({ events, selectedId, predictionPoints = [], showPr
       setDetail({ id, x, y, zoom });
     };
     map.on('pointermove', hover);
-    return () => { map.un('singleclick', handler as any); map.un('pointermove', hover as any); };
+
+    return () => {
+      map.un('singleclick', handler as any);
+      map.un('pointermove', hover as any);
+    };
   }, [onSelect]);
+
+  return (
+    <div className="relative w-full h-full">
+      <div ref={ref} className="w-full h-full" />
+      <MapLayers onChange={handleLayerChange} />
+      {detail && (
+        <div className="absolute bg-black/80 text-white p-2 rounded-md text-xs pointer-events-none" style={{ left: detail.x + 10, top: detail.y + 10 }}>
+          ID: {detail.id}
+        </div>
+      )}
+    </div>
+  );
+}
 
   useEffect(() => {
     const layer = layerRef.current;
@@ -326,14 +405,65 @@ export function MapComponent({ events, selectedId, predictionPoints = [], showPr
     return () => window.removeEventListener('rtaip_overlays_changed', handler as any);
   }, []);
 
-  function radiusKmForSource(src?: string) {
-    const s = String(src || '').toLowerCase();
-    if (s.includes('usgs')) return 120;
-    if (s.includes('noaa')) return 60;
-    if (s.includes('gdacs')) return 200;
-    if (s.includes('fema')) return 40;
-    return 80;
-  }
+  useEffect(() => {
+    const usaceLayer = usaceLayerRef.current;
+    if (!usaceLayer) return;
+    usaceLayer.setVisible(layers.usace);
+    if (layers.usace) {
+      const source = usaceLayer.getSource();
+      source?.clear();
+      // Placeholder for USACE data
+      const usaceData = [
+        { lon: -95.3698, lat: 29.7604, name: 'Houston Ship Channel' },
+        { lon: -118.2437, lat: 34.0522, name: 'Port of Los Angeles' },
+      ];
+      usaceData.forEach(d => {
+        const f = new Feature({ geometry: new Point(fromLonLat([d.lon, d.lat])) });
+        f.setStyle(new Style({ image: new RegularShape({ fill: new Fill({ color: 'blue' }), points: 4, radius: 8, angle: Math.PI / 4 }) }));
+        source?.addFeature(f);
+      });
+    }
+  }, [layers.usace]);
+
+  useEffect(() => {
+    const ngaLayer = ngaLayerRef.current;
+    if (!ngaLayer) return;
+    ngaLayer.setVisible(layers.nga);
+    if (layers.nga) {
+      const source = ngaLayer.getSource();
+      source?.clear();
+      // Placeholder for NGA data
+      const ngaData = [
+        { lon: 34.9, lat: 32.9, name: 'NGA Report 1' },
+        { lon: 35.1, lat: 31.8, name: 'NGA Report 2' },
+      ];
+      ngaData.forEach(d => {
+        const f = new Feature({ geometry: new Point(fromLonLat([d.lon, d.lat])) });
+        f.setStyle(new Style({ image: new RegularShape({ fill: new Fill({ color: 'green' }), points: 5, radius: 8 }) }));
+        source?.addFeature(f);
+      });
+    }
+  }, [layers.nga]);
+
+  useEffect(() => {
+    const gtdLayer = gtdLayerRef.current;
+    if (!gtdLayer) return;
+    gtdLayer.setVisible(layers.gtd);
+    if (layers.gtd) {
+      const source = gtdLayer.getSource();
+      source?.clear();
+      // Placeholder for GTD data
+      const gtdData = [
+        { lon: 69.3451, lat: 30.3753, name: 'GTD Event 1' },
+        { lon: 71.5249, lat: 33.9750, name: 'GTD Event 2' },
+      ];
+      gtdData.forEach(d => {
+        const f = new Feature({ geometry: new Point(fromLonLat([d.lon, d.lat])) });
+        f.setStyle(new Style({ image: new RegularShape({ fill: new Fill({ color: 'red' }), points: 3, radius: 8 }) }));
+        source?.addFeature(f);
+      });
+    }
+  }, [layers.gtd]);
 
   useEffect(() => {
     const heat = heatLayerRef.current;
@@ -361,24 +491,38 @@ export function MapComponent({ events, selectedId, predictionPoints = [], showPr
     });
   }, [showHospitals, events]);
 
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    if (focus && focus.latitude != null && focus.longitude != null) {
+      const center = fromLonLat([focus.longitude, focus.latitude]);
+      map.getView().setCenter(center);
+      map.getView().setZoom(8);
+    } else {
+      map.getView().setCenter(fromLonLat([0, 0]));
+      map.getView().setZoom(2);
+    }
+    map.render();
+  }, [focus]);
+
   return (
-    <div className="relative">
-      <div ref={ref} className="w-full h-[60vh] border border-primary/20" />
+    <div className="relative bg-white/10 backdrop-blur-md rounded-lg shadow-lg">
+      <div ref={ref} className="w-full h-[60vh] rounded-lg" />
+      <MapLayers onLayerChange={handleLayerChange} />
       {detail && (() => {
         const ev = events.find(e => e.id === detail.id);
         if (!ev) return null;
         const sev = eventSeverity(ev);
         const more = (detail.zoom || 2) >= 5;
         return (
-          <div style={{ left: detail.x + 12, top: detail.y + 12 }} className="absolute z-40 clip-corner-sm border border-primary/20 bg-background/95 px-3 py-2 text-xs w-[280px]">
-            <div className="text-primary">{String(ev.source || '').toUpperCase()} • Risk {Math.round(sev*100)}%</div>
-            <div className="text-muted-foreground">{new Date(ev.timestamp).toLocaleString()}</div>
-            {more && <div className="mt-1 text-[11px] whitespace-pre-wrap">{JSON.stringify(ev.data || {}, null, 2)}</div>}
+          <div style={{ left: detail.x + 12, top: detail.y + 12 }} className="absolute z-40 bg-black/50 backdrop-blur-md border border-white/20 rounded-lg px-3 py-2 text-xs w-[280px] shadow-lg">
+            <div className="text-blue-300">{String(ev.source || '').toUpperCase()} • Risk {Math.round(sev*100)}%</div>
+            <div className="text-gray-400">{new Date(ev.timestamp).toLocaleString()}</div>
+            {more && <div className="mt-1 text-[11px] whitespace-pre-wrap text-gray-300">{JSON.stringify(ev.data || {}, null, 2)}</div>}
           </div>
         );
       })()}
     </div>
   );
 }
-
-export default MapComponent;

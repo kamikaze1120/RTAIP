@@ -1,9 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { getBackendBase } from '../services/data';
-import { Button, TextField, Card, CardContent, CardHeader, Typography, Select, MenuItem, FormControl, InputLabel, SelectChangeEvent, Box } from '@mui/material';
 import { MapPin, Trash2, Edit3, Save, X, Target } from 'lucide-react';
-import { ThemeProvider } from '@mui/material/styles';
-import theme from '../theme';
 
 export interface ISRAsset {
   id: number;
@@ -208,193 +205,110 @@ export default function ISRAssetsPanel() {
   };
 
   return (
-    <ThemeProvider theme={theme}>
-    <Card>
-      <CardHeader
-        title="ISR Asset Manager"
-        subheader={drawingMode ? 'Click map to set target' : `${assets.length} assets`}
-        titleTypographyProps={{ variant: 'h6', fontSize: '1rem' }}
-        subheaderTypographyProps={{ fontSize: '0.75rem' }}
-      />
-      <CardContent>
-        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2, mb: 2 }}>
-          <TextField
-            label="Asset Name"
-            size="small"
-            value={newAsset.name}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewAsset(prev => ({ ...prev, name: e.target.value }))}
-          />
-          <FormControl fullWidth size="small">
-            <InputLabel>Type</InputLabel>
-            <Select
-              value={newAsset.type}
-              label="Type"
-              onChange={(e: SelectChangeEvent) => setNewAsset(prev => ({ ...prev, type: e.target.value }))}
-            >
-              <MenuItem value="UAV">UAV</MenuItem>
-              <MenuItem value="Satellite">Satellite</MenuItem>
-              <MenuItem value="Aircraft">Aircraft</MenuItem>
-              <MenuItem value="Ground">Ground</MenuItem>
-            </Select>
-          </FormControl>
-          <TextField
-            label="Latitude"
-            size="small"
-            value={newAsset.lat}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewAsset(prev => ({ ...prev, lat: e.target.value }))}
-          />
-          <TextField
-            label="Longitude"
-            size="small"
-            value={newAsset.lon}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewAsset(prev => ({ ...prev, lon: e.target.value }))}
-          />
-          <FormControl fullWidth size="small">
-            <InputLabel>Status</InputLabel>
-            <Select
-              value={newAsset.status}
-              label="Status"
-              onChange={(e: SelectChangeEvent) => setNewAsset(prev => ({ ...prev, status: e.target.value as any }))}
-            >
-              <MenuItem value="available">Available</MenuItem>
-              <MenuItem value="tasked">Tasked</MenuItem>
-              <MenuItem value="maintenance">Maintenance</MenuItem>
-              <MenuItem value="deployed">Deployed</MenuItem>
-            </Select>
-          </FormControl>
-          <Button
-            variant="contained"
-            onClick={addAsset}
-            disabled={!newAsset.name || !newAsset.lat || !newAsset.lon}
-          >
-            Add Asset
-          </Button>
-        </Box>
+    <div className="bg-white/10 backdrop-blur-md rounded-lg p-6 shadow-lg">
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-xl font-bold text-white">ISR Asset Manager</h2>
+        <div className="text-sm text-gray-400">{drawingMode ? 'Click map to set target' : `${assets.length} assets`}</div>
+      </div>
+      
+      <div className="grid grid-cols-2 gap-4 mb-4">
+        <input type="text" placeholder="Asset Name" className="col-span-2 bg-black/20 border border-gray-700 rounded-md px-3 py-2 text-white" value={newAsset.name} onChange={(e) => setNewAsset(prev => ({ ...prev, name: e.target.value }))} />
+        <select className="bg-black/20 border border-gray-700 rounded-md px-3 py-2 text-white" value={newAsset.type} onChange={(e) => setNewAsset(prev => ({ ...prev, type: e.target.value }))}>
+          <option value="UAV">UAV</option>
+          <option value="Satellite">Satellite</option>
+          <option value="Aircraft">Aircraft</option>
+          <option value="Ground">Ground</option>
+        </select>
+        <input type="text" placeholder="Latitude" className="bg-black/20 border border-gray-700 rounded-md px-3 py-2 text-white" value={newAsset.lat} onChange={(e) => setNewAsset(prev => ({ ...prev, lat: e.target.value }))} />
+        <input type="text" placeholder="Longitude" className="bg-black/20 border border-gray-700 rounded-md px-3 py-2 text-white" value={newAsset.lon} onChange={(e) => setNewAsset(prev => ({ ...prev, lon: e.target.value }))} />
+        <select className="bg-black/20 border border-gray-700 rounded-md px-3 py-2 text-white" value={newAsset.status} onChange={(e) => setNewAsset(prev => ({ ...prev, status: e.target.value as any }))}>
+          <option value="available">Available</option>
+          <option value="tasked">Tasked</option>
+          <option value="maintenance">Maintenance</option>
+          <option value="deployed">Deployed</option>
+        </select>
+        <button className="col-span-2 bg-blue-600/50 text-white rounded-md py-2" onClick={addAsset} disabled={!newAsset.name || !newAsset.lat || !newAsset.lon}>Add Asset</button>
+      </div>
 
-        {drawingMode && (
-          <Box sx={{ p: 2, bgcolor: 'grey.200', borderRadius: 1, mb: 2 }}>
-            <Typography variant="body2" color="text.secondary">Click on map to set target location</Typography>
-            {pendingTasking.target && (
-              <Typography variant="body2">
-                Target: {pendingTasking.target.lat.toFixed(4)}, {pendingTasking.target.lon.toFixed(4)}
-              </Typography>
-            )}
-            <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
-              <Button size="small" variant="contained" onClick={assignTasking} disabled={!pendingTasking.target}>Assign Task</Button>
-              <Button size="small" variant="outlined" onClick={cancelTasking}>Cancel</Button>
-            </Box>
-          </Box>
-        )}
-
-        <Box sx={{ maxHeight: 300, overflowY: 'auto', spaceY: 2 }}>
-          {assets.length === 0 && (
-            <Typography variant="body2" color="text.secondary" align="center" sx={{ py: 4 }}>
-              No ISR assets configured
-            </Typography>
+      {drawingMode && (
+        <div className="bg-black/20 p-4 rounded-lg mb-4">
+          <p className="text-gray-400">Click on map to set target location</p>
+          {pendingTasking.target && (
+            <p className="text-white">Target: {pendingTasking.target.lat.toFixed(4)}, {pendingTasking.target.lon.toFixed(4)}</p>
           )}
-          {assets.map(asset => (
-            <Box key={asset.id} sx={{ p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 1, mb: 1 }}>
-              {editingId === asset.id ? (
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                  <TextField
-                    size="small"
-                    label="Name"
-                    value={editForm.name || ''}
-                    onChange={(e) => setEditForm(prev => ({ ...prev, name: e.target.value }))}
-                  />
-                  <FormControl fullWidth size="small">
-                    <InputLabel>Type</InputLabel>
-                    <Select
-                      value={editForm.type || ''}
-                      label="Type"
-                      onChange={(e: SelectChangeEvent) => setEditForm(prev => ({ ...prev, type: e.target.value }))}
-                    >
-                      <MenuItem value="UAV">UAV</MenuItem>
-                      <MenuItem value="Satellite">Satellite</MenuItem>
-                      <MenuItem value="Aircraft">Aircraft</MenuItem>
-                      <MenuItem value="Ground">Ground</MenuItem>
-                    </Select>
-                  </FormControl>
-                  <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1 }}>
-                    <TextField
-                      size="small"
-                      label="Latitude"
-                      value={editForm.lat || ''}
-                      onChange={(e) => setEditForm(prev => ({ ...prev, lat: Number(e.target.value) }))}
-                    />
-                    <TextField
-                      size="small"
-                      label="Longitude"
-                      value={editForm.lon || ''}
-                      onChange={(e) => setEditForm(prev => ({ ...prev, lon: Number(e.target.value) }))}
-                    />
-                  </Box>
-                  <FormControl fullWidth size="small">
-                    <InputLabel>Status</InputLabel>
-                    <Select
-                      value={editForm.status || ''}
-                      label="Status"
-                      onChange={(e: SelectChangeEvent) => setEditForm(prev => ({ ...prev, status: e.target.value as any }))}
-                    >
-                      <MenuItem value="available">Available</MenuItem>
-                      <MenuItem value="tasked">Tasked</MenuItem>
-                      <MenuItem value="maintenance">Maintenance</MenuItem>
-                      <MenuItem value="deployed">Deployed</MenuItem>
-                    </Select>
-                  </FormControl>
-                  <Box sx={{ display: 'flex', gap: 1 }}>
-                    <Button size="small" variant="contained" onClick={saveEdit}><Save style={{ width: 16, height: 16 }} /></Button>
-                    <Button size="small" variant="outlined" onClick={cancelEdit}><X style={{ width: 16, height: 16 }} /></Button>
-                  </Box>
-                </Box>
-              ) : (
-                <Box>
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Typography variant="subtitle2">{asset.name}</Typography>
-                      <Typography variant="caption" sx={{ bgcolor: 'grey.200', px: 1, borderRadius: 1 }}>{asset.type}</Typography>
-                      <Typography variant="caption" sx={{
-                        px: 1,
-                        borderRadius: 1,
-                        color: asset.status === 'available' ? 'success.main' : asset.status === 'tasked' ? 'warning.main' : asset.status === 'maintenance' ? 'error.main' : 'info.main',
-                        bgcolor: asset.status === 'available' ? 'success.light' : asset.status === 'tasked' ? 'warning.light' : asset.status === 'maintenance' ? 'error.light' : 'info.light',
-                      }}>
-                        {asset.status}
-                      </Typography>
-                    </Box>
-                    <Box sx={{ display: 'flex', gap: 0.5 }}>
-                      <Button size="small" variant="text" onClick={() => startTasking(asset.id)} sx={{ minWidth: 0, p: 0.5 }}>
-                        <Target style={{ width: 16, height: 16 }} />
-                      </Button>
-                      <Button size="small" variant="text" onClick={() => pushToMap(asset)} sx={{ minWidth: 0, p: 0.5 }}>
-                        <MapPin style={{ width: 16, height: 16 }} />
-                      </Button>
-                      <Button size="small" variant="text" onClick={() => startEdit(asset)} sx={{ minWidth: 0, p: 0.5 }}>
-                        <Edit3 style={{ width: 16, height: 16 }} />
-                      </Button>
-                      <Button size="small" variant="text" color="error" onClick={() => deleteAsset(asset.id)} sx={{ minWidth: 0, p: 0.5 }}>
-                        <Trash2 style={{ width: 16, height: 16 }} />
-                      </Button>
-                    </Box>
-                  </Box>
-                  <Typography variant="caption" color="text.secondary">
-                    {asset.lat.toFixed(4)}, {asset.lon.toFixed(4)}
-                    {asset.metadata?.range && ` • Range: ${asset.metadata.range}km`}
-                    {asset.metadata?.endurance && ` • Endurance: ${asset.metadata.endurance}h`}
-                  </Typography>
-                  {asset.tasking && (
-                    <Typography variant="caption" sx={{ color: 'warning.main', bgcolor: 'warning.light', p: 0.5, borderRadius: 1, display: 'block', mt: 1 }}>
-                      Tasked to: {asset.tasking.target.lat.toFixed(4)}, {asset.tasking.target.lon.toFixed(4)}
-                      {asset.tasking.description && ` • ${asset.tasking.description}`}
-                    </Typography>
-                  )}
-                </Box>
-              )}
-            </Box>
-          ))}
-        </Box>
-      </CardContent>
-    </Card>
-    </ThemeProvider>
+          <div className="flex gap-2 mt-2">
+            <button className="bg-blue-600/50 text-white rounded-md px-3 py-1" onClick={assignTasking} disabled={!pendingTasking.target}>Assign Task</button>
+            <button className="bg-gray-600/50 text-white rounded-md px-3 py-1" onClick={cancelTasking}>Cancel</button>
+          </div>
+        </div>
+      )}
+
+      <div className="max-h-96 overflow-y-auto space-y-2">
+        {assets.length === 0 && (
+          <p className="text-gray-400 text-center py-4">No ISR assets configured</p>
+        )}
+        {assets.map(asset => (
+          <div key={asset.id} className="bg-black/20 p-4 rounded-lg">
+            {editingId === asset.id ? (
+              <div className="flex flex-col gap-2">
+                <input type="text" className="bg-black/30 border border-gray-700 rounded-md px-3 py-2 text-white" value={editForm.name || ''} onChange={(e) => setEditForm(prev => ({ ...prev, name: e.target.value }))} />
+                <select className="bg-black/30 border border-gray-700 rounded-md px-3 py-2 text-white" value={editForm.type || ''} onChange={(e) => setEditForm(prev => ({ ...prev, type: e.target.value }))}>
+                  <option value="UAV">UAV</option>
+                  <option value="Satellite">Satellite</option>
+                  <option value="Aircraft">Aircraft</option>
+                  <option value="Ground">Ground</option>
+                </select>
+                <div className="grid grid-cols-2 gap-2">
+                  <input type="text" className="bg-black/30 border border-gray-700 rounded-md px-3 py-2 text-white" value={editForm.lat || ''} onChange={(e) => setEditForm(prev => ({ ...prev, lat: Number(e.target.value) }))} />
+                  <input type="text" className="bg-black/30 border border-gray-700 rounded-md px-3 py-2 text-white" value={editForm.lon || ''} onChange={(e) => setEditForm(prev => ({ ...prev, lon: Number(e.target.value) }))} />
+                </div>
+                <select className="bg-black/30 border border-gray-700 rounded-md px-3 py-2 text-white" value={editForm.status || ''} onChange={(e) => setEditForm(prev => ({ ...prev, status: e.target.value as any }))}>
+                  <option value="available">Available</option>
+                  <option value="tasked">Tasked</option>
+                  <option value="maintenance">Maintenance</option>
+                  <option value="deployed">Deployed</option>
+                </select>
+                <div className="flex gap-2">
+                  <button className="bg-blue-600/50 text-white rounded-md p-2" onClick={saveEdit}><Save size={16} /></button>
+                  <button className="bg-gray-600/50 text-white rounded-md p-2" onClick={cancelEdit}><X size={16} /></button>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <p className="font-bold text-white">{asset.name}</p>
+                    <p className="text-xs bg-gray-700 px-2 py-1 rounded-full text-gray-300">{asset.type}</p>
+                    <p className={`text-xs px-2 py-1 rounded-full ${
+                      asset.status === 'available' ? 'bg-green-600/50 text-green-300' :
+                      asset.status === 'tasked' ? 'bg-yellow-600/50 text-yellow-300' :
+                      asset.status === 'maintenance' ? 'bg-red-600/50 text-red-300' :
+                      'bg-blue-600/50 text-blue-300'
+                    }`}>{asset.status}</p>
+                  </div>
+                  <div className="flex gap-1">
+                    <button className="text-gray-400 hover:text-white" onClick={() => startTasking(asset.id)}><Target size={16} /></button>
+                    <button className="text-gray-400 hover:text-white" onClick={() => pushToMap(asset)}><MapPin size={16} /></button>
+                    <button className="text-gray-400 hover:text-white" onClick={() => startEdit(asset)}><Edit3 size={16} /></button>
+                    <button className="text-red-500 hover:text-red-400" onClick={() => deleteAsset(asset.id)}><Trash2 size={16} /></button>
+                  </div>
+                </div>
+                <p className="text-sm text-gray-400">
+                  {asset.lat.toFixed(4)}, {asset.lon.toFixed(4)}
+                  {asset.metadata?.range && ` • Range: ${asset.metadata.range}km`}
+                  {asset.metadata?.endurance && ` • Endurance: ${asset.metadata.endurance}h`}
+                </p>
+                {asset.tasking && (
+                  <p className="text-sm bg-yellow-600/20 text-yellow-300 p-2 rounded-lg mt-2">
+                    Tasked to: {asset.tasking.target.lat.toFixed(4)}, {asset.tasking.target.lon.toFixed(4)}
+                    {asset.tasking.description && ` • ${asset.tasking.description}`}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
