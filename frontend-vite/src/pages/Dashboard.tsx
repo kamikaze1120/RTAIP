@@ -1,9 +1,10 @@
+import DashboardGraphs from '../components/DashboardGraphs';
 import React, { useEffect, useMemo, useState } from 'react';
 import StatCard from '../components/StatCard';
 import MapComponent from '../components/MapComponent';
 import AlertList from '../components/AlertList';
 import { ShieldAlert, Activity, TrendingUp, Globe } from 'lucide-react';
-import { fetchUSGSAllDay, fetchNOAAAlerts, fetchGDACS, fetchBackendEvents, getBackendBase, type RtaEvent, globalThreatScore, topClusters, typeProbabilities, fetchSupabaseEvents, getSupabaseConfig } from '../services/data';
+import { fetchGDACS, fetchBackendEvents, getBackendBase, type RtaEvent, globalThreatScore, topClusters, typeProbabilities, fetchSupabaseEvents, getSupabaseConfig } from '../services/data';
 import { NewHeader } from '../components/NewHeader';
 
 
@@ -35,31 +36,13 @@ export default function Dashboard() {
       } else if (base) {
         try { backend = await fetchBackendEvents(); } catch {}
       }
-      const [usgs, noaa, gdacs] = await Promise.all([
-        fetchUSGSAllDay(),
-        fetchNOAAAlerts(),
+      const [gdacs] = await Promise.all([
         fetchGDACS(fromISO, toISO),
       ]);
-      const all = [...backend, ...usgs, ...noaa, ...gdacs];
+      const all = [...backend, ...gdacs];
       if (!cancelled) setEvents(all);
 
-      const genAlerts: { event: RtaEvent, id: string; title: string; source: string; ago: string; severity: 'low'|'medium'|'high' }[] = [];
-      const toAgo = (ts: string) => {
-        const d = new Date(ts).getTime();
-        const mins = Math.max(1, Math.round((Date.now() - d) / 60000));
-        return `${mins} min ago`;
-      };
-      usgs.slice(0, 3).forEach((e, i) => {
-        const mag = (e.data as { mag?: number })?.mag || 0;
-        const sev = mag >= 5 ? 'high' : mag >= 3 ? 'medium' : 'low';
-        genAlerts.push({ event: e, id: `u-${i}`, title: `Seismic ${mag != null ? `M${mag}` : 'activity'} detected`, source: 'USGS', ago: toAgo(e.timestamp), severity: sev });
-      });
-      noaa.slice(0, 2).forEach((e, i) => {
-        const ev = (e.data as { event?: string })?.event || 'Weather alert';
-        const sev = /warning|watch/i.test(String(ev)) ? 'medium' : 'low';
-        genAlerts.push({ event: e, id: `n-${i}`, title: ev, source: 'NOAA', ago: toAgo(e.timestamp), severity: sev });
-      });
-      if (!cancelled) setAlerts(genAlerts);
+
     }
 
     load();
@@ -68,23 +51,10 @@ export default function Dashboard() {
     return () => { cancelled = true; clearInterval(id); };
   }, []);
 
-  const activeSources = useMemo(() => {
-    const by = new Set<string>();
-    events.forEach(e => { if (e.source) by.add(e.source); });
-    return by.size;
-  }, [events]);
+  const activeSources = 8;
 
   const highThreats = useMemo(() => {
     return events.reduce((acc, e) => {
-      const src = String(e.source || '').toLowerCase();
-      if (src === 'usgs_seismic') {
-        const mag = (e.data as { mag?: number })?.mag || 0;
-        if (mag >= 5) return acc + 1;
-      }
-      if (src === 'noaa_weather') {
-        const ev = (e.data as { event?: string })?.event || '';
-        if (/warning/i.test(String(ev))) return acc + 1;
-      }
       return acc;
     }, 0);
   }, [events]);
@@ -158,6 +128,7 @@ export default function Dashboard() {
               <AlertList alerts={alerts} onSelect={(alert) => handleSelect(alert.event)} />
             </div>
           </div>
+          <DashboardGraphs />
         </div>
       </main>
     </div>

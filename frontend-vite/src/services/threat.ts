@@ -6,7 +6,8 @@ const gtdData = [
     location: { lon: -74.006, lat: 40.7128 }, 
     description: 'A coordinated small-arms attack on a remote military outpost. The engagement lasted approximately 20 minutes before the assailants withdrew. No casualties were reported.',
     threat_level: 'High',
-    group: 'Unknown Insurgent Group'
+    group: 'Unknown Insurgent Group',
+    type: 'Conventional'
   },
   { 
     id: 2, 
@@ -15,7 +16,8 @@ const gtdData = [
     location: { lon: 34.35, lat: 31.5 }, 
     description: 'An improvised explosive device was detonated near a logistical convoy, disabling one vehicle. The convoy was able to repel a follow-on ambush.',
     threat_level: 'Critical',
-    group: 'Local Militia'
+    group: 'Local Militia',
+    type: 'Asymmetric'
   },
   { 
     id: 3, 
@@ -24,7 +26,8 @@ const gtdData = [
     location: { lon: 139.6917, lat: 35.6895 }, 
     description: 'A sophisticated cyber attack targeted critical communication infrastructure, causing intermittent outages for several hours. The attack vector is under investigation.',
     threat_level: 'Medium',
-    group: 'State-Sponsored Actor'
+    group: 'State-Sponsored Actor',
+    type: 'Cyber'
   },
   {
     id: 4,
@@ -33,12 +36,51 @@ const gtdData = [
     location: { lon: -118.2437, lat: 34.0522 },
     description: 'An unidentified unmanned aerial vehicle was sighted conducting reconnaissance near a major airbase. The UAV was not engaged and its origin is unknown.',
     threat_level: 'Medium',
-    group: 'Unknown'
+    group: 'Unknown',
+    type: 'Reconnaissance'
   }
+];
+
+const odinThreats = [
+    {
+    id: 5,
+    date: '2023-11-10',
+    title: 'GPS Jamming Activity',
+    location: { lon: 25.27, lat: 54.68 },
+    description: 'Widespread GPS jamming reported, affecting both civilian and military navigation systems in the region. Suspected electronic warfare exercise.',
+    threat_level: 'High',
+    group: 'Regional Power',
+    type: 'Electronic Warfare'
+    }
+];
+
+const dticThreats = [
+    {
+    id: 6,
+    date: '2023-11-12',
+    title: 'Hypersonic Missile Test',
+    location: { lon: 104.06, lat: 30.67 },
+    description: 'A successful test of a new hypersonic glide vehicle was detected. The test demonstrates a significant advancement in offensive capabilities.',
+    threat_level: 'Critical',
+    group: 'Peer Competitor',
+    type: 'Strategic'
+    }
 ];
 
 export const getGtdEvents = async () => {
   console.log('Fetching GTD events...');
   await new Promise(resolve => setTimeout(resolve, 500));
   return gtdData;
+};
+
+export const getOdinThreats = async () => {
+    console.log('Fetching ODIN threats...');
+    await new Promise(resolve => setTimeout(resolve, 500));
+    return odinThreats;
+};
+
+export const getDticThreats = async () => {
+    console.log('Fetching DTIC threats...');
+    await new Promise(resolve => setTimeout(resolve, 500));
+    return dticThreats;
 };

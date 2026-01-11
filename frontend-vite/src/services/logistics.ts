@@ -6,7 +6,9 @@ const pubLogData = [
     location: { lon: -95.3698, lat: 29.7604 }, 
     status: 'In Transit',
     quantity: 500,
-    eta: '2023-11-10'
+    eta: '2023-11-10',
+    type: 'Electronics',
+    description: 'Critical components for repairing communication systems. En route to main depot.'
   },
   { 
     id: 2, 
@@ -14,7 +16,9 @@ const pubLogData = [
     name: 'Rifle, 5.56mm, M16A4', 
     location: { lon: -118.2437, lat: 34.0522 }, 
     status: 'In Stock',
-    quantity: 150
+    quantity: 150,
+    type: 'Weaponry',
+    description: 'Standard issue service rifles. Stored at main armory.'
   },
   { 
     id: 3, 
@@ -22,7 +26,9 @@ const pubLogData = [
     name: 'Glove, Combat, Foliage Green', 
     location: { lon: -74.006, lat: 40.7128 }, 
     status: 'Low Stock',
-    quantity: 30
+    quantity: 30,
+    type: 'Apparel',
+    description: 'Personal protective equipment for ground personnel. Reorder required.'
   },
   {
     id: 4,
@@ -30,7 +36,9 @@ const pubLogData = [
     name: 'Battery, Lithium, Non-Rechargeable',
     location: { lon: -84.3880, lat: 33.7490 },
     status: 'In Stock',
-    quantity: 2500
+    quantity: 2500,
+    type: 'Electronics',
+    description: 'Power source for various portable electronic devices.'
   },
   {
     id: 5,
@@ -39,7 +47,9 @@ const pubLogData = [
     location: { lon: -95.3698, lat: 29.7604 },
     status: 'In Transit',
     quantity: 5,
-    eta: '2023-11-12'
+    eta: '2023-11-12',
+    type: 'Vehicle',
+    description: 'Up-armored utility vehicles being transported to forward operating base.'
   }
 ];
 

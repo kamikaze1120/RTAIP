@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import MapComponent from '../components/MapComponent';
 import { getAssets } from '../services/logistics';
 import { NewHeader } from '../components/NewHeader';
+import { Cpu, Box, Shield, Truck, Shirt } from 'lucide-react';
 
 interface Asset {
   id: number;
@@ -14,7 +15,24 @@ interface Asset {
   status: 'In Stock' | 'In Transit' | 'Low Stock' | 'Out of Stock';
   quantity: number;
   eta?: string; // Estimated time of arrival for 'In Transit' assets
+  type: 'Electronics' | 'Weaponry' | 'Apparel' | 'Vehicle' | 'General';
+  description: string;
 }
+
+const AssetIcon = ({ type }: { type: Asset['type'] }) => {
+  switch (type) {
+    case 'Electronics':
+      return <Cpu className="w-4 h-4 mr-2" />;
+    case 'Weaponry':
+      return <Shield className="w-4 h-4 mr-2" />;
+    case 'Apparel':
+      return <Shirt className="w-4 h-4 mr-2" />;
+    case 'Vehicle':
+      return <Truck className="w-4 h-4 mr-2" />;
+    default:
+      return <Box className="w-4 h-4 mr-2" />;
+  }
+};
 
 const Logistics = () => {
   const [assets, setAssets] = useState<Asset[]>([]);
@@ -76,8 +94,11 @@ const Logistics = () => {
                     className={`bg-black/20 p-4 rounded-lg cursor-pointer border-2 mb-4 ${selectedAsset?.id === asset.id ? 'border-blue-500' : 'border-transparent hover:border-gray-700'}`}
                     onClick={() => setSelectedAsset(asset)}
                   >
-                    <h3 className="text-lg font-bold truncate">{asset.name}</h3>
-                    <p className="text-sm text-gray-400">{asset.nsn}</p>
+                    <div className="flex items-center">
+                      <AssetIcon type={asset.type} />
+                      <h3 className="text-lg font-bold truncate">{asset.name}</h3>
+                    </div>
+                    <p className="text-sm text-gray-400 mt-1">{asset.nsn}</p>
                     <div className="flex items-center mt-2">
                       <span className={`px-2 py-1 text-xs font-bold rounded-full ${getStatusColor(asset.status)}`}>
                         {asset.status}
@@ -104,6 +125,7 @@ const Logistics = () => {
                       <span>ETA: {selectedAsset.eta}</span>
                     )}
                   </div>
+                  <p className="mt-4 text-gray-300">{selectedAsset.description}</p>
                 </div>
                 <div className="flex-grow mt-6 rounded-lg overflow-hidden">
                   <MapComponent 
