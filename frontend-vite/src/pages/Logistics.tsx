@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import MapComponent from '../components/MapComponent';
+import Globe from '../components/Globe';
 import { getAssets } from '../services/logistics';
 import { NewHeader } from '../components/NewHeader';
 import { Cpu, Box, Shield, Truck, Shirt } from 'lucide-react';
@@ -128,7 +128,7 @@ const Logistics = () => {
                   <p className="mt-4 text-gray-300">{selectedAsset.description}</p>
                 </div>
                 <div className="flex-grow mt-6 rounded-lg overflow-hidden">
-                  <MapComponent 
+                  <Globe 
                     events={filteredAssets.map(a => ({
                       id: String(a.id),
                       latitude: a.location.lat,

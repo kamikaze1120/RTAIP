@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import MapComponent from '../components/MapComponent';
+import Globe from '../components/Globe';
 import { getGtdEvents, getOdinThreats, getDticThreats } from '../services/threat';
 import { NewHeader } from '../components/NewHeader';
 import { Shield, Zap, WifiOff, Satellite, Skull, Crosshair } from 'lucide-react';
@@ -131,7 +131,7 @@ const ThreatAnalysis = () => {
                   <p className="mt-6 text-gray-300 whitespace-pre-wrap h-48 overflow-y-auto pr-2">{selectedEvent.description}</p>
                 </div>
                 <div className="flex-grow mt-6 rounded-lg overflow-hidden">
-                  <MapComponent 
+                  <Globe 
                     events={filteredEvents.map(e => ({
                       id: String(e.id),
                       latitude: e.location.lat,

@@ -1,9 +1,10 @@
 import DashboardGraphs from '../components/DashboardGraphs';
 import React, { useEffect, useMemo, useState } from 'react';
 import StatCard from '../components/StatCard';
-import MapComponent from '../components/MapComponent';
+import Globe from '../components/Globe';
 import AlertList from '../components/AlertList';
-import { ShieldAlert, Activity, TrendingUp, Globe } from 'lucide-react';
+import { ShieldAlert, Activity, TrendingUp } from 'lucide-react';
+import { Globe as GlobeIcon } from 'lucide-react';
 import { fetchGDACS, fetchBackendEvents, getBackendBase, type RtaEvent, globalThreatScore, topClusters, typeProbabilities, fetchSupabaseEvents, getSupabaseConfig } from '../services/data';
 import { NewHeader } from '../components/NewHeader';
 
@@ -91,7 +92,7 @@ export default function Dashboard() {
             <StatCard 
               title="Global Threat Score"
               value={gts}
-              icon={<Globe />}
+              icon={<GlobeIcon />}
               variant={gts > 75 ? 'danger' : gts > 50 ? 'warning' : 'default'}
             />
             <StatCard 
@@ -114,7 +115,7 @@ export default function Dashboard() {
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
             <div className="lg:col-span-3 bg-white/10 backdrop-blur-md rounded-lg p-4 shadow-lg">
-              <MapComponent 
+              <Globe 
                 events={events.filter(e => {
                   const t = new Date(e.timestamp).getTime();
                   const cutoff = Date.now() - 7 * 24 * 3600000;

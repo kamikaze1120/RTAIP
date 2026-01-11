@@ -11,11 +11,15 @@ import ThreatAnalysis from './pages/ThreatAnalysis';
 import Logistics from './pages/Logistics';
 import Security from './pages/Security';
  
-import { getBackendBase, getHealthPaths, checkSupabaseHealth, getSupabaseConfig } from './services/data';
+import { getBackendBase, getHealthPaths, checkSupabaseHealth, getSupabaseConfig, runConnectivityDiagnostics } from './services/data';
 
 
 export default function App() {
   
+  useEffect(() => {
+    runConnectivityDiagnostics().then(console.log);
+  }, []);
+
   useEffect(() => {
     async function check() {
       const base = getBackendBase();

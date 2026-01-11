@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { type RtaEvent, fetchSupabaseEvents, getSupabaseConfig, fetchGDACS, fetchBackendEvents, getBackendBase } from '../services/data';
+import { type RtaEvent, fetchSupabaseEvents, getSupabaseConfig, fetchBackendEvents, getBackendBase } from '../services/data';
 import StatCard from '../components/StatCard';
 import { Database, Satellite, CloudDrizzle, Users, Shield, Building } from 'lucide-react';
 import AlertList from '../components/AlertList';
@@ -37,10 +37,7 @@ export default function Sources() {
       } else if (base) {
         try { backend = await fetchBackendEvents(); } catch {}
       }
-      const [gdacs] = await Promise.all([
-        fetchGDACS(fromISO, toISO),
-      ]);
-      const all = [...backend, ...gdacs];
+      const all = [...backend];
       if (!cancelled) setEvents(all);
     }
 
@@ -55,10 +52,9 @@ export default function Sources() {
     newSources.forEach(s => counts.set(s.label, 0));
     events.forEach(e => {
       if (e.source) {
-        // Normalize source names
         const sourceName = e.source.toLowerCase();
         for (const s of newSources) {
-          if (s.label.toLowerCase() === sourceName) {
+          if (sourceName.includes(s.label.toLowerCase())) {
             counts.set(s.label, (counts.get(s.label) || 0) + 1);
             break;
           }
