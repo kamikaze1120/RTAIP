@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from database import Session, User
+from database import Session, User, DataEvent
 from pydantic import BaseModel
 from auth import create_access_token, get_password_hash, verify_password
 from datetime import timedelta
@@ -98,6 +98,11 @@ def login_for_access_token(user: UserLogin, db: Session = Depends(get_db)):
         data={"sub": user.username}, expires_delta=access_token_expires
     )
     return {"access_token": access_token, "token_type": "bearer"}
+
+@app.get("/events")
+def get_events(db: Session = Depends(get_db)):
+    return db.query(DataEvent).all()
+
 
 if __name__ == "__main__":
     import uvicorn
