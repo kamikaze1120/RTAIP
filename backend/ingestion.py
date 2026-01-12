@@ -20,14 +20,31 @@ async def fetch_data(url, params=None):
 
 async def ingest_nasa_fires():
     # NASA FIRMS API example (simplified, use actual endpoint)
-    url = "https://firms.modaps.eosdis.nasa.gov/api/area/csv/12345/VIIRS/1"  # Placeholder, need proper API
-    data = await fetch_data(url)
-    if data:
-        with Session() as session:
-            for item in data:  # Assuming list of fires
-                event = DataEvent(source="nasa_fires", timestamp=datetime.utcnow(), latitude=item.get('latitude'), longitude=item.get('longitude'), data=item)
-                session.add(event)
-    session.commit()
+    url = "https://firms.modaps.eosdis.nasa.gov/api/area/csv/524a0a35e31c6318588be63b096c3b45/VIIRS_SNPP_NRT/world/1"
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url) as response:
+            if response.status == 200:
+                data = await response.text()
+                with Session() as db_session:
+                    # Skip header
+                    for line in data.splitlines()[1:]:
+                        try:
+                            lat, lon, bright_ti4, scan, track, acq_date, acq_time, satellite, confidence, version, bright_ti5, frp, daynight = line.split(',')
+                            event = DataEvent(
+                                source="NGA Tearline",
+                                timestamp=datetime.strptime(f"{acq_date} {acq_time}", "%Y-%m-%d %H%M"),
+                                latitude=float(lat),
+                                longitude=float(lon),
+                                data={"confidence": confidence, "frp": float(frp)},
+                                confidence=float(confidence) / 100.0
+                            )
+                            db_session.add(event)
+                        except ValueError:
+                            continue  # Skip malformed lines
+                    db_session.commit()
+            else:
+                print(f"Error fetching {url}: {response.status}")
+
 
 async def ingest_nasa_eonet():
     url = "https://eonet.gsfc.nasa.gov/api/v3/events"
@@ -97,7 +114,7 @@ async def ingest_gdacs_disasters():
                             continue
                     except Exception:
                         pass
-                    event = DataEvent(source="gdacs_disasters", timestamp=ts, latitude=lat, longitude=lon, data=feat, confidence=conf)
+                    event = DataEvent(source="ODIN", timestamp=ts, latitude=lat, longitude=lon, data=feat, confidence=conf)
                     session.add(event)
                 session.commit()
     except Exception as e:
@@ -147,7 +164,7 @@ async def ingest_adsb_aircraft():
         with Session() as session:
             for state in states[:10]:  # Limit for demo
                 conf = _confidence_for_adsb(state)
-                event = DataEvent(source="adsb", timestamp=datetime.utcnow(), latitude=state[6], longitude=state[5], data=state, confidence=conf)
+                event = DataEvent(source="DTIC", timestamp=datetime.utcnow(), latitude=state[6], longitude=state[5], data=state, confidence=conf)
                 session.add(event)
             session.commit()
 
@@ -166,16 +183,37 @@ def _confidence_for_ais(item):
         return 0.5
 
 async def ingest_ais_maritime():
-    # Using a free AIS source, e.g., Norwegian stream (simplified, needs proper handling)
-    url = "http://aisstream.io/api/vessels"  # Placeholder, actual might need TCP
-    data = await fetch_data(url)
-    if data:
-        with Session() as session:
-            for item in data:
-                conf = _confidence_for_ais(item)
-                event = DataEvent(source="ais", timestamp=datetime.utcnow(), latitude=item.get('lat'), longitude=item.get('lon'), data=item, confidence=conf)
-                session.add(event)
-            session.commit()
+    try:
+        reader, writer = await asyncio.open_connection('153.44.253.27', 5631)
+        while True:
+            line = await reader.readline()
+            if not line:
+                break
+            try:
+                data = json.loads(line.decode())
+                if data.get('class') == 'AIS' and 'lat' in data and 'lon' in data:
+                    with Session() as session:
+                        conf = _confidence_for_ais(data)
+                        event = DataEvent(
+                            source="PUB LOG",
+                            timestamp=datetime.utcnow(),
+                            latitude=data.get('lat'),
+                            longitude=data.get('lon'),
+                            data=data,
+                            confidence=conf
+                        )
+                        session.add(event)
+                        session.commit()
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                continue # Ignore malformed lines
+    except ConnectionRefusedError:
+        print("AIS stream connection refused.")
+    except Exception as e:
+        print(f"An error occurred with the AIS stream: {e}")
+    finally:
+        if 'writer' in locals() and writer:
+            writer.close()
+            await writer.wait_closed()
 
 def _confidence_for_usgs(feature):
     try:
@@ -197,7 +235,7 @@ async def ingest_usgs_seismic():
             for feature in features:
                 coords = feature['geometry']['coordinates']
                 conf = _confidence_for_usgs(feature)
-                event = DataEvent(source="usgs_seismic", timestamp=datetime.utcnow(), latitude=coords[1], longitude=coords[0], data=feature, confidence=conf)
+                event = DataEvent(source="Global Terrorism DB", timestamp=datetime.utcnow(), latitude=coords[1], longitude=coords[0], data=feature, confidence=conf)
                 session.add(event)
             session.commit()
 
