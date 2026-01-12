@@ -6,8 +6,36 @@ from pydantic import BaseModel
 from auth import create_access_token, get_password_hash, verify_password
 from datetime import timedelta
 import os
+import asyncio
+import threading
+from ingestion import ingest_nasa_eonet, ingest_nasa_fires, ingest_noaa_weather, ingest_adsb_aircraft, ingest_ais_maritime, ingest_usgs_seismic
 
 app = FastAPI()
+
+# Ingestion scheduling
+def run_ingestion():
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    
+    async def schedule_tasks():
+        while True:
+            await asyncio.gather(
+                ingest_nasa_eonet(),
+                ingest_nasa_fires(),
+                ingest_noaa_weather(),
+                ingest_adsb_aircraft(),
+                ingest_ais_maritime(),
+                ingest_usgs_seismic()
+            )
+            await asyncio.sleep(3600) # Run every hour
+
+    loop.run_until_complete(schedule_tasks())
+
+@app.on_event("startup")
+async def startup_event():
+    thread = threading.Thread(target=run_ingestion)
+    thread.daemon = True
+    thread.start()
 
 # Enable CORS for frontend; configurable via ALLOWED_ORIGINS env (comma-separated)
 DEFAULT_ORIGINS = [
