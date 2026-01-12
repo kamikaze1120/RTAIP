@@ -29,9 +29,9 @@ const DashboardGraphs: React.FC = () => {
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="name" />
             <YAxis />
-            <Tooltip />
+            <Tooltip contentStyle={{ background: 'rgba(0,0,0,0.7)', border: 'none', color: '#fff' }} />
             <Legend />
-            <Bar dataKey="count" fill="#8884d8" />
+            <Bar isAnimationActive dataKey="count" fill="#60a5fa" />
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -42,11 +42,11 @@ const DashboardGraphs: React.FC = () => {
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="date" />
             <YAxis />
-            <Tooltip />
+            <Tooltip contentStyle={{ background: 'rgba(0,0,0,0.7)', border: 'none', color: '#fff' }} />
             <Legend />
-            <Line type="monotone" dataKey="In Transit" stroke="#8884d8" />
-            <Line type="monotone" dataKey="In Stock" stroke="#82ca9d" />
-            <Line type="monotone" dataKey="Deployed" stroke="#ffc658" />
+            <Line isAnimationActive type="monotone" dataKey="In Transit" stroke="#60a5fa" strokeWidth={2} />
+            <Line isAnimationActive type="monotone" dataKey="In Stock" stroke="#22c55e" strokeWidth={2} />
+            <Line isAnimationActive type="monotone" dataKey="Deployed" stroke="#f59e0b" strokeWidth={2} />
           </LineChart>
         </ResponsiveContainer>
       </div>
