@@ -31,3 +31,4 @@ Thumbs.db
 package-lock.json
 /backend/package-lock.json
 /frontend-vite/package-lock.json
+*.patch
