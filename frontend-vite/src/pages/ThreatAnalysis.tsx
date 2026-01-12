@@ -5,7 +5,7 @@ import { NewHeader } from '../components/NewHeader';
 import { Shield, Zap, WifiOff, Satellite, Skull, Crosshair } from 'lucide-react';
 
 interface ThreatEvent {
-  [key: string]: any;
+  [key: string]: unknown;
   id: number;
   date: string;
   title: string;
@@ -70,7 +70,7 @@ const ThreatAnalysis = () => {
   );
 
   return (
-    <div className="bg-black text-white min-h-screen">
+    <div className="flow-gradient text-white min-h-screen">
       <NewHeader />
       <div className="container mx-auto px-6 py-24 space-y-8">
         <h1 className="text-4xl font-bold">Threat Analysis & Forecasting</h1>

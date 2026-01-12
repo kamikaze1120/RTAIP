@@ -16,10 +16,10 @@ const navItems = [
 export function NewHeader() {
   const location = useLocation();
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 bg-black/50 backdrop-blur-md">
+    <header className="fixed top-0 left-0 right-0 z-50 bg-black/30 backdrop-blur-2xl shadow-lg">
       <div className="container mx-auto flex items-center justify-between px-6 py-4">
-        <Link to="/" className="text-2xl font-bold text-white">
-          RTAIP
+        <Link to="/" className="text-2xl font-extrabold text-white tracking-tight font-orbitron">
+          <span className="inline-block px-2 py-1 rounded-md bg-white/10 box-glow">RTAIP</span>
         </Link>
         <nav className="flex items-center gap-6">
           {navItems.map((item) => {
@@ -29,16 +29,31 @@ export function NewHeader() {
                 key={item.path}
                 to={item.path}
                 className={cn(
-                  'text-sm font-medium transition-colors',
+                  'group relative text-sm font-medium transition-colors',
                   isActive ? 'text-white' : 'text-gray-400 hover:text-white'
                 )}
               >
-                {item.label}
+                <span className="relative">
+                  {item.label}
+                  <span className={cn('absolute left-0 right-0 -bottom-1 h-[2px] rounded transition-all duration-300', isActive ? 'bg-gradient-to-r from-cyan-400 to-violet-400' : 'bg-transparent group-hover:bg-white/40')}></span>
+                </span>
               </Link>
             );
           })}
+          <Link to="/settings" className="ml-2 px-3 py-1.5 rounded-md bg-gradient-to-r from-cyan-500 to-violet-500 text-black font-semibold shadow-lg hover:opacity-90 transition-opacity">
+            Configure
+          </Link>
+          <div className="ml-4 flex items-center gap-2 px-2 py-1 rounded-md bg-green-600/10 border border-green-500/20">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+            </span>
+            <span className="text-xs text-green-300">Live</span>
+          </div>
         </nav>
+        
       </div>
+      <div className="h-[1px] bg-gradient-to-r from-cyan-500/40 via-violet-500/40 to-fuchsia-500/40" />
     </header>
   );
 }

@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { type RtaEvent, fetchSupabaseEvents, getSupabaseConfig, fetchBackendEvents, getBackendBase } from '../services/data';
 import StatCard from '../components/StatCard';
 import { Database, Satellite, CloudDrizzle, Users, Shield, Building } from 'lucide-react';
-import AlertList from '../components/AlertList';
+ 
 import { NewHeader } from '../components/NewHeader';
 
 type SourceStat = { label: string; count: number; subtitle?: string; icon: React.ReactNode; variant?: 'default'|'warning'|'danger'|'success' };
@@ -20,15 +20,12 @@ const newSources: SourceStat[] = [
 
 export default function Sources() {
   const [stats, setStats] = useState<SourceStat[]>(newSources);
-  const [alerts, setAlerts] = useState<{ event: RtaEvent, id: string; title: string; source: string; ago: string; severity: 'low'|'medium'|'high' }[]>([]);
   const [events, setEvents] = useState<RtaEvent[]>([]);
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
-      const now = new Date();
-      const fromISO = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
-      const toISO = now.toISOString();
+      
       const base = getBackendBase();
       let backend: RtaEvent[] = [];
       const supa = getSupabaseConfig();
@@ -69,7 +66,7 @@ export default function Sources() {
   }, [sourceCounts]);
 
   return (
-    <div className="bg-black text-white min-h-screen">
+    <div className="flow-gradient text-white min-h-screen">
       <NewHeader />
       <div className="p-4 lg:p-6">
         <div className="mb-8">
@@ -82,9 +79,7 @@ export default function Sources() {
           ))}
         </div>
 
-        <div className="mt-8">
-          <AlertList alerts={alerts} onSelect={() => {}} />
-        </div>
+        
 
         <div className="mt-8 bg-white/10 backdrop-blur-md rounded-lg p-6 shadow-lg">
           <h2 className="text-xl font-bold text-white mb-4">Integration Notes</h2>

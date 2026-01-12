@@ -1,6 +1,11 @@
 # Dependencies
 /node_modules
 /backend/node_modules
+/frontend-vite/node_modules
+
+# Vite cache and build
+/frontend-vite/.vite
+/frontend-vite/dist
 
 # Build artifacts
 /build

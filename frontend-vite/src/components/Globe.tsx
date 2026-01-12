@@ -12,23 +12,27 @@ function latLonToVector3(lat: number, lon: number, radius: number): THREE.Vector
   return new THREE.Vector3(x, y, z);
 }
 
-const Globe: React.FC<{ events: RtaEvent[], focus: RtaEvent | null }> = ({ events, focus }) => {
+const Globe: React.FC<{ events: RtaEvent[], focus: RtaEvent | null, onSelect?: (e: RtaEvent) => void }> = ({ events, focus, onSelect }) => {
   const mountRef = useRef<HTMLDivElement>(null);
   const [texture, setTexture] = useState<THREE.Texture | null>(null);
   const markersRef = useRef<THREE.Group>(new THREE.Group());
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
+  const raycasterRef = useRef<THREE.Raycaster>(new THREE.Raycaster());
+  const mouseRef = useRef<THREE.Vector2>(new THREE.Vector2());
+  const [hovered, setHovered] = useState<{ e: RtaEvent; x: number; y: number } | null>(null);
 
   useEffect(() => {
     const loader = new THREE.TextureLoader();
-    loader.load('/earth-bluemarble.jpeg', (loadedTexture) => {
+    loader.setCrossOrigin('anonymous');
+    loader.load('https://threejs.org/examples/textures/planets/earth_atmos_2048.jpg', (loadedTexture) => {
       setTexture(loadedTexture);
-    });
+    }, undefined, () => setTexture(null));
   }, []);
 
   useEffect(() => {
-    if (!mountRef.current || !texture) return;
+    if (!mountRef.current) return;
 
     const scene = new THREE.Scene();
     cameraRef.current = new THREE.PerspectiveCamera(75, mountRef.current.clientWidth / mountRef.current.clientHeight, 0.1, 1000);
@@ -36,11 +40,48 @@ const Globe: React.FC<{ events: RtaEvent[], focus: RtaEvent | null }> = ({ event
     rendererRef.current.setSize(mountRef.current.clientWidth, mountRef.current.clientHeight);
     mountRef.current.appendChild(rendererRef.current.domElement);
 
-    const sphere = new THREE.Mesh(
-      new THREE.SphereGeometry(5, 64, 64),
-      new THREE.MeshStandardMaterial({ map: texture, metalness: 0.3, roughness: 0.7 })
-    );
+    const material = texture
+      ? new THREE.MeshPhongMaterial({ map: texture, specular: new THREE.Color(0x222222), shininess: 12 })
+      : new THREE.MeshPhongMaterial({ color: 0x0b1220, specular: new THREE.Color(0x222222), shininess: 12 });
+    const sphereGeom = new THREE.SphereGeometry(5, 64, 64);
+    const sphere = new THREE.Mesh(sphereGeom, material);
     scene.add(sphere);
+
+    const texLoader = new THREE.TextureLoader();
+    texLoader.setCrossOrigin('anonymous');
+    texLoader.load('https://threejs.org/examples/textures/planets/earth_specular_2048.jpg', (spec) => {
+      (material as THREE.MeshPhongMaterial).specularMap = spec;
+      material.needsUpdate = true;
+    });
+    texLoader.load('https://threejs.org/examples/textures/planets/earth_normal_2048.jpg', (bump) => {
+      (material as THREE.MeshPhongMaterial).bumpMap = bump;
+      (material as THREE.MeshPhongMaterial).bumpScale = 0.05;
+      material.needsUpdate = true;
+    });
+
+    // remove grid/wire overlay per request
+
+    const atmosphere = new THREE.Mesh(new THREE.SphereGeometry(5.2, 64, 64), new THREE.MeshBasicMaterial({ color: 0x2dd4bf, transparent: true, opacity: 0.06 }));
+    scene.add(atmosphere);
+
+    texLoader.load('https://threejs.org/examples/textures/planets/earth_clouds_2048.png', (cloudTex) => {
+      const clouds = new THREE.Mesh(new THREE.SphereGeometry(5.06, 64, 64), new THREE.MeshPhongMaterial({ map: cloudTex, transparent: true, opacity: 0.35 }));
+      clouds.name = 'clouds-layer';
+      scene.add(clouds);
+    });
+
+    const stars = new THREE.BufferGeometry();
+    const starCount = 4000; const positions = new Float32Array(starCount * 3);
+    for (let i = 0; i < starCount; i++) {
+      const r = 80; const theta = Math.random() * 2 * Math.PI; const phi = Math.acos(2 * Math.random() - 1);
+      const x = r * Math.sin(phi) * Math.cos(theta);
+      const y = r * Math.sin(phi) * Math.sin(theta);
+      const z = r * Math.cos(phi);
+      positions[i*3] = x; positions[i*3+1] = y; positions[i*3+2] = z;
+    }
+    stars.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    const starField = new THREE.Points(stars, new THREE.PointsMaterial({ color: 0xffffff, size: 0.2, opacity: 0.7, transparent: true }));
+    scene.add(starField);
 
     scene.add(markersRef.current);
 
@@ -55,7 +96,9 @@ const Globe: React.FC<{ events: RtaEvent[], focus: RtaEvent | null }> = ({ event
     controlsRef.current.enableDamping = true;
     controlsRef.current.dampingFactor = 0.05;
     controlsRef.current.screenSpacePanning = false;
-    controlsRef.current.minDistance = 6;
+    controlsRef.current.enableRotate = true; // allow user rotation but no auto-rotation
+    controlsRef.current.enableZoom = true;
+    controlsRef.current.minDistance = 5.3; // allow closer zoom near surface
     controlsRef.current.maxDistance = 25;
 
     cameraRef.current.position.z = 10;
@@ -69,6 +112,8 @@ const Globe: React.FC<{ events: RtaEvent[], focus: RtaEvent | null }> = ({ event
         const opacity = 0.5 + Math.sin(Date.now() * 0.005) * 0.5;
         (pulse.material as THREE.MeshBasicMaterial).opacity = opacity;
       });
+      // keep globe stationary
+      // clouds static
       if (controlsRef.current) controlsRef.current.update();
       if (rendererRef.current && cameraRef.current) rendererRef.current.render(scene, cameraRef.current);
     };
@@ -82,8 +127,44 @@ const Globe: React.FC<{ events: RtaEvent[], focus: RtaEvent | null }> = ({ event
     };
     window.addEventListener('resize', handleResize);
 
+    const handlePointerMove = (event: MouseEvent) => {
+      if (!rendererRef.current || !cameraRef.current) return;
+      const rect = rendererRef.current.domElement.getBoundingClientRect();
+      mouseRef.current.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      mouseRef.current.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+      raycasterRef.current.setFromCamera(mouseRef.current, cameraRef.current);
+      const intersects = raycasterRef.current.intersectObjects(markersRef.current.children, true);
+      if (intersects.length > 0) {
+        const obj = intersects[0].object.parent as THREE.Group;
+        const e = obj?.userData?.event as RtaEvent | undefined;
+        if (e) setHovered({ e, x: event.clientX - rect.left, y: event.clientY - rect.top });
+      } else {
+        setHovered(null);
+      }
+    };
+
+    const handleClick = () => {
+      if (!rendererRef.current || !cameraRef.current) return;
+      raycasterRef.current.setFromCamera(mouseRef.current, cameraRef.current);
+      const intersects = raycasterRef.current.intersectObjects(markersRef.current.children, true);
+      if (intersects.length > 0) {
+        const obj = intersects[0].object.parent as THREE.Group;
+        const e = obj?.userData?.event as RtaEvent | undefined;
+        if (e) {
+          const pos = latLonToVector3(e.latitude as number, e.longitude as number, 10);
+          cameraRef.current.position.lerp(pos, 0.2);
+          onSelect?.(e);
+        }
+      }
+    };
+
+    rendererRef.current?.domElement.addEventListener('mousemove', handlePointerMove);
+    rendererRef.current?.domElement.addEventListener('click', handleClick);
+
     return () => {
       window.removeEventListener('resize', handleResize);
+      rendererRef.current?.domElement.removeEventListener('mousemove', handlePointerMove);
+      rendererRef.current?.domElement.removeEventListener('click', handleClick);
       if (rendererRef.current) mountRef.current?.removeChild(rendererRef.current.domElement);
     };
   }, [texture]);
@@ -111,6 +192,7 @@ const Globe: React.FC<{ events: RtaEvent[], focus: RtaEvent | null }> = ({ event
 
         const pos = latLonToVector3(event.latitude, event.longitude, 5);
         marker.position.copy(pos);
+        marker.userData = { event };
         markersRef.current.add(marker);
       }
     });
@@ -123,7 +205,17 @@ const Globe: React.FC<{ events: RtaEvent[], focus: RtaEvent | null }> = ({ event
     }
   }, [focus]);
 
-  return <div ref={mountRef} style={{ width: '100%', height: '100%', background: 'radial-gradient(circle, rgba(30,30,35,1) 0%, rgba(10,10,10,1) 100%)' }} />;
+  return (
+    <div ref={mountRef} className="flow-gradient" style={{ width: '100%', height: '100%', position: 'relative' }}>
+      {hovered && (
+        <div style={{ position: 'absolute', left: hovered.x + 12, top: hovered.y + 12, pointerEvents: 'none' }} className="px-2 py-1 rounded-md text-xs bg-black/70 border border-white/10 text-white shadow-lg">
+          <div className="font-semibold">{String(hovered.e.source || 'Event')}</div>
+          <div className="text-gray-300">{new Date(hovered.e.timestamp).toLocaleString()}</div>
+          <div className="text-gray-400">Lat: {hovered.e.latitude} • Lon: {hovered.e.longitude}</div>
+        </div>
+      )}
+    </div>
+  );
 };
 
 export default Globe;

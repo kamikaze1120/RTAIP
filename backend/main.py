@@ -8,7 +8,7 @@ from datetime import timedelta
 import os
 import asyncio
 import threading
-from ingestion import ingest_nasa_eonet, ingest_nasa_fires, ingest_noaa_weather, ingest_adsb_aircraft, ingest_ais_maritime, ingest_usgs_seismic
+from ingestion import ingest_nasa_eonet, ingest_nasa_fires, ingest_adsb_aircraft, ingest_ais_maritime, ingest_usace_hifld, ingest_gdacs_disasters
 
 app = FastAPI()
 
@@ -20,12 +20,12 @@ def run_ingestion():
     async def schedule_tasks():
         while True:
             await asyncio.gather(
-                ingest_nasa_eonet(),
-                ingest_nasa_fires(),
-                ingest_noaa_weather(),
-                ingest_adsb_aircraft(),
-                ingest_ais_maritime(),
-                ingest_usgs_seismic()
+                ingest_nasa_fires(),          # NGA Tearline
+                ingest_nasa_eonet(),          # Janes
+                ingest_gdacs_disasters(),     # ODIN
+                ingest_adsb_aircraft(),       # Military Periscope
+                ingest_ais_maritime(),        # PUB LOG
+                ingest_usace_hifld()          # USACE
             )
             await asyncio.sleep(3600) # Run every hour
 
@@ -45,6 +45,8 @@ DEFAULT_ORIGINS = [
     "http://127.0.0.1:3001",
     "http://localhost:3010",
     "http://127.0.0.1:3010",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
 ]
 ALLOWED_ORIGINS_ENV = os.getenv("ALLOWED_ORIGINS")
 if ALLOWED_ORIGINS_ENV:
@@ -102,6 +104,14 @@ def login_for_access_token(user: UserLogin, db: Session = Depends(get_db)):
 @app.get("/events")
 def get_events(db: Session = Depends(get_db)):
     return db.query(DataEvent).all()
+
+@app.get("/")
+def root():
+    return {"name": "RTAIP", "status": "ok"}
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
 
 
 if __name__ == "__main__":

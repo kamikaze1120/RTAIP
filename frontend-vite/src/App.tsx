@@ -1,5 +1,5 @@
-import { Routes, Route } from 'react-router-dom';
-import { useEffect } from 'react';
+import { Routes, Route, useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
 import { NewHeader } from './components/NewHeader';
 
 import MapPage from './pages/Map';
@@ -15,7 +15,8 @@ import { getBackendBase, getHealthPaths, checkSupabaseHealth, getSupabaseConfig,
 
 
 export default function App() {
-  
+  const navigate = useNavigate();
+  const [booting, setBooting] = useState(true);
   useEffect(() => {
     runConnectivityDiagnostics().then(console.log);
   }, []);
@@ -56,12 +57,27 @@ export default function App() {
     const id = setInterval(check, Math.max(15000, r));
     return () => { clearInterval(id); };
   }, []);
+  useEffect(() => {
+    const id = setTimeout(() => {
+      setBooting(false);
+      navigate('/sources');
+    }, 2000);
+    return () => clearTimeout(id);
+  }, [navigate]);
   return (
-    <div className="relative min-h-screen bg-black text-white">
-      <NewHeader />
+    <div className="relative min-h-screen text-white bg-animated">
+      <div className="grid-overlay"></div>
+      {!booting && <NewHeader />}
       <main>
-        
-        <div className="pt-16">
+        <div className="pt-16 relative z-10">
+          {booting ? (
+            <div className="fixed inset-0 flex items-center justify-center flow-gradient">
+              <div className="text-center">
+                <div className="text-5xl font-extrabold text-white font-orbitron text-glow">RTAIP</div>
+                <div className="mt-3 text-sm text-gray-300">Real-time Threat Analysis & Intelligence Platform</div>
+              </div>
+            </div>
+          ) : (
           <Routes>
             <Route path="/sources" element={<Sources />} />
             <Route path="/dashboard" element={<Dashboard />} />
@@ -73,9 +89,9 @@ export default function App() {
             <Route path="/security" element={<Security />} />
             <Route path="/" element={<Dashboard />} />
           </Routes>
+          )}
         </div>
       </main>
-      
     </div>
   );
 }

@@ -77,8 +77,7 @@ export async function fetchBackendEvents(): Promise<RtaEvent[]> {
 }
 
 export function eventSeverity(e: RtaEvent): number {
-  const src = String(e.source || '').toLowerCase();
-  let sev = 0.3;
+  const sev = 0.3;
 
   const conf = typeof e.confidence === 'number' ? e.confidence : 0.5;
   return Math.max(0, Math.min(1, sev * (0.6 + 0.4 * conf)));
@@ -118,7 +117,6 @@ export function typeProbabilities(events: RtaEvent[]): Record<string, number> {
   });
   const byType: Record<string, number> = {};
   recent.forEach(e => {
-    const s = String(e.source || '').toLowerCase();
     const type = 'other';
     byType[type] = (byType[type] || 0) + eventSeverity(e);
   });
@@ -298,9 +296,19 @@ export async function callGemini(query: string, context?: string): Promise<strin
     };
     const r = await fetchWithTimeout(url, { timeoutMs: 12000, method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     if (!r.ok) return null;
-    const jd: any = await r.json();
-    const text = jd?.candidates?.[0]?.content?.parts?.[0]?.text;
-    return typeof text === 'string' ? text : JSON.stringify(jd);
+    const jd = await r.json() as Record<string, unknown>;
+    const candidates = jd['candidates'] as unknown;
+    if (Array.isArray(candidates) && candidates[0] && typeof candidates[0] === 'object') {
+      const content = (candidates[0] as Record<string, unknown>)['content'] as unknown;
+      if (content && typeof content === 'object') {
+        const parts = (content as Record<string, unknown>)['parts'] as unknown;
+        if (Array.isArray(parts) && parts[0] && typeof parts[0] === 'object') {
+          const text = (parts[0] as Record<string, unknown>)['text'];
+          if (typeof text === 'string') return text;
+        }
+      }
+    }
+    return JSON.stringify(jd);
   } catch { return null; }
 }
 
@@ -339,14 +347,18 @@ export async function fetchFEMA(): Promise<RtaEvent[]> {
   try {
     const url = `https://gis.fema.gov/arcgis/rest/services/IncidentManagement/DisasterDeclarationsSummaries/FeatureServer/0/query?where=1%3D1&outFields=declarationDate,incidentType,declaredCountyArea,declaredState,disasterNumber&returnGeometry=true&outSR=4326&f=json`;
     const r = await fetchWithTimeout(url);
-    const jd: { features?: Record<string, unknown>[] } = await r.json(); const feats: Record<string, unknown>[] = Array.isArray(jd?.features) ? jd.features : [];
+    const jd = await r.json() as { features?: Record<string, unknown>[] };
+    const feats: Record<string, unknown>[] = Array.isArray(jd?.features) ? jd.features : [];
     return feats.map((f: Record<string, unknown>, idx: number) => {
-      const attr = f.attributes || {};
-      const geom = f.geometry || {};
-      const tsNum = typeof (attr as any).declarationDate === 'number' ? (attr as any).declarationDate : null;
+      const attr = (f['attributes'] as Record<string, unknown>) || {};
+      const geom = (f['geometry'] as Record<string, unknown>) || {};
+      const tsNumRaw = attr['declarationDate'];
+      const tsNum = typeof tsNumRaw === 'number' ? tsNumRaw : null;
       const ts = tsNum ? new Date(tsNum).toISOString() : new Date().toISOString();
-      const lon = typeof (geom as any).x === 'number' ? (geom as any).x : null;
-      const lat = typeof (geom as any).y === 'number' ? (geom as any).y : null;
+      const lonRaw = geom['x'];
+      const latRaw = geom['y'];
+      const lon = typeof lonRaw === 'number' ? lonRaw : null;
+      const lat = typeof latRaw === 'number' ? latRaw : null;
       return {
         id: String(attr.disasterNumber || `fema-${idx}`),
         timestamp: ts,
@@ -354,7 +366,7 @@ export async function fetchFEMA(): Promise<RtaEvent[]> {
         latitude: lat,
         longitude: lon,
         confidence: 1,
-        data: { incidentType: attr.incidentType, county: attr.declaredCountyArea, state: attr.declaredState },
+        data: { incidentType: attr['incidentType'], county: attr['declaredCountyArea'], state: attr['declaredState'] },
       };
     });
   } catch {
@@ -366,12 +378,15 @@ export async function fetchHIFLDHospitals(): Promise<RtaEvent[]> {
   try {
     const url = `https://maps.nccs.nasa.gov/mapping/rest/services/hifld_open/public_health/FeatureServer/0/query?where=1%3D1&outFields=name,type,state&returnGeometry=true&f=json`;
     const r = await fetchWithTimeout(url);
-    const jd: { features?: Record<string, unknown>[] } = await r.json(); const feats: Record<string, unknown>[] = Array.isArray(jd?.features) ? jd.features : [];
+    const jd = await r.json() as { features?: Record<string, unknown>[] };
+    const feats: Record<string, unknown>[] = Array.isArray(jd?.features) ? jd.features : [];
     return feats.map((f: Record<string, unknown>, idx: number) => {
-      const attr = f.attributes || {};
-      const geom = f.geometry || {};
-      const lon = typeof geom.x === 'number' ? geom.x : null;
-      const lat = typeof geom.y === 'number' ? geom.y : null;
+      const attr = (f['attributes'] as Record<string, unknown>) || {};
+      const geom = (f['geometry'] as Record<string, unknown>) || {};
+      const lonRaw = geom['x'];
+      const latRaw = geom['y'];
+      const lon = typeof lonRaw === 'number' ? lonRaw : null;
+      const lat = typeof latRaw === 'number' ? latRaw : null;
       return {
         id: String(attr.id || `hifld-${idx}`),
         timestamp: new Date().toISOString(),
@@ -379,7 +394,7 @@ export async function fetchHIFLDHospitals(): Promise<RtaEvent[]> {
         latitude: lat,
         longitude: lon,
         confidence: 1,
-        data: { name: attr.name, type: attr.type, state: attr.state },
+        data: { name: attr['name'], type: attr['type'], state: attr['state'] },
       };
     });
   } catch {
@@ -392,11 +407,14 @@ export async function fetchCensusCounties(): Promise<RtaEvent[]> {
   try {
     const url = `https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/State_County/MapServer/11/query?where=1%3D1&outFields=NAME,STATE,INTPTLAT,INTPTLON,GEOID&returnGeometry=false&f=json`;
     const r = await fetchWithTimeout(url);
-    const jd: { features?: Record<string, unknown>[] } = await r.json(); const feats: Record<string, unknown>[] = Array.isArray(jd?.features) ? jd.features : [];
+    const jd = await r.json() as { features?: Record<string, unknown>[] };
+    const feats: Record<string, unknown>[] = Array.isArray(jd?.features) ? jd.features : [];
     return feats.map((f: Record<string, unknown>, idx: number) => {
-      const attr = f.attributes || {};
-  const lat = (attr as any).INTPTLAT != null ? parseFloat((attr as any).INTPTLAT) : null;
-  const lon = (attr as any).INTPTLON != null ? parseFloat((attr as any).INTPTLON) : null;
+      const attr = (f['attributes'] as Record<string, unknown>) || {};
+  const latRaw = attr['INTPTLAT'];
+  const lonRaw = attr['INTPTLON'];
+  const lat = latRaw != null ? parseFloat(String(latRaw)) : null;
+  const lon = lonRaw != null ? parseFloat(String(lonRaw)) : null;
   return {
     id: String(attr.GEOID || `census-${idx}`),
     timestamp: new Date().toISOString(),
@@ -404,7 +422,7 @@ export async function fetchCensusCounties(): Promise<RtaEvent[]> {
     latitude: typeof lat === 'number' && isFinite(lat) ? lat : null,
     longitude: typeof lon === 'number' && isFinite(lon) ? lon : null,
     confidence: 1,
-    data: { name: attr.NAME, state: attr.STATE },
+    data: { name: attr['NAME'], state: attr['STATE'] },
   };
     });
   } catch {
@@ -414,12 +432,12 @@ export async function fetchCensusCounties(): Promise<RtaEvent[]> {
 export async function fetchGlobalPopulationByContinent(): Promise<{ total: number; continents: Record<string, number> }> {
   try {
     const r = await fetchWithTimeout('https://restcountries.com/v3.1/all?fields=population,region,subregion', { timeoutMs: 10000 });
-    const rows: any[] = await r.json();
+    const rows = await r.json() as Array<Record<string, unknown>>;
     const continents: Record<string, number> = { 'Africa': 0, 'Asia': 0, 'Europe': 0, 'North America': 0, 'South America': 0, 'Oceania': 0, 'Antarctica': 0 };
-    rows.forEach((c: any) => {
-      const pop = Number(c?.population || 0);
-      const region = String(c?.region || '');
-      const sub = String(c?.subregion || '');
+    rows.forEach((c: Record<string, unknown>) => {
+      const pop = Number(c['population'] || 0);
+      const region = String(c['region'] || '');
+      const sub = String(c['subregion'] || '');
       let key = '';
       if (region === 'Africa') key = 'Africa';
       else if (region === 'Asia') key = 'Asia';

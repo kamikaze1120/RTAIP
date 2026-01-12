@@ -5,7 +5,7 @@ import { getBackendBase } from '../services/data';
 function brief(events: RtaEvent[]) {
   const now = new Date();
   const start = new Date(now.getTime() - 60 * 60000);
-  const inWindow = events.filter(e => { const t = new Date(e.timestamp).getTime(); return !isNaN(t) && t >= start.getTime(); });
+  const inWindow = events.filter(e => { const t = new Date(e.timestamp).getTime(); const src = String(e.source||''); return !/usgs|noaa/i.test(src) && !isNaN(t) && t >= start.getTime(); });
   const total = inWindow.length;
   const bySrc = inWindow.reduce((acc: Record<string, number>, e) => { const k=(e.source||'unknown').toLowerCase(); acc[k]=(acc[k]||0)+1; return acc; }, {});
   const topSrc = Object.entries(bySrc).sort((a,b)=>b[1]-a[1])[0];
@@ -13,10 +13,8 @@ function brief(events: RtaEvent[]) {
   const avg = confVals.length ? (confVals.reduce((a,b)=>a+b,0)/confVals.length) : 0;
   const pct = Math.round(avg * 100);
   const band = pct >= 70 ? 'High' : pct >= 40 ? 'Moderate' : 'Low';
-  const hasSeismic = inWindow.some(e => (e.source||'').toLowerCase()==='usgs_seismic');
-  const hasWeather = inWindow.some(e => (e.source||'').toLowerCase()==='noaa_weather');
   const hasInfra = inWindow.some(e => (e.source||'').toLowerCase()==='hifld_infra');
-  const correlation = hasSeismic && hasInfra ? 'Potential impact near infrastructure points.' : (hasWeather && hasInfra ? 'Weather alerts observed near infrastructure.' : 'No supporting anomalies detected across aviation or maritime domains.');
+  const correlation = hasInfra ? 'Activity near infrastructure points.' : 'No cross-domain anomalies detected.';
   const lead = total > 0 ? `Between ${start.toISOString().slice(11,16)}–${now.toISOString().slice(11,16)} UTC, activity observed.` : 'Stable patterns in the last hour.';
   const srcLine = topSrc ? `Most activity: ${(topSrc[0]||'UNKNOWN').toUpperCase()} (${topSrc[1]}).` : '';
   const next = `Next: monitor ${topSrc ? topSrc[0].toUpperCase() : 'key sources'} and watch for new anomaly flags.`;

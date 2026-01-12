@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getBackendBase } from '../services/data';
+import { getBackendBase, runConnectivityDiagnostics, runSupabaseDiagnostics, type ConnectivityDiagnostics, type SupabaseDiagnostics } from '../services/data';
 import { NewHeader } from '../components/NewHeader';
 
 export default function Settings() {
@@ -83,14 +83,22 @@ export default function Settings() {
         value={value}
         onChange={onChange}
         placeholder={placeholder}
-        className="w-full px-4 py-2 bg-black/20 text-white placeholder-gray-500 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+        className="w-full px-4 py-2 bg-black/20 text-white placeholder-gray-500 border border-white/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500"
       />
       {helpText && <p className="mt-2 text-xs text-gray-500">{helpText}</p>}
     </div>
   );
 
+  const [conn, setConn] = useState<ConnectivityDiagnostics | null>(null);
+  const [supa, setSupa] = useState<SupabaseDiagnostics | null>(null);
+  const testConnections = async () => {
+    const a = await runConnectivityDiagnostics();
+    const b = await runSupabaseDiagnostics();
+    setConn(a);
+    setSupa(b);
+  };
   return (
-    <div className="bg-black text-white min-h-screen">
+    <div className="flow-gradient text-white min-h-screen">
       <NewHeader />
       <div className="p-4 lg:p-6">
         <div className="max-w-4xl mx-auto">
@@ -166,13 +174,29 @@ export default function Settings() {
               </div>
             </>)}
 
+            {renderSection("Connections Status", "Check connectivity to backend and Supabase.", <>
+              <div className="flex items-center gap-3">
+                <button onClick={testConnections} className="px-4 py-2 rounded-md bg-gradient-to-r from-cyan-500 to-fuchsia-500 text-black font-semibold shadow-lg hover:opacity-90 transition-opacity">Test Connections</button>
+                <div className="text-xs text-gray-300">{conn?.configured ? 'Backend configured' : 'Backend not configured'}</div>
+              </div>
+              <div className="grid md:grid-cols-2 gap-4 mt-4">
+                <div className="bg-black/20 p-3 rounded-lg border border-white/10">
+                  <div className="text-sm text-gray-300 mb-2">Backend</div>
+                  <div className="text-xs text-gray-400">Base: {conn?.base || '—'}</div>
+                  <div className="text-xs text-gray-400">Health: {(conn?.health || []).some(h => h.ok) ? 'OK' : 'Fail'}</div>
+                  <div className="text-xs text-gray-400">Events: {conn?.events?.ok ? 'OK' : 'Fail'}</div>
+                </div>
+                <div className="bg-black/20 p-3 rounded-lg border border-white/10">
+                  <div className="text-sm text-gray-300 mb-2">Supabase</div>
+                  <div className="text-xs text-gray-400">URL: {supa?.url || '—'}</div>
+                  <div className="text-xs text-gray-400">Table: {supa?.table || '—'}</div>
+                  <div className="text-xs text-gray-400">OK: {supa?.ok ? 'Yes' : 'No'}</div>
+                </div>
+              </div>
+            </>)}
+
             <div className="flex justify-end mt-8">
-              <button 
-                onClick={save}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition-colors duration-300"
-              >
-                Save All Settings
-              </button>
+              <button onClick={save} className="px-6 py-3 rounded-md bg-gradient-to-r from-cyan-500 to-violet-500 text-black font-bold shadow-lg hover:opacity-90 transition-opacity">Save All Settings</button>
             </div>
           </div>
         </div>

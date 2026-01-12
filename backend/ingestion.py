@@ -73,7 +73,7 @@ async def ingest_nasa_eonet():
                         continue
                 except Exception:
                     pass
-                event = DataEvent(source="nasa_eonet", timestamp=ts, latitude=lat, longitude=lon, data=ev, confidence=conf)
+                event = DataEvent(source="Janes", timestamp=ts, latitude=lat, longitude=lon, data=ev, confidence=conf)
                 session.add(event)
             session.commit()
 
@@ -164,7 +164,7 @@ async def ingest_adsb_aircraft():
         with Session() as session:
             for state in states[:10]:  # Limit for demo
                 conf = _confidence_for_adsb(state)
-                event = DataEvent(source="DTIC", timestamp=datetime.utcnow(), latitude=state[6], longitude=state[5], data=state, confidence=conf)
+                event = DataEvent(source="Military Periscope", timestamp=datetime.utcnow(), latitude=state[6], longitude=state[5], data=state, confidence=conf)
                 session.add(event)
             session.commit()
 
@@ -236,8 +236,43 @@ async def ingest_usgs_seismic():
                 coords = feature['geometry']['coordinates']
                 conf = _confidence_for_usgs(feature)
                 event = DataEvent(source="Global Terrorism DB", timestamp=datetime.utcnow(), latitude=coords[1], longitude=coords[0], data=feature, confidence=conf)
-                session.add(event)
-            session.commit()
+
+async def ingest_usace_hifld():
+    try:
+        url = "https://maps.nccs.nasa.gov/mapping/rest/services/hifld_open/public_health/FeatureServer/0/query"
+        params = {
+            "where": "1=1",
+            "outFields": "name,type,state",
+            "returnGeometry": "true",
+            "outSR": "4326",
+            "f": "json"
+        }
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, params=params) as response:
+                if response.status != 200:
+                    print(f"Error fetching USACE HIFLD: {response.status}")
+                    return
+                jd = await response.json()
+                feats = jd.get("features") or []
+                with Session() as s:
+                    for f in feats[:100]:
+                        attr = f.get("attributes", {})
+                        geom = f.get("geometry", {})
+                        lon = geom.get("x")
+                        lat = geom.get("y")
+                        ev = DataEvent(
+                            source="USACE",
+                            timestamp=datetime.utcnow(),
+                            latitude=float(lat) if isinstance(lat, (int,float)) else None,
+                            longitude=float(lon) if isinstance(lon, (int,float)) else None,
+                            data={"name": attr.get("name"), "type": attr.get("type"), "state": attr.get("state")},
+                            confidence=1.0 if (lat is not None and lon is not None) else 0.6
+                        )
+                        s.add(ev)
+                    s.commit()
+    except Exception as e:
+        print(f"USACE ingestion failed: {e}")
+
 
 # Removed Reddit ingestion (ingest_reddit_social) as it is not relevant and lacked geolocation
 def run_ingestion():
@@ -246,13 +281,12 @@ def run_ingestion():
     asyncio.set_event_loop(loop)
     try:
         loop.run_until_complete(asyncio.gather(
-            ingest_nasa_fires(),
-            ingest_noaa_weather(),
-            ingest_adsb_aircraft(),
-            ingest_ais_maritime(),
-            ingest_usgs_seismic(),
-            ingest_nasa_eonet(),
-            ingest_gdacs_disasters()
+            ingest_nasa_fires(),           # NGA Tearline
+            ingest_adsb_aircraft(),        # Military Periscope
+            ingest_ais_maritime(),         # PUB LOG
+            ingest_nasa_eonet(),           # Janes
+            ingest_gdacs_disasters(),      # ODIN
+            ingest_usace_hifld()           # USACE
         ))
         # Conditional backfill: if no anomalies for GDACS/EONET, ensure last 100 hours of data present
         try:

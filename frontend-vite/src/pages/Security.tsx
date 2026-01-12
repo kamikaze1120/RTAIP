@@ -47,7 +47,7 @@ export default function Security() {
     }, []);
 
     return (
-        <div className="bg-black text-white min-h-screen">
+        <div className="flow-gradient text-white min-h-screen">
             <NewHeader />
             <div className="p-4 lg:p-6">
                 <div className="mb-8">
@@ -57,31 +57,31 @@ export default function Security() {
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                     {/* Login Form */}
-                    <div className="bg-white/5 p-6 rounded-lg">
+                    <div className="bg-white/10 backdrop-blur-md rounded-lg shadow-lg p-6 border border-cyan-500/20 bg-gradient-to-br from-cyan-500/10 to-violet-500/10">
                         <h3 className="text-xl font-semibold text-white mb-4">PKI/CAC Authentication</h3>
                         <div className="space-y-4">
-                            <input type="text" placeholder="Username" value={username} onChange={(e) => setUsername(e.target.value)} className="w-full px-4 py-2 bg-black/20 text-white placeholder-gray-500 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                            <input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full px-4 py-2 bg-black/20 text-white placeholder-gray-500 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                            <input type="text" placeholder="CAC Serial Number" value={cacSerialNumber} onChange={(e) => setCacSerialNumber(e.target.value)} className="w-full px-4 py-2 bg-black/20 text-white placeholder-gray-500 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                            <button onClick={handleLogin} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-300">
+                            <input type="text" placeholder="Username" value={username} onChange={(e) => setUsername(e.target.value)} className="w-full px-4 py-2 bg-black/20 text-white placeholder-gray-500 border border-white/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500" />
+                            <input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full px-4 py-2 bg-black/20 text-white placeholder-gray-500 border border-white/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500" />
+                            <input type="text" placeholder="CAC Serial Number" value={cacSerialNumber} onChange={(e) => setCacSerialNumber(e.target.value)} className="w-full px-4 py-2 bg-black/20 text-white placeholder-gray-500 border border-white/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500" />
+                            <button onClick={handleLogin} className="w-full bg-gradient-to-r from-cyan-500 to-violet-500 text-black font-bold py-2 px-4 rounded-lg transition-opacity hover:opacity-90">
                                 Authenticate
                             </button>
                         </div>
                     </div>
 
                     {/* Access Control Policies */}
-                    <div className="bg-white/5 p-6 rounded-lg">
+                    <div className="bg-white/10 backdrop-blur-md rounded-lg shadow-lg p-6 border border-cyan-500/20 bg-gradient-to-br from-violet-500/10 to-fuchsia-500/10">
                         <h3 className="text-xl font-semibold text-white mb-4">Access Control Policies</h3>
                         <div className="space-y-4">
-                            <div className="flex items-center justify-between bg-black/20 p-3 rounded-lg">
+                            <div className="flex items-center justify-between bg-black/20 p-3 rounded-lg border border-white/10">
                                 <label htmlFor="pkiRequired" className="text-gray-300">Require PKI/CAC for Login</label>
                                 <input type="checkbox" id="pkiRequired" name="pkiRequired" checked={policies.pkiRequired} onChange={handlePolicyChange} className="form-checkbox h-5 w-5 text-blue-600 bg-gray-800 border-gray-600 rounded focus:ring-blue-500" />
                             </div>
-                            <div className="flex items-center justify-between bg-black/20 p-3 rounded-lg">
+                            <div className="flex items-center justify-between bg-black/20 p-3 rounded-lg border border-white/10">
                                 <label htmlFor="abacEnabled" className="text-gray-300">Enable Attribute-Based Access Control (ABAC)</label>
                                 <input type="checkbox" id="abacEnabled" name="abacEnabled" checked={policies.abacEnabled} onChange={handlePolicyChange} className="form-checkbox h-5 w-5 text-blue-600 bg-gray-800 border-gray-600 rounded focus:ring-blue-500" />
                             </div>
-                            <div className="flex items-center justify-between bg-black/20 p-3 rounded-lg">
+                            <div className="flex items-center justify-between bg-black/20 p-3 rounded-lg border border-white/10">
                                 <label htmlFor="rbacEnabled" className="text-gray-300">Enable Role-Based Access Control (RBAC)</label>
                                 <input type="checkbox" id="rbacEnabled" name="rbacEnabled" checked={policies.rbacEnabled} onChange={handlePolicyChange} className="form-checkbox h-5 w-5 text-blue-600 bg-gray-800 border-gray-600 rounded focus:ring-blue-500" />
                             </div>
@@ -90,7 +90,7 @@ export default function Security() {
                 </div>
 
                 {/* Audit Logs */}
-                <div className="mt-8 bg-white/5 p-6 rounded-lg">
+                <div className="mt-8 bg-white/10 backdrop-blur-md rounded-lg shadow-lg p-6 border border-white/10">
                     <h3 className="text-xl font-semibold text-white mb-4">Tamper-Evident Audit Logs</h3>
                     <div className="overflow-x-auto">
                         <table className="min-w-full text-sm text-left text-gray-300">
@@ -104,7 +104,7 @@ export default function Security() {
                             </thead>
                             <tbody>
                                 {auditLogs.length > 0 ? auditLogs.map((log: AuditLog, index) => (
-                                    <tr key={index} className="border-b border-gray-700 hover:bg-white/10">
+                                    <tr key={index} className="border-b border-white/10 hover:bg-white/10">
                                         <td className="px-6 py-4">{new Date(log.timestamp).toLocaleString()}</td>
                                         <td className="px-6 py-4">{log.event}</td>
                                         <td className="px-6 py-4">{log.user}</td>

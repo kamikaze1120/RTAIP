@@ -34,7 +34,9 @@ const summarizeEvent = (e: RtaEvent) => {
 
 export function EventFeed({ events, onSelect, focus }: { events: RtaEvent[]; onSelect?: (event: RtaEvent) => void; focus?: RtaEvent | null }) {
   const seen = new Set<string>();
-  const clean = events.filter(e => { const key = `${String(e.source).toLowerCase()}-${e.id}`; if (seen.has(key)) return false; seen.add(key); return true; });
+  const clean = events
+    .filter(e => !/usgs|noaa/i.test(String(e.source || '')))
+    .filter(e => { const key = `${String(e.source).toLowerCase()}-${e.id}`; if (seen.has(key)) return false; seen.add(key); return true; });
 
   if (focus) {
     return (
@@ -58,7 +60,7 @@ export function EventFeed({ events, onSelect, focus }: { events: RtaEvent[]; onS
 
   return (
     <div className="bg-white/10 backdrop-blur-md rounded-lg p-2 shadow-lg">
-      <div className="border-b border-white/20 px-2 py-1 flex items-center justify-between">
+      <div className="border-b border-white/20 px-2 py-1 flex items-center justify-between animate-in fade-in duration-500">
         <div className="text-lg font-bold text-white">Event Feed</div>
       </div>
       <ul className="divide-y divide-white/10 max-h-[420px] overflow-y-auto">
@@ -68,7 +70,7 @@ export function EventFeed({ events, onSelect, focus }: { events: RtaEvent[]; onS
           const confPct = typeof event.confidence === 'number' ? Math.round(event.confidence * 100) : '—';
           const sevPct = Math.round(eventSeverity(event) * 100);
           return (
-            <li key={event.id} className="px-2 py-3">
+            <li key={event.id} className="px-2 py-3 animate-in fade-in slide-in-from-top-1 duration-300">
               <div className="grid grid-cols-[auto_80px] gap-4 items-center">
                 <div className="grid gap-1">
                   <div className="flex items-center gap-2">

@@ -1,23 +1,27 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { getBackendBase, fetchBackendEvents, type RtaEvent } from '../services/data';
 import Globe from '../components/Globe';
 import EventFeed from '../components/EventFeed';
 import { NewHeader } from '../components/NewHeader';
+import Map from 'ol/Map';
+import View from 'ol/View';
+import TileLayer from 'ol/layer/Tile';
+import OSM from 'ol/source/OSM';
+import { fromLonLat } from 'ol/proj';
 
 
 export default function MapPage() {
   const [events, setEvents] = useState<RtaEvent[]>([]);
   
-  const [sources, setSources] = useState({});
   const [hoursWindow, setHoursWindow] = useState(24);
-  const [showPred, setShowPred] = useState(false);
+  const [loading, setLoading] = useState(true);
   
   const [mapFocus, setMapFocus] = useState<RtaEvent | null>(null);
+  const [showStreetMap, setShowStreetMap] = useState(false);
+  const streetMapRef = useRef<HTMLDivElement | null>(null);
+  const olRef = useRef<Map | null>(null);
 
   useEffect(() => {
-    const ep = window.localStorage.getItem('enablePredictions');
-    if (ep) setShowPred(ep === 'true');
-    
   }, []);
 
   useEffect(() => {
@@ -29,18 +33,34 @@ export default function MapPage() {
       if (backend) {
         all = await fetchBackendEvents();
       } else if (fallback) {
-        const now = new Date();
-        const fromISO = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
-        const toISO = now.toISOString();
-        const promises: Promise<RtaEvent[]>[] = [];
-
-        const results = await Promise.all(promises);
-        all = results.flat();
+        all = [];
       }
-      if (!cancelled) setEvents(all);
+      if (!cancelled) {
+        setEvents(all);
+        setLoading(false);
+      }
     })();
     return () => { cancelled = true; };
-  }, [sources]);
+  }, []);
+
+  useEffect(() => {
+    if (showStreetMap && mapFocus && mapFocus.latitude != null && mapFocus.longitude != null) {
+      if (!streetMapRef.current) return;
+      if (!olRef.current) {
+        olRef.current = new Map({
+          target: streetMapRef.current,
+          layers: [new TileLayer({ source: new OSM() })],
+          view: new View({ center: fromLonLat([mapFocus.longitude, mapFocus.latitude]), zoom: 14 })
+        });
+      } else {
+        olRef.current.setTarget(streetMapRef.current);
+        olRef.current.getView().setCenter(fromLonLat([mapFocus.longitude, mapFocus.latitude]));
+        olRef.current.getView().setZoom(14);
+      }
+    } else if (olRef.current) {
+      olRef.current.setTarget(undefined as unknown as HTMLElement);
+    }
+  }, [showStreetMap, mapFocus]);
 
   useEffect(() => {
     const r = Number(window.localStorage.getItem('refreshMs') || '60000');
@@ -54,14 +74,14 @@ export default function MapPage() {
   }, []);
 
   return (
-    <div className="bg-black text-white min-h-screen">
+    <div className="flow-gradient text-white min-h-screen animate-in fade-in duration-700">
       <NewHeader />
       <div className="p-4 lg:p-6">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           
           {/* Sidebar */}
           <div className="lg:col-span-1 space-y-6">
-            <div className="bg-white/10 backdrop-blur-md rounded-lg shadow-lg p-4">
+            <div className="bg-white/10 backdrop-blur-md rounded-lg shadow-lg p-4 animate-in slide-in-from-left-2 duration-500">
               <h2 className="text-lg font-bold mb-4">Controls</h2>
               
               {/* Time Window */}
@@ -76,8 +96,13 @@ export default function MapPage() {
                   max="168" 
                   value={hoursWindow} 
                   onChange={(e) => setHoursWindow(Number(e.target.value))} 
-                  className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                  className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer transition-all duration-300"
                 />
+              </div>
+
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-sm font-medium">Street View Overlay</span>
+                <button className="px-2 py-1 bg-white/10 border border-white/10 rounded-md hover:bg-white/20 transition-colors" onClick={() => setShowStreetMap(s => !s)}>{showStreetMap ? 'Hide' : 'Show'}</button>
               </div>
 
               {/* Source Toggles */}
@@ -89,16 +114,7 @@ export default function MapPage() {
                 </div>
               </div>
 
-              {/* Other Options */}
-              <div>
-                <h3 className="text-md font-semibold mb-2">Options</h3>
-                <div className="flex flex-col space-y-2 text-sm">
-                  <label className="flex items-center space-x-2 cursor-pointer">
-                    <input type="checkbox" checked={showPred} onChange={e => setShowPred(e.target.checked)} className="form-checkbox h-4 w-4 text-blue-600 bg-gray-800 border-gray-600 rounded" />
-                    <span>Show Predictions</span>
-                  </label>
-                </div>
-              </div>
+              
               
             </div>
 
@@ -107,17 +123,35 @@ export default function MapPage() {
               events={events.filter(e => {
                 const t = new Date(e.timestamp).getTime();
                 const cutoff = Date.now() - hoursWindow * 3600000;
-                return !isNaN(t) && t >= cutoff;
+                const src = String(e.source || '');
+                return !isNaN(t) && t >= cutoff && !/usgs|noaa/i.test(src);
               })} 
-              onSelect={(e) => setMapFocus(f => f?.id === e.id ? null : e)} 
+              onSelect={(e) => { setMapFocus(f => f?.id === e.id ? null : e); }} 
               focus={mapFocus} 
             />
           </div>
 
           {/* Main Content */}
-          <div className="lg:col-span-3">
-            <div className="bg-white/10 backdrop-blur-md rounded-lg shadow-lg h-[calc(100vh-120px)]">
-              <Globe events={events} focus={mapFocus} />
+          <div className="lg:col-span-3 animate-in slide-in-from-right-2 duration-500">
+            <div className="relative bg-white/10 backdrop-blur-md rounded-lg shadow-lg h-[calc(100vh-120px)] transition-all">
+              {loading && (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="h-10 w-10 rounded-full border-2 border-white/50 border-t-white animate-spin" />
+                </div>
+              )}
+              <Globe events={events.filter(e => !/usgs|noaa/i.test(String(e.source||'')))} focus={mapFocus} onSelect={(e) => setMapFocus(f => f?.id === e.id ? null : e)} />
+
+              {showStreetMap && mapFocus && mapFocus.latitude != null && mapFocus.longitude != null && (
+                <div className="absolute inset-4 bg-black/80 border border-white/10 rounded-lg shadow-2xl">
+                  <div className="flex items-center justify-between p-2 text-xs text-gray-300">
+                    <div>
+                      Street View • Lat: {mapFocus.latitude?.toFixed(4)} • Lon: {mapFocus.longitude?.toFixed(4)}
+                    </div>
+                    <button className="px-2 py-1 bg-white/10 rounded-md" onClick={() => setShowStreetMap(false)}>Close</button>
+                  </div>
+                  <div ref={streetMapRef} style={{ width: '100%', height: 'calc(100% - 32px)' }} />
+                </div>
+              )}
             </div>
           </div>
 
