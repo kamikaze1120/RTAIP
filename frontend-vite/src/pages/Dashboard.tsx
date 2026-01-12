@@ -5,7 +5,7 @@ import Globe from '../components/Globe';
 import AlertList from '../components/AlertList';
 import { ShieldAlert, Activity, TrendingUp } from 'lucide-react';
 import { Globe as GlobeIcon } from 'lucide-react';
-import { fetchGDACS, fetchBackendEvents, getBackendBase, type RtaEvent, globalThreatScore, topClusters, typeProbabilities, fetchSupabaseEvents, getSupabaseConfig } from '../services/data';
+import { fetchBackendEvents, getBackendBase, type RtaEvent, globalThreatScore, topClusters, typeProbabilities, fetchSupabaseEvents, getSupabaseConfig } from '../services/data';
 import { NewHeader } from '../components/NewHeader';
 
 
@@ -37,10 +37,7 @@ export default function Dashboard() {
       } else if (base) {
         try { backend = await fetchBackendEvents(); } catch {}
       }
-      const [gdacs] = await Promise.all([
-        fetchGDACS(fromISO, toISO),
-      ]);
-      const all = [...backend, ...gdacs];
+      const all = [...backend];
       if (!cancelled) setEvents(all);
 
 
