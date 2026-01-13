@@ -117,7 +117,7 @@ export default function Settings() {
                   type="number"
                   value={refreshMs}
                   onChange={e => setRefreshMs(Number(e.target.value))}
-                  className="w-full px-4 py-2 bg-black/20 text-white placeholder-gray-500 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2 bg-black/20 text-white placeholder-gray-500 border border-white/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500"
                 />
                  <p className="mt-2 text-xs text-gray-500">How often to poll the backend for new data, in milliseconds.</p>
               </div>

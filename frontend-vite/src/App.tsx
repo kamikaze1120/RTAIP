@@ -1,4 +1,4 @@
-import { Routes, Route, useNavigate } from 'react-router-dom';
+import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { NewHeader } from './components/NewHeader';
 
@@ -16,6 +16,7 @@ import { getBackendBase, getHealthPaths, checkSupabaseHealth, getSupabaseConfig,
 
 export default function App() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [booting, setBooting] = useState(true);
   useEffect(() => {
     runConnectivityDiagnostics().then(console.log);
@@ -60,10 +61,12 @@ export default function App() {
   useEffect(() => {
     const id = setTimeout(() => {
       setBooting(false);
-      navigate('/sources');
+      if (location.pathname === '/') {
+        navigate('/sources');
+      }
     }, 2000);
     return () => clearTimeout(id);
-  }, [navigate]);
+  }, [navigate, location.pathname]);
   return (
     <div className="relative min-h-screen text-white bg-animated">
       <div className="grid-overlay"></div>

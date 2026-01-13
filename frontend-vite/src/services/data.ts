@@ -42,8 +42,15 @@ async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit & { 
 }
 
 export function getBackendBase(): string | null {
-  const env = import.meta.env.VITE_BACKEND_URL as string | undefined;
-  return (env && env.trim()) || null;
+  try {
+    const ls = typeof window !== 'undefined' ? window.localStorage.getItem('backendUrl') : null;
+    const env = import.meta.env.VITE_BACKEND_URL as string | undefined;
+    const url = (ls && ls.trim()) || (env && env.trim()) || '';
+    return url ? url : null;
+  } catch {
+    const env = import.meta.env.VITE_BACKEND_URL as string | undefined;
+    return (env && env.trim()) || null;
+  }
 }
 
 export function getHealthPaths(): string[] {
@@ -223,10 +230,20 @@ export async function runConnectivityDiagnostics(): Promise<ConnectivityDiagnost
 }
 
 export function getSupabaseConfig(): { url?: string; anon?: string; table?: string } {
-  const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-  const anon = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) || (import.meta.env.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY as string | undefined);
-  const table = (import.meta.env.VITE_SUPABASE_TABLE as string | undefined) || 'events';
-  return { url, anon, table };
+  try {
+    const lsUrl = typeof window !== 'undefined' ? window.localStorage.getItem('supabaseUrl') : null;
+    const lsAnon = typeof window !== 'undefined' ? window.localStorage.getItem('supabaseAnon') : null;
+    const lsTable = typeof window !== 'undefined' ? window.localStorage.getItem('supabaseTable') : null;
+    const url = (lsUrl && lsUrl.trim()) || (import.meta.env.VITE_SUPABASE_URL as string | undefined);
+    const anon = (lsAnon && lsAnon.trim()) || (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) || (import.meta.env.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY as string | undefined);
+    const table = (lsTable && lsTable.trim()) || (import.meta.env.VITE_SUPABASE_TABLE as string | undefined) || 'events';
+    return { url, anon, table };
+  } catch {
+    const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+    const anon = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) || (import.meta.env.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY as string | undefined);
+    const table = (import.meta.env.VITE_SUPABASE_TABLE as string | undefined) || 'events';
+    return { url, anon, table };
+  }
 }
 
 export async function checkSupabaseHealth(): Promise<boolean> {

@@ -64,7 +64,7 @@ const Intelligence = () => {
   }, []);
 
   return (
-    <div className="bg-black text-white min-h-screen">
+    <div className="flow-gradient text-white min-h-screen">
       <NewHeader />
       <div className="container mx-auto px-6 py-24 space-y-8">
         <h1 className="text-4xl font-bold">Intelligence & Research</h1>
@@ -79,9 +79,9 @@ const Intelligence = () => {
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     placeholder="Search sources..."
-                    className="flex-grow bg-black/20 text-white placeholder-gray-500 border border-gray-700 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="flex-grow bg-black/20 text-white placeholder-gray-500 border border-white/20 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-cyan-500"
                   />
-                  <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg" disabled={loading}>
+                  <button type="submit" className="bg-gradient-to-r from-cyan-500 to-violet-500 text-black font-bold py-2 px-4 rounded-lg hover:opacity-90" disabled={loading}>
                     {loading ? '...' : 'Go'}
                   </button>
                 </div>

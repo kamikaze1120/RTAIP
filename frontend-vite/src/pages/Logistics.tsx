@@ -68,7 +68,7 @@ const Logistics = () => {
   };
 
   return (
-    <div className="bg-black text-white min-h-screen">
+    <div className="flow-gradient text-white min-h-screen">
       <NewHeader />
       <div className="container mx-auto px-6 py-24 space-y-8">
         <h1 className="text-4xl font-bold">Logistics & Asset Management</h1>
@@ -81,7 +81,7 @@ const Logistics = () => {
                 value={filter}
                 onChange={(e) => setFilter(e.target.value)}
                 placeholder="Filter assets by name or NSN..."
-                className="w-full bg-black/20 text-white placeholder-gray-500 border border-gray-700 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full bg-black/20 text-white placeholder-gray-500 border border-white/20 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-cyan-500"
               />
             </div>
             <div className="bg-white/10 backdrop-blur-md rounded-lg shadow-lg p-4 h-[70vh] overflow-y-auto pr-2">
@@ -91,7 +91,7 @@ const Logistics = () => {
                 filteredAssets.map(asset => (
                   <div 
                     key={asset.id} 
-                    className={`bg-black/20 p-4 rounded-lg cursor-pointer border-2 mb-4 ${selectedAsset?.id === asset.id ? 'border-blue-500' : 'border-transparent hover:border-gray-700'}`}
+                    className={`bg-black/20 p-4 rounded-lg cursor-pointer border mb-4 transition-colors ${selectedAsset?.id === asset.id ? 'border-cyan-500/40' : 'border-white/10 hover:border-white/30'}`}
                     onClick={() => setSelectedAsset(asset)}
                   >
                     <div className="flex items-center">
