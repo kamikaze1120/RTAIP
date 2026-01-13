@@ -10,6 +10,7 @@ import Intelligence from './pages/Intelligence';
 import ThreatAnalysis from './pages/ThreatAnalysis';
 import Logistics from './pages/Logistics';
 import Security from './pages/Security';
+import Settings from './pages/Settings';
  
 import { getBackendBase, getHealthPaths, checkSupabaseHealth, getSupabaseConfig, runConnectivityDiagnostics } from './services/data';
 
@@ -90,6 +91,7 @@ export default function App() {
             <Route path="/map" element={<MapPage />} />
             <Route path="/timeline" element={<Timeline />} />
             <Route path="/security" element={<Security />} />
+            <Route path="/settings" element={<Settings />} />
             <Route path="/" element={<Dashboard />} />
           </Routes>
           )}
