@@ -6,6 +6,11 @@
       "config": { "distDir": "dist" }
     }
   ],
+  "build": {
+    "env": {
+      "VITE_BACKEND_URL": "https://your-backend.example.com"
+    }
+  },
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
   ]
