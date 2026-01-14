@@ -3,9 +3,17 @@ import { getBackendBase, runConnectivityDiagnostics, runSupabaseDiagnostics, get
 import { NewHeader } from '../components/NewHeader';
 
 export default function Settings() {
-  const [backendUrl, setBackendUrl] = useState('');
-  const [refreshMs, setRefreshMs] = useState(60000);
-  const [enabledSources, setEnabledSources] = useState({
+  const canonicalSources = [
+    'ODIN',
+    'DTIC',
+    'USACE',
+    'PUB LOG',
+    'NGA Tearline',
+    'Military Periscope',
+    'Janes',
+    'Global Terrorism DB',
+  ];
+  const defaultSourceMap: Record<string, boolean> = {
     'ODIN': true,
     'DTIC': true,
     'USACE': true,
@@ -14,7 +22,10 @@ export default function Settings() {
     'Military Periscope': false,
     'Janes': false,
     'Global Terrorism DB': false,
-  });
+  };
+  const [backendUrl, setBackendUrl] = useState('');
+  const [refreshMs, setRefreshMs] = useState(60000);
+  const [enabledSources, setEnabledSources] = useState<Record<string, boolean>>(defaultSourceMap);
   const [healthPath, setHealthPath] = useState('/health');
   const [enablePredictions, setEnablePredictions] = useState(true);
   const [defaultImpactRadius, setDefaultImpactRadius] = useState(120);
@@ -31,7 +42,18 @@ export default function Settings() {
     const cur = getBackendBase();
     setBackendUrl(cur || '');
     const s = window.localStorage.getItem('sources');
-    if (s) try { setEnabledSources(JSON.parse(s)); } catch {}
+    if (s) {
+      try {
+        const parsed = JSON.parse(s) as Record<string, boolean>;
+        const filtered: Record<string, boolean> = {};
+        canonicalSources.forEach(name => { filtered[name] = parsed[name] ?? defaultSourceMap[name] ?? true; });
+        setEnabledSources(filtered);
+      } catch {
+        setEnabledSources(defaultSourceMap);
+      }
+    } else {
+      setEnabledSources(defaultSourceMap);
+    }
     const r = window.localStorage.getItem('refreshMs');
     if (r) setRefreshMs(Number(r));
     const hp = window.localStorage.getItem('healthPath');
@@ -140,12 +162,15 @@ export default function Settings() {
 
             {renderSection("Data Sources", "Enable or disable specific data sources.", <>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                {Object.keys(enabledSources).map(k => (
+                {canonicalSources.map(k => (
                   <label key={k} className="flex items-center space-x-3 p-3 bg-black/20 rounded-lg border border-white/10">
                     <input type="checkbox" checked={enabledSources[k as keyof typeof enabledSources]} onChange={e => setEnabledSources(s => ({ ...s, [k]: e.target.checked }))} className="form-checkbox h-5 w-5 text-cyan-500 bg-gray-800 border-gray-600 rounded focus:ring-cyan-500" />
                     <span className="text-white font-medium">{k}</span>
                   </label>
                 ))}
+              </div>
+              <div className="pt-2">
+                <button onClick={() => setEnabledSources(defaultSourceMap)} className="px-3 py-2 rounded-md bg-gradient-to-r from-cyan-500 to-violet-500 text-black font-semibold shadow hover:opacity-90">Reset Sources</button>
               </div>
               <label className="flex items-center space-x-3 pt-4">
                 <input type="checkbox" checked={useOpenFallback} onChange={e => setUseOpenFallback(e.target.checked)} className="form-checkbox h-5 w-5 text-blue-600 bg-gray-800 border-gray-600 rounded focus:ring-blue-500" />

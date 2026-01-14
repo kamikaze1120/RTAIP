@@ -21,6 +21,12 @@ const newSources: SourceStat[] = [
 export default function Sources() {
   const [stats, setStats] = useState<SourceStat[]>(newSources);
   const [events, setEvents] = useState<RtaEvent[]>([]);
+  const enabledMap = useMemo(() => {
+    try {
+      const s = typeof window !== 'undefined' ? window.localStorage.getItem('sources') : null;
+      return s ? (JSON.parse(s) as Record<string, boolean>) : {};
+    } catch { return {}; }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -62,8 +68,9 @@ export default function Sources() {
   }, [events]);
 
   useEffect(() => {
-    setStats(newSources.map(s => ({ ...s, count: sourceCounts.get(s.label) || 0 })));
-  }, [sourceCounts]);
+    const filtered = newSources.filter(s => enabledMap[s.label] !== false);
+    setStats(filtered.map(s => ({ ...s, count: sourceCounts.get(s.label) || 0 })));
+  }, [sourceCounts, enabledMap]);
 
   return (
     <div className="flow-gradient text-white min-h-screen">
