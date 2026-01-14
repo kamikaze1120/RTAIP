@@ -1,11 +1,20 @@
 import React, { useEffect, useState } from 'react';
-import { getBackendBase, runConnectivityDiagnostics, runSupabaseDiagnostics, type ConnectivityDiagnostics, type SupabaseDiagnostics } from '../services/data';
+import { getBackendBase, runConnectivityDiagnostics, runSupabaseDiagnostics, getSupabaseConfig, type ConnectivityDiagnostics, type SupabaseDiagnostics } from '../services/data';
 import { NewHeader } from '../components/NewHeader';
 
 export default function Settings() {
   const [backendUrl, setBackendUrl] = useState('');
   const [refreshMs, setRefreshMs] = useState(60000);
-  const [enabledSources, setEnabledSources] = useState({ usgs: true, noaa: true, gdacs: false });
+  const [enabledSources, setEnabledSources] = useState({
+    'ODIN': true,
+    'DTIC': true,
+    'USACE': true,
+    'PUB LOG': true,
+    'NGA Tearline': true,
+    'Military Periscope': false,
+    'Janes': false,
+    'Global Terrorism DB': false,
+  });
   const [healthPath, setHealthPath] = useState('/health');
   const [enablePredictions, setEnablePredictions] = useState(true);
   const [defaultImpactRadius, setDefaultImpactRadius] = useState(120);
@@ -47,6 +56,12 @@ export default function Settings() {
     if (sa) setSupabaseAnon(sa);
     const st = window.localStorage.getItem('supabaseTable');
     if (st) setSupabaseTable(st);
+    if (!su || !sa || !st) {
+      const env = getSupabaseConfig();
+      if (!su && env.url) setSupabaseUrl(env.url);
+      if (!sa && env.anon) setSupabaseAnon(env.anon);
+      if (!st && env.table) setSupabaseTable(env.table);
+    }
   }, []);
 
   const save = () => {
@@ -126,9 +141,9 @@ export default function Settings() {
             {renderSection("Data Sources", "Enable or disable specific data sources.", <>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 {Object.keys(enabledSources).map(k => (
-                  <label key={k} className="flex items-center space-x-3 p-3 bg-black/20 rounded-lg">
-                    <input type="checkbox" checked={enabledSources[k as keyof typeof enabledSources]} onChange={e => setEnabledSources(s => ({ ...s, [k]: e.target.checked }))} className="form-checkbox h-5 w-5 text-blue-600 bg-gray-800 border-gray-600 rounded focus:ring-blue-500" />
-                    <span className="text-white font-medium">{k.toUpperCase()}</span>
+                  <label key={k} className="flex items-center space-x-3 p-3 bg-black/20 rounded-lg border border-white/10">
+                    <input type="checkbox" checked={enabledSources[k as keyof typeof enabledSources]} onChange={e => setEnabledSources(s => ({ ...s, [k]: e.target.checked }))} className="form-checkbox h-5 w-5 text-cyan-500 bg-gray-800 border-gray-600 rounded focus:ring-cyan-500" />
+                    <span className="text-white font-medium">{k}</span>
                   </label>
                 ))}
               </div>
