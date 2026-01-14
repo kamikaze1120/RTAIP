@@ -70,7 +70,10 @@ export default function AnalystPanel({ events, onAsk }: { events: RtaEvent[]; on
       return;
     }
     try {
-      const r = await fetch(`${baseUrl.replace(/\/$/, '')}${aiPath}`, {
+      const b = baseUrl.replace(/\/$/, '');
+      const endsApi = /\/api$/.test(b);
+      const p = endsApi && /^\/api\//.test(aiPath) ? aiPath.replace(/^\/api/, '') : aiPath;
+      const r = await fetch(`${b}${p}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: q })
       });
       const jd = await r.json();
