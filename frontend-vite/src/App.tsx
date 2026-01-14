@@ -12,7 +12,7 @@ import Logistics from './pages/Logistics';
 import Security from './pages/Security';
 import Settings from './pages/Settings';
  
-import { getBackendBase, getHealthPaths, checkSupabaseHealth, getSupabaseConfig, runConnectivityDiagnostics } from './services/data';
+import { getBackendBase, checkSupabaseHealth, getSupabaseConfig, runConnectivityDiagnostics } from './services/data';
 
 
 export default function App() {
@@ -33,8 +33,9 @@ export default function App() {
       }
       if (!base) { return; }
       const b = base.replace(/\/$/, '');
+      const endsApi = /\/api$/.test(b);
       try {
-        const paths = getHealthPaths();
+        const paths = endsApi ? ['/health', '/status'] : ['/health', '/api/health', '/status'];
         for (const p of paths) {
           try {
             const r = await fetch(`${b}${p}`, { cache: 'no-store' });
@@ -46,7 +47,14 @@ export default function App() {
           if (ping.ok) { }
         } catch {}
         try {
-          const ev = await fetch(`${b}/events`, { cache: 'no-store' });
+          const evCandidates = endsApi ? ['/events'] : ['/events', '/api/events'];
+          let ev: Response | null = null;
+          for (const p of evCandidates) {
+            try {
+              const tmp = await fetch(`${b}${p}`, { cache: 'no-store' });
+              ev = tmp; if (tmp.ok) break;
+            } catch {}
+          }
           if (ev.ok) { }
           else { }
         } catch {
