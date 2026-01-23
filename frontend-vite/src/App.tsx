@@ -20,6 +20,25 @@ export default function App() {
   const location = useLocation();
   const [booting, setBooting] = useState(true);
   useEffect(() => {
+    // Persist env defaults to localStorage so backend stays connected without manual input
+    try {
+      const envBackend = import.meta.env.VITE_BACKEND_URL as string | undefined;
+      if (envBackend && !window.localStorage.getItem('backendUrl')) {
+        window.localStorage.setItem('backendUrl', envBackend);
+      }
+      const envSupaUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+      if (envSupaUrl && !window.localStorage.getItem('supabaseUrl')) {
+        window.localStorage.setItem('supabaseUrl', envSupaUrl);
+      }
+      const envSupaAnon = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+      if (envSupaAnon && !window.localStorage.getItem('supabaseAnon')) {
+        window.localStorage.setItem('supabaseAnon', envSupaAnon);
+      }
+      const envSupaTable = (import.meta.env.VITE_SUPABASE_TABLE as string | undefined) || 'events';
+      if (envSupaTable && !window.localStorage.getItem('supabaseTable')) {
+        window.localStorage.setItem('supabaseTable', envSupaTable);
+      }
+    } catch {}
     runConnectivityDiagnostics().then(console.log);
   }, []);
 
@@ -55,7 +74,7 @@ export default function App() {
               ev = tmp; if (tmp.ok) break;
             } catch {}
           }
-          if (ev.ok) { }
+          if (ev && ev.ok) { }
           else { }
         } catch {
         }

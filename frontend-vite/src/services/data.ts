@@ -274,11 +274,11 @@ export async function fetchSupabaseEvents(): Promise<RtaEvent[]> {
       if (error || !Array.isArray(data)) return [];
       return data.map((row: Record<string, unknown>) => ({
         id: String(row.id ?? `${row.source}-${row.timestamp}`),
-        source: row.source ?? 'supabase',
-        timestamp: row.timestamp ?? row.created_at ?? new Date().toISOString(),
-        latitude: typeof row.lat === 'number' ? row.lat : (typeof row.latitude === 'number' ? row.latitude : null),
-        longitude: typeof row.lon === 'number' ? row.lon : (typeof row.longitude === 'number' ? row.longitude : null),
-        confidence: typeof row.confidence === 'number' ? row.confidence : 0.6,
+        source: String(row.source ?? 'supabase'),
+        timestamp: String((row as Record<string, unknown>).timestamp ?? (row as Record<string, unknown>).created_at ?? new Date().toISOString()),
+        latitude: typeof (row as Record<string, unknown>).lat === 'number' ? (row as Record<string, unknown>).lat : (typeof (row as Record<string, unknown>).latitude === 'number' ? (row as Record<string, unknown>).latitude : null),
+        longitude: typeof (row as Record<string, unknown>).lon === 'number' ? (row as Record<string, unknown>).lon : (typeof (row as Record<string, unknown>).longitude === 'number' ? (row as Record<string, unknown>).longitude : null),
+        confidence: typeof (row as Record<string, unknown>).confidence === 'number' ? (row as Record<string, unknown>).confidence : 0.6,
         data: row
       }));
     } catch { /* fall through to REST */ }
