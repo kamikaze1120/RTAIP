@@ -57,7 +57,7 @@
 }
 
 @layer base {
-  * { @apply border-border; }
+  * { border-color: hsl(var(--border)); }
 html { font-family: "Sora", "JetBrains Mono", system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; scroll-behavior: smooth; }
 
 /* Animated gradient background and grid overlay */
@@ -77,7 +77,9 @@ html { font-family: "Sora", "JetBrains Mono", system-ui, -apple-system, Segoe UI
 }
 @keyframes gradientShift { 0% { background-position: 0% 0%; } 50% { background-position: 100% 100%; } 100% { background-position: 0% 0%; } }
   body {
-    @apply text-foreground antialiased;
+    color: hsl(var(--foreground));
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
     background-color: hsl(var(--background));
     background-image: radial-gradient(circle at 10% 10%, hsl(var(--accent) / 0.05) 0%, transparent 30%),
                       radial-gradient(circle at 90% 80%, hsl(var(--primary) / 0.05) 0%, transparent 30%);
