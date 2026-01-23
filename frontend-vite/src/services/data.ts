@@ -272,30 +272,50 @@ export async function fetchSupabaseEvents(): Promise<RtaEvent[]> {
     try {
       const { data, error } = await client.from(table).select('*').limit(1000);
       if (error || !Array.isArray(data)) return [];
-      return data.map((row: Record<string, unknown>) => ({
-        id: String(row.id ?? `${row.source}-${row.timestamp}`),
-        source: String(row.source ?? 'supabase'),
-        timestamp: String((row as Record<string, unknown>).timestamp ?? (row as Record<string, unknown>).created_at ?? new Date().toISOString()),
-        latitude: typeof (row as Record<string, unknown>).lat === 'number' ? (row as Record<string, unknown>).lat : (typeof (row as Record<string, unknown>).latitude === 'number' ? (row as Record<string, unknown>).latitude : null),
-        longitude: typeof (row as Record<string, unknown>).lon === 'number' ? (row as Record<string, unknown>).lon : (typeof (row as Record<string, unknown>).longitude === 'number' ? (row as Record<string, unknown>).longitude : null),
-        confidence: typeof (row as Record<string, unknown>).confidence === 'number' ? (row as Record<string, unknown>).confidence : 0.6,
-        data: row
-      }));
+      type SupaRow = Record<string, unknown> & { id?: string | number; source?: unknown; timestamp?: unknown; created_at?: unknown; lat?: unknown; latitude?: unknown; lon?: unknown; longitude?: unknown; confidence?: unknown };
+      const numOrNull = (v: unknown): number | null => (typeof v === 'number' ? v : null);
+      return data.map((row: Record<string, unknown>) => {
+        const r = row as SupaRow;
+        const lat: number | null = numOrNull(r.lat) ?? numOrNull(r.latitude);
+        const lon: number | null = numOrNull(r.lon) ?? numOrNull(r.longitude);
+        const conf: number = typeof r.confidence === 'number' ? (r.confidence as number) : 0.6;
+        const ts: string = String(r.timestamp ?? r.created_at ?? new Date().toISOString());
+        const src: string = String(r.source ?? 'supabase');
+        return {
+          id: String(r.id ?? `${src}-${ts}`),
+          source: src,
+          timestamp: ts,
+          latitude: lat,
+          longitude: lon,
+          confidence: conf,
+          data: row,
+        };
+      });
     } catch { /* fall through to REST */ }
   }
   try {
     const r = await fetchWithTimeout(`${url.replace(/\/$/, '')}/rest/v1/${encodeURIComponent(table)}?select=*`, { timeoutMs: 10000, headers: { apikey: anon, Authorization: `Bearer ${anon}` } });
     if (!r.ok) return [];
     const rows: Record<string, unknown>[] = await r.json();
-    const events: RtaEvent[] = rows.map((row: Record<string, unknown>) => ({
-      id: String(row.id ?? `${row.source}-${row.timestamp}`),
-      source: (row.source as string) ?? 'supabase',
-      timestamp: (row.timestamp as string) ?? (row.created_at as string) ?? new Date().toISOString(),
-      latitude: typeof row.lat === 'number' ? row.lat : (typeof row.latitude === 'number' ? row.latitude : null),
-      longitude: typeof row.lon === 'number' ? row.lon : (typeof row.longitude === 'number' ? row.longitude : null),
-      confidence: typeof row.confidence === 'number' ? row.confidence : 0.6,
-      data: row
-    }));
+    type SupaRow = Record<string, unknown> & { id?: string | number; source?: unknown; timestamp?: unknown; created_at?: unknown; lat?: unknown; latitude?: unknown; lon?: unknown; longitude?: unknown; confidence?: unknown };
+    const numOrNull = (v: unknown): number | null => (typeof v === 'number' ? v : null);
+    const events: RtaEvent[] = rows.map((row: Record<string, unknown>) => {
+      const r = row as SupaRow;
+      const lat: number | null = numOrNull(r.lat) ?? numOrNull(r.latitude);
+      const lon: number | null = numOrNull(r.lon) ?? numOrNull(r.longitude);
+      const conf: number = typeof r.confidence === 'number' ? (r.confidence as number) : 0.6;
+      const ts: string = String(r.timestamp ?? r.created_at ?? new Date().toISOString());
+      const src: string = String(r.source ?? 'supabase');
+      return {
+        id: String(r.id ?? `${src}-${ts}`),
+        source: src,
+        timestamp: ts,
+        latitude: lat,
+        longitude: lon,
+        confidence: conf,
+        data: row,
+      };
+    });
     return events;
   } catch { return []; }
 }
