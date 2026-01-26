@@ -36,8 +36,6 @@ export default function Settings() {
   
 
   useEffect(() => {
-    const cur = getBackendBase();
-    setBackendUrl(cur || '');
     const s = window.localStorage.getItem('sources');
     if (s) {
       try {
@@ -51,10 +49,6 @@ export default function Settings() {
     } else {
       setEnabledSources(defaultSourceMap);
     }
-    const r = window.localStorage.getItem('refreshMs');
-    if (r) setRefreshMs(Number(r));
-    const hp = window.localStorage.getItem('healthPath');
-    if (hp) setHealthPath(hp);
     const ep = window.localStorage.getItem('enablePredictions');
     if (ep) setEnablePredictions(ep === 'true');
     const dir = window.localStorage.getItem('defaultImpactRadius');
@@ -69,18 +63,6 @@ export default function Settings() {
     if (gk) setGeminiApiKey(gk);
     const gm = window.localStorage.getItem('geminiModel');
     if (gm) setGeminiModel(gm);
-    const su = window.localStorage.getItem('supabaseUrl');
-    if (su) setSupabaseUrl(su);
-    const sa = window.localStorage.getItem('supabaseAnon');
-    if (sa) setSupabaseAnon(sa);
-    const st = window.localStorage.getItem('supabaseTable');
-    if (st) setSupabaseTable(st);
-    if (!su || !sa || !st) {
-      const env = getSupabaseConfig();
-      if (!su && env.url) setSupabaseUrl(env.url);
-      if (!sa && env.anon) setSupabaseAnon(env.anon);
-      if (!st && env.table) setSupabaseTable(env.table);
-    }
   }, []);
 
   
@@ -174,13 +156,7 @@ export default function Settings() {
               {renderInput("Default Impact Radius (km)", String(defaultImpactRadius), e => setDefaultImpactRadius(Number(e.target.value)), "", 'number', "Default radius for impact simulations.")}
             </>)}
             
-            {renderSection("Supabase Integration", "Connect to a Supabase instance for event data.", <>
-              <div className="grid md:grid-cols-1 gap-6">
-                {renderInput("Supabase Project URL", supabaseUrl, e => setSupabaseUrl(e.target.value), "https://xxxx.supabase.co")}
-                {renderInput("Supabase Public Anon Key", supabaseAnon, e => setSupabaseAnon(e.target.value), "", 'password')}
-                {renderInput("Supabase Table Name", supabaseTable, e => setSupabaseTable(e.target.value), "events")}
-              </div>
-            </>)}
+
 
             {renderSection("Connections Status", "Check connectivity to backend and Supabase.", <>
               <div className="flex items-center gap-3">
@@ -203,9 +179,7 @@ export default function Settings() {
               </div>
             </>)}
 
-            <div className="flex justify-end mt-8">
-              <button onClick={save} className="px-6 py-3 rounded-md bg-gradient-to-r from-cyan-500 to-violet-500 text-black font-bold shadow-lg hover:opacity-90 transition-opacity">Save All Settings</button>
-            </div>
+
           </div>
         </div>
       </div>
