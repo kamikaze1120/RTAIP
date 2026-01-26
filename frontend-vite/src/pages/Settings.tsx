@@ -23,10 +23,9 @@ export default function Settings() {
     'Janes': false,
     'Global Terrorism DB': false,
   };
-  const [backendUrl, setBackendUrl] = useState('');
-  const [refreshMs, setRefreshMs] = useState(60000);
+  
   const [enabledSources, setEnabledSources] = useState<Record<string, boolean>>(defaultSourceMap);
-  const [healthPath, setHealthPath] = useState('/health');
+  
   const [enablePredictions, setEnablePredictions] = useState(true);
   const [defaultImpactRadius, setDefaultImpactRadius] = useState(120);
   const [useOpenFallback, setUseOpenFallback] = useState(true);
@@ -34,9 +33,7 @@ export default function Settings() {
   const [aiProvider, setAiProvider] = useState<'backend'|'gemini'>('backend');
   const [geminiApiKey, setGeminiApiKey] = useState('');
   const [geminiModel, setGeminiModel] = useState('models/gemini-1.5-flash');
-  const [supabaseUrl, setSupabaseUrl] = useState('');
-  const [supabaseAnon, setSupabaseAnon] = useState('');
-  const [supabaseTable, setSupabaseTable] = useState('events');
+  
 
   useEffect(() => {
     const cur = getBackendBase();
@@ -86,23 +83,7 @@ export default function Settings() {
     }
   }, []);
 
-  const save = () => {
-    window.localStorage.setItem('backendUrl', backendUrl.trim());
-    window.localStorage.setItem('sources', JSON.stringify(enabledSources));
-    window.localStorage.setItem('refreshMs', String(refreshMs));
-    window.localStorage.setItem('healthPath', healthPath.trim());
-    window.localStorage.setItem('enablePredictions', String(enablePredictions));
-    window.localStorage.setItem('defaultImpactRadius', String(defaultImpactRadius));
-    window.localStorage.setItem('useOpenFallback', String(useOpenFallback));
-    window.localStorage.setItem('aiEndpointPath', aiEndpointPath.trim());
-    window.localStorage.setItem('aiProvider', aiProvider);
-    if (geminiApiKey) window.localStorage.setItem('geminiApiKey', geminiApiKey.trim());
-    window.localStorage.setItem('geminiModel', geminiModel.trim());
-    if (supabaseUrl) window.localStorage.setItem('supabaseUrl', supabaseUrl.trim());
-    if (supabaseAnon) window.localStorage.setItem('supabaseAnon', supabaseAnon.trim());
-    window.localStorage.setItem('supabaseTable', supabaseTable.trim());
-    alert('Settings saved!');
-  };
+  
 
   const renderSection = (title: string, description: string, children: React.ReactNode) => (
     <div className="bg-white/5 p-6 rounded-lg">
@@ -145,20 +126,7 @@ export default function Settings() {
           </div>
 
           <div className="space-y-8">
-            {renderSection("Backend Configuration", "Settings for connecting to the RTAIP backend.", <>
-              {renderInput("Backend URL", backendUrl, e => setBackendUrl(e.target.value), "https://your-backend.onrender.com", 'text', "The base URL of your RTAIP backend server.")}
-              {renderInput("Health Path", healthPath, e => setHealthPath(e.target.value), "/health", 'text', "The path for the backend health check endpoint.")}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Refresh Interval (ms)</label>
-                <input
-                  type="number"
-                  value={refreshMs}
-                  onChange={e => setRefreshMs(Number(e.target.value))}
-                  className="w-full px-4 py-2 bg-black/20 text-white placeholder-gray-500 border border-white/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                />
-                 <p className="mt-2 text-xs text-gray-500">How often to poll the backend for new data, in milliseconds.</p>
-              </div>
-            </>)}
+            
 
             {renderSection("Data Sources", "Enable or disable specific data sources.", <>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
