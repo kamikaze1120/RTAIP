@@ -8,7 +8,7 @@
   ],
   "build": {
     "env": {
-      "VITE_BACKEND_URL": "https://your-backend.example.com"
+      "VITE_BACKEND_URL": "https://us-central1-rtaip-af1a8.cloudfunctions.net/api"
     }
   },
   "rewrites": [
