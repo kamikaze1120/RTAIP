@@ -9,12 +9,6 @@
   "build": {
     "env": {
       "VITE_BACKEND_URL": "https://your-backend.example.com"
-      ,
-      "VITE_SUPABASE_URL": "https://dxmzzhglwblunszpqkvg.supabase.co"
-      ,
-      "VITE_SUPABASE_ANON_KEY": "<set-in-vercel-ui>"
-      ,
-      "VITE_SUPABASE_TABLE": "events"
     }
   },
   "rewrites": [
