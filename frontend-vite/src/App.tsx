@@ -23,7 +23,7 @@ export default function App() {
     // Persist env defaults to localStorage so backend stays connected without manual input
     try {
       const envBackend = import.meta.env.VITE_BACKEND_URL as string | undefined;
-      if (envBackend && !window.localStorage.getItem('backendUrl')) {
+      if (envBackend) {
         window.localStorage.setItem('backendUrl', envBackend);
       }
       const envSupaUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
