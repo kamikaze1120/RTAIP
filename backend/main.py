@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from database import Session, User, DataEvent
+from database import Session as DBSession, User, DataEvent
 from pydantic import BaseModel
 from auth import create_access_token, get_password_hash, verify_password
 from datetime import timedelta
@@ -72,8 +72,9 @@ class UserLogin(BaseModel):
     password: str
 
 def get_db():
-    db = Session()
+    db = DBSession()
     try:
+        logger.info("Database session created.")
         yield db
     finally:
         db.close()
