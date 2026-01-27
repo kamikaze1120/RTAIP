@@ -101,9 +101,22 @@ def login_for_access_token(user: UserLogin, db: Session = Depends(get_db)):
     )
     return {"access_token": access_token, "token_type": "bearer"}
 
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 @app.get("/events")
 def get_events(db: Session = Depends(get_db)):
-    return db.query(DataEvent).all()
+    try:
+        logger.info("Fetching events from the database.")
+        events = db.query(DataEvent).all()
+        logger.info(f"Successfully fetched {len(events)} events.")
+        return events
+    except Exception as e:
+        logger.error(f"Error fetching events: {e}", exc_info=True)
+        return {"error": "Failed to fetch events"}
 
 @app.get("/")
 def root():
