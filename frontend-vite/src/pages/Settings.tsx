@@ -65,9 +65,17 @@ export default function Settings() {
     if (gm) setGeminiModel(gm);
   }, []);
 
-  
-
-  const renderSection = (title: string, description: string, children: React.ReactNode) => (
+  const saveSettings = () => {
+    window.localStorage.setItem('sources', JSON.stringify(enabledSources));
+    window.localStorage.setItem('enablePredictions', String(enablePredictions));
+    window.localStorage.setItem('defaultImpactRadius', String(defaultImpactRadius));
+    window.localStorage.setItem('useOpenFallback', String(useOpenFallback));
+    window.localStorage.setItem('aiEndpointPath', aiEndpointPath);
+    window.localStorage.setItem('aiProvider', aiProvider);
+    window.localStorage.setItem('geminiApiKey', geminiApiKey);
+    window.localStorage.setItem('geminiModel', geminiModel);
+    alert('Settings saved!');
+  };
     <div className="bg-white/5 p-6 rounded-lg">
       <h2 className="text-xl font-bold text-white mb-2">{title}</h2>
       <p className="text-gray-400 mb-6">{description}</p>
@@ -119,8 +127,9 @@ export default function Settings() {
                   </label>
                 ))}
               </div>
-              <div className="pt-2">
+              <div className="pt-2 flex items-center gap-3">
                 <button onClick={() => setEnabledSources(defaultSourceMap)} className="px-3 py-2 rounded-md bg-gradient-to-r from-cyan-500 to-violet-500 text-black font-semibold shadow hover:opacity-90">Reset Sources</button>
+                <button onClick={saveSettings} className="px-4 py-2 rounded-md bg-gradient-to-r from-green-500 to-emerald-500 text-black font-semibold shadow-lg hover:opacity-90 transition-opacity">Save</button>
               </div>
               <label className="flex items-center space-x-3 pt-4">
                 <input type="checkbox" checked={useOpenFallback} onChange={e => setUseOpenFallback(e.target.checked)} className="form-checkbox h-5 w-5 text-blue-600 bg-gray-800 border-gray-600 rounded focus:ring-blue-500" />
