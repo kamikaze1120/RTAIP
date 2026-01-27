@@ -2,10 +2,58 @@ from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, 
 from sqlalchemy.orm import sessionmaker, declarative_base
 from datetime import datetime
 import os
+import socket
+from urllib.parse import urlparse, urlunparse
+
+def resolve_ipv4(url: str) -> str:
+    """
+    Parses a URL, resolves its hostname to an IPv4 address, and returns the updated URL.
+    This is a workaround for network environments that have issues with IPv6, like Render.
+    """
+    if not url or not url.startswith('postgresql'):
+        return url
+    try:
+        parsed_url = urlparse(url)
+        # Resolve hostname to IPv4 address
+        ipv4_address = None
+        for res in socket.getaddrinfo(parsed_url.hostname, parsed_url.port):
+            if res[0] == socket.AF_INET: # AF_INET is IPv4
+                ipv4_address = res[4][0]
+                break
+        
+        if ipv4_address:
+            # Reconstruct the URL with the resolved IP address
+            netloc_parts = parsed_url.netloc.split('@')
+            if len(netloc_parts) == 2:
+                auth, _ = netloc_parts
+                new_netloc = f"{auth}@{ipv4_address}:{parsed_url.port}"
+            else:
+                new_netloc = f"{ipv4_address}:{parsed_url.port}"
+
+            new_url_parts = parsed_url._replace(netloc=new_netloc)
+            resolved_url = urlunparse(new_url_parts)
+            # Avoid logging password
+            if parsed_url.password:
+                log_url = resolved_url.replace(parsed_url.password, '*****')
+            else:
+                log_url = resolved_url
+            print(f"[DB INIT] Resolved {parsed_url.hostname} to {ipv4_address}. New URL: {log_url}")
+            return resolved_url
+        else:
+            print(f"[DB INIT] Warning: Could not resolve {parsed_url.hostname} to an IPv4 address. Using original URL.")
+            return url
+    except (socket.gaierror, TypeError, AttributeError, ValueError) as e:
+        print(f"[DB INIT] Warning: Failed to resolve hostname in URL '{url}'. Error: {e}. Using original URL.")
+        return url
+
 
 # Use Supabase/Postgres if DATABASE_URL is provided, otherwise fall back to local SQLite
-DATABASE_URL = os.environ.get('DATABASE_URL', 'sqlite:///rtaip.db')
-DIRECT_URL = os.environ.get('DIRECT_URL')  # For migrations/DDL on Supabase
+DATABASE_URL_RAW = os.environ.get('DATABASE_URL', 'sqlite:///rtaip.db')
+DIRECT_URL_RAW = os.environ.get('DIRECT_URL')  # For migrations/DDL on Supabase
+
+# Force IPv4 resolution for Render/Supabase networking issues
+DATABASE_URL = resolve_ipv4(DATABASE_URL_RAW)
+DIRECT_URL = resolve_ipv4(DIRECT_URL_RAW)
 
 # Configure SQLAlchemy engine with SSL for Postgres and pool_pre_ping for connection health
 if DATABASE_URL.startswith('postgresql'):
