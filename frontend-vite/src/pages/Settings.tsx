@@ -76,6 +76,7 @@ export default function Settings() {
     window.localStorage.setItem('geminiModel', geminiModel);
     alert('Settings saved!');
   };
+  const renderSection = (title: string, description: string, children: React.ReactNode) => (
     <div className="bg-white/5 p-6 rounded-lg">
       <h2 className="text-xl font-bold text-white mb-2">{title}</h2>
       <p className="text-gray-400 mb-6">{description}</p>
