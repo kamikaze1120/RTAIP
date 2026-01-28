@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from database import Session as DBSession, User, DataEvent
+from database import Session as DBSession, User, DataEvent, ensure_schema
 from pydantic import BaseModel
 from auth import create_access_token, get_password_hash, verify_password
 from datetime import timedelta
@@ -126,6 +126,11 @@ def root():
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+@app.post("/migrate")
+def migrate():
+    ok, msg = ensure_schema()
+    return {"ok": ok, "message": msg}
 
 
 if __name__ == "__main__":
