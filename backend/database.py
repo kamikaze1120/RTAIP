@@ -4,12 +4,56 @@ from datetime import datetime
 import os
 import socket
 from urllib.parse import urlparse, urlunparse
+import logging
+
+logger = logging.getLogger(__name__)
+
+def resolve_ipv4(url: str) -> str:
+    if not url or not url.startswith('postgresql'):
+        return url
+    try:
+        parsed = urlparse(url)
+        host = parsed.hostname
+        port = parsed.port or 5432
+        if not host:
+            return url
+        ipv4 = None
+        try:
+            ipv4 = socket.gethostbyname(host)
+        except Exception:
+            pass
+        if not ipv4:
+            try:
+                infos = socket.getaddrinfo(host, port, family=socket.AF_INET)
+                if infos:
+                    ipv4 = infos[0][4][0]
+            except Exception:
+                pass
+        if not ipv4:
+            return url
+        parts = parsed.netloc.split('@')
+        if len(parts) == 2:
+            auth, _ = parts
+            new_netloc = f"{auth}@{ipv4}:{port}"
+        else:
+            new_netloc = f"{ipv4}:{port}"
+        new_url = parsed._replace(netloc=new_netloc)
+        resolved = urlunparse(new_url)
+        try:
+            logger.info(f"[DB INIT] IPv4 resolved for {host}: {ipv4}")
+        except Exception:
+            pass
+        return resolved
+    except Exception:
+        return url
 
 
 
 # Use Supabase/Postgres if DATABASE_URL is provided, otherwise fall back to local SQLite
-DATABASE_URL = os.environ.get('DATABASE_URL', 'sqlite:///rtaip.db')
-DIRECT_URL = os.environ.get('DIRECT_URL')
+DATABASE_URL_RAW = os.environ.get('DATABASE_URL', 'sqlite:///rtaip.db')
+DIRECT_URL_RAW = os.environ.get('DIRECT_URL')
+DATABASE_URL = resolve_ipv4(DATABASE_URL_RAW)
+DIRECT_URL = resolve_ipv4(DIRECT_URL_RAW)
 
 # Configure SQLAlchemy engine with SSL for Postgres and pool_pre_ping for connection health
 if DATABASE_URL.startswith('postgresql'):
