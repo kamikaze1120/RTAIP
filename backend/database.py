@@ -52,7 +52,31 @@ def resolve_ipv4(url: str) -> str:
 # Use Supabase/Postgres if DATABASE_URL is provided, otherwise fall back to local SQLite
 DATABASE_URL_RAW = os.environ.get('DATABASE_URL', 'sqlite:///rtaip.db')
 DIRECT_URL_RAW = os.environ.get('DIRECT_URL')
-DATABASE_URL = resolve_ipv4(DATABASE_URL_RAW)
+def _add_pgbouncer(url: str) -> str:
+    try:
+        if not url or not url.startswith('postgresql'):
+            return url
+        p = urlparse(url)
+        host = p.hostname or ''
+        port = p.port or 5432
+        if host.endswith('supabase.co') and port == 5432:
+            netloc = p.netloc
+            if '@' in netloc:
+                auth, _ = netloc.split('@', 1)
+                new_netloc = f"{auth}@{host}:6543"
+            else:
+                new_netloc = f"{host}:6543"
+            new_url = p._replace(netloc=new_netloc)
+            return urlunparse(new_url)
+        return url
+    except Exception:
+        return url
+
+resolved = resolve_ipv4(DATABASE_URL_RAW)
+if resolved == DATABASE_URL_RAW:
+    DATABASE_URL = _add_pgbouncer(DATABASE_URL_RAW)
+else:
+    DATABASE_URL = resolved
 DIRECT_URL = resolve_ipv4(DIRECT_URL_RAW)
 
 # Configure SQLAlchemy engine with SSL for Postgres and pool_pre_ping for connection health
