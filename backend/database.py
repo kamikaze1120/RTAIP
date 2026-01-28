@@ -138,24 +138,23 @@ class User(Base):
     role = Column(String, default='user')
     created_at = Column(DateTime, default=datetime.utcnow)
 
-# Create tables: prefer DIRECT_URL (Supabase 5432) for DDL, otherwise use runtime engine
-try:
-    if DIRECT_URL and DIRECT_URL.startswith('postgresql'):
-        _dargs = {"sslmode": "require", "connect_timeout": 10, "application_name": "RTAIP-backend-direct", "options": "-c statement_timeout=120s"}
-        if DIRECT_HOSTADDR:
-            _dargs["hostaddr"] = DIRECT_HOSTADDR
-        direct_engine = create_engine(
-            DIRECT_URL,
-            echo=True,
-            pool_pre_ping=True,
-            connect_args=_dargs
-        )
-        Base.metadata.create_all(direct_engine)
-    else:
-        Base.metadata.create_all(engine)
-except Exception as e:
-    # Fail-safe: don't crash app if DDL fails; tables may already exist
-    print(f"[DB INIT] Warning: failed to ensure tables exist: {e}")
+def _safe_init_schema():
+    try:
+        if DIRECT_URL and DIRECT_URL.startswith('postgresql'):
+            _dargs = {"sslmode": "require", "connect_timeout": 10, "application_name": "RTAIP-backend-direct", "options": "-c statement_timeout=120s"}
+            if DIRECT_HOSTADDR:
+                _dargs["hostaddr"] = DIRECT_HOSTADDR
+            direct_engine = create_engine(
+                DIRECT_URL,
+                echo=True,
+                pool_pre_ping=True,
+                connect_args=_dargs
+            )
+            Base.metadata.create_all(direct_engine)
+        else:
+            Base.metadata.create_all(engine)
+    except Exception as e:
+        print(f"[DB INIT] Warning: failed to ensure tables exist: {e}")
 
 # NEW: exportable helper to ensure schema on demand (e.g., via /migrate endpoint)
 
@@ -214,4 +213,4 @@ def ensure_schema():
     except Exception as e:
         return False, str(e)
 
-ensure_schema()
+# Do not auto-run schema ensuring at import time; use /migrate endpoint instead
