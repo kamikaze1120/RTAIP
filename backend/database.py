@@ -17,7 +17,7 @@ if DATABASE_URL.startswith('postgresql'):
         DATABASE_URL,
         echo=True,
         pool_pre_ping=True,
-        connect_args={"sslmode": "require", "connect_timeout": 10, "server_settings": {"application_name": "RTAIP-backend"}, "options": "-c statement_timeout=60s"}
+        connect_args={"sslmode": "require", "connect_timeout": 10, "application_name": "RTAIP-backend", "options": "-c statement_timeout=60s"}
     )
 else:
     engine = create_engine(DATABASE_URL, echo=True)
@@ -87,7 +87,7 @@ try:
             DIRECT_URL,
             echo=True,
             pool_pre_ping=True,
-            connect_args={"sslmode": "require", "connect_timeout": 10, "server_settings": {"application_name": "RTAIP-backend-direct"}, "options": "-c statement_timeout=120s"}
+            connect_args={"sslmode": "require", "connect_timeout": 10, "application_name": "RTAIP-backend-direct", "options": "-c statement_timeout=120s"}
         )
         Base.metadata.create_all(direct_engine)
     else:
