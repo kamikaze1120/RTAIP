@@ -8,44 +8,33 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-def resolve_ipv4(url: str) -> str:
+def get_ipv4_hostaddr(url: str):
     if not url or not url.startswith('postgresql'):
-        return url
+        return None
     try:
-        parsed = urlparse(url)
-        host = parsed.hostname
-        port = parsed.port or 5432
+        p = urlparse(url)
+        host = p.hostname
+        port = p.port or 5432
         if not host:
-            return url
-        ipv4 = None
+            return None
         try:
             ipv4 = socket.gethostbyname(host)
+            if ipv4:
+                logger.info(f"[DB INIT] hostaddr for {host}: {ipv4}")
+                return ipv4
         except Exception:
             pass
-        if not ipv4:
-            try:
-                infos = socket.getaddrinfo(host, port, family=socket.AF_INET)
-                if infos:
-                    ipv4 = infos[0][4][0]
-            except Exception:
-                pass
-        if not ipv4:
-            return url
-        parts = parsed.netloc.split('@')
-        if len(parts) == 2:
-            auth, _ = parts
-            new_netloc = f"{auth}@{ipv4}:{port}"
-        else:
-            new_netloc = f"{ipv4}:{port}"
-        new_url = parsed._replace(netloc=new_netloc)
-        resolved = urlunparse(new_url)
         try:
-            logger.info(f"[DB INIT] IPv4 resolved for {host}: {ipv4}")
+            infos = socket.getaddrinfo(host, port, family=socket.AF_INET)
+            if infos:
+                ipv4 = infos[0][4][0]
+                logger.info(f"[DB INIT] hostaddr for {host}: {ipv4}")
+                return ipv4
         except Exception:
             pass
-        return resolved
+        return None
     except Exception:
-        return url
+        return None
 
 
 
@@ -72,20 +61,21 @@ def _add_pgbouncer(url: str) -> str:
     except Exception:
         return url
 
-resolved = resolve_ipv4(DATABASE_URL_RAW)
-if resolved == DATABASE_URL_RAW:
-    DATABASE_URL = _add_pgbouncer(DATABASE_URL_RAW)
-else:
-    DATABASE_URL = resolved
-DIRECT_URL = resolve_ipv4(DIRECT_URL_RAW)
+DATABASE_URL = _add_pgbouncer(DATABASE_URL_RAW)
+DIRECT_URL = DIRECT_URL_RAW
+DB_HOSTADDR = get_ipv4_hostaddr(DATABASE_URL_RAW)
+DIRECT_HOSTADDR = get_ipv4_hostaddr(DIRECT_URL_RAW)
 
 # Configure SQLAlchemy engine with SSL for Postgres and pool_pre_ping for connection health
 if DATABASE_URL.startswith('postgresql'):
+    _args = {"sslmode": "require", "connect_timeout": 10, "application_name": "RTAIP-backend", "options": "-c statement_timeout=60s"}
+    if DB_HOSTADDR:
+        _args["hostaddr"] = DB_HOSTADDR
     engine = create_engine(
         DATABASE_URL,
         echo=True,
         pool_pre_ping=True,
-        connect_args={"sslmode": "require", "connect_timeout": 10, "application_name": "RTAIP-backend", "options": "-c statement_timeout=60s"}
+        connect_args=_args
     )
 else:
     engine = create_engine(DATABASE_URL, echo=True)
@@ -151,11 +141,14 @@ class User(Base):
 # Create tables: prefer DIRECT_URL (Supabase 5432) for DDL, otherwise use runtime engine
 try:
     if DIRECT_URL and DIRECT_URL.startswith('postgresql'):
+        _dargs = {"sslmode": "require", "connect_timeout": 10, "application_name": "RTAIP-backend-direct", "options": "-c statement_timeout=120s"}
+        if DIRECT_HOSTADDR:
+            _dargs["hostaddr"] = DIRECT_HOSTADDR
         direct_engine = create_engine(
             DIRECT_URL,
             echo=True,
             pool_pre_ping=True,
-            connect_args={"sslmode": "require", "connect_timeout": 10, "application_name": "RTAIP-backend-direct", "options": "-c statement_timeout=120s"}
+            connect_args=_dargs
         )
         Base.metadata.create_all(direct_engine)
     else:
