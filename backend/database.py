@@ -8,74 +8,19 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-def get_ipv4_hostaddr(url: str):
-    if not url or not url.startswith('postgresql'):
-        return None
-    try:
-        p = urlparse(url)
-        host = p.hostname
-        port = p.port or 5432
-        if not host:
-            return None
-        try:
-            ipv4 = socket.gethostbyname(host)
-            if ipv4:
-                logger.info(f"[DB INIT] hostaddr for {host}: {ipv4}")
-                return ipv4
-        except Exception:
-            pass
-        try:
-            infos = socket.getaddrinfo(host, port, family=socket.AF_INET)
-            if infos:
-                ipv4 = infos[0][4][0]
-                logger.info(f"[DB INIT] hostaddr for {host}: {ipv4}")
-                return ipv4
-        except Exception:
-            pass
-        return None
-    except Exception:
-        return None
-
 
 
 # Use Supabase/Postgres if DATABASE_URL is provided, otherwise fall back to local SQLite
-DATABASE_URL_RAW = os.environ.get('DATABASE_URL', 'sqlite:///rtaip.db')
-DIRECT_URL_RAW = os.environ.get('DIRECT_URL')
-def _add_pgbouncer(url: str) -> str:
-    try:
-        if not url or not url.startswith('postgresql'):
-            return url
-        p = urlparse(url)
-        host = p.hostname or ''
-        port = p.port or 5432
-        if host.endswith('supabase.co') and port == 5432:
-            netloc = p.netloc
-            if '@' in netloc:
-                auth, _ = netloc.split('@', 1)
-                new_netloc = f"{auth}@{host}:6543"
-            else:
-                new_netloc = f"{host}:6543"
-            new_url = p._replace(netloc=new_netloc)
-            return urlunparse(new_url)
-        return url
-    except Exception:
-        return url
-
-DATABASE_URL = _add_pgbouncer(DATABASE_URL_RAW)
-DIRECT_URL = DIRECT_URL_RAW
-DB_HOSTADDR = get_ipv4_hostaddr(DATABASE_URL_RAW)
-DIRECT_HOSTADDR = get_ipv4_hostaddr(DIRECT_URL_RAW)
+DATABASE_URL = os.environ.get('DATABASE_URL', 'sqlite:///rtaip.db')
+DIRECT_URL = os.environ.get('DIRECT_URL', DATABASE_URL)
 
 # Configure SQLAlchemy engine with SSL for Postgres and pool_pre_ping for connection health
 if DATABASE_URL.startswith('postgresql'):
-    _args = {"sslmode": "require", "connect_timeout": 10, "application_name": "RTAIP-backend", "options": "-c statement_timeout=60s"}
-    if DB_HOSTADDR:
-        _args["hostaddr"] = DB_HOSTADDR
     engine = create_engine(
         DATABASE_URL,
         echo=True,
         pool_pre_ping=True,
-        connect_args=_args
+        connect_args={"sslmode": "require", "connect_timeout": 10, "application_name": "RTAIP-backend", "options": "-c statement_timeout=60s"}
     )
 else:
     engine = create_engine(DATABASE_URL, echo=True)
@@ -140,16 +85,13 @@ class User(Base):
 
 def _safe_init_schema():
     try:
-        if DIRECT_URL and DIRECT_URL.startswith('postgresql'):
-            _dargs = {"sslmode": "require", "connect_timeout": 10, "application_name": "RTAIP-backend-direct", "options": "-c statement_timeout=120s"}
-            if DIRECT_HOSTADDR:
-                _dargs["hostaddr"] = DIRECT_HOSTADDR
-            direct_engine = create_engine(
-                DIRECT_URL,
-                echo=True,
-                pool_pre_ping=True,
-                connect_args=_dargs
-            )
+    if DIRECT_URL and DIRECT_URL.startswith('postgresql'):
+        direct_engine = create_engine(
+            DIRECT_URL,
+            echo=True,
+            pool_pre_ping=True,
+            connect_args={"sslmode": "require", "connect_timeout": 10, "application_name": "RTAIP-backend-direct", "options": "-c statement_timeout=120s"}
+        )
             Base.metadata.create_all(direct_engine)
         else:
             Base.metadata.create_all(engine)
