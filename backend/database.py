@@ -85,13 +85,13 @@ class User(Base):
 
 def _safe_init_schema():
     try:
-    if DIRECT_URL and DIRECT_URL.startswith('postgresql'):
-        direct_engine = create_engine(
-            DIRECT_URL,
-            echo=True,
-            pool_pre_ping=True,
-            connect_args={"sslmode": "require", "connect_timeout": 10, "application_name": "RTAIP-backend-direct", "options": "-c statement_timeout=120s"}
-        )
+        if DIRECT_URL and DIRECT_URL.startswith('postgresql'):
+            direct_engine = create_engine(
+                DIRECT_URL,
+                echo=True,
+                pool_pre_ping=True,
+                connect_args={"sslmode": "require", "connect_timeout": 10, "application_name": "RTAIP-backend-direct", "options": "-c statement_timeout=120s"}
+            )
             Base.metadata.create_all(direct_engine)
         else:
             Base.metadata.create_all(engine)
