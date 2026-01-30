@@ -5,7 +5,7 @@ import { NewHeader } from '../components/NewHeader';
 export default function Settings() {
   const canonicalSources = [
     'ODIN',
-    'DTIC',
+    'DTIC', 
     'USACE',
     'PUB LOG',
     'NGA Tearline',
@@ -19,13 +19,12 @@ export default function Settings() {
     'USACE': true,
     'PUB LOG': true,
     'NGA Tearline': true,
-    'Military Periscope': false,
-    'Janes': false,
-    'Global Terrorism DB': false,
+    'Military Periscope': true,
+    'Janes': true,
+    'Global Terrorism DB': true,
   };
   
   const [enabledSources, setEnabledSources] = useState<Record<string, boolean>>(defaultSourceMap);
-  
   const [enablePredictions, setEnablePredictions] = useState(true);
   const [defaultImpactRadius, setDefaultImpactRadius] = useState(120);
   const [useOpenFallback, setUseOpenFallback] = useState(true);
@@ -33,6 +32,14 @@ export default function Settings() {
   const [aiProvider, setAiProvider] = useState<'backend'|'gemini'>('backend');
   const [geminiApiKey, setGeminiApiKey] = useState('');
   const [geminiModel, setGeminiModel] = useState('models/gemini-1.5-flash');
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   
 
   useEffect(() => {
