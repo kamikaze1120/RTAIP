@@ -136,6 +136,17 @@ def migrate():
     ok, msg = ensure_schema()
     return {"ok": ok, "message": msg}
 
+@app.post("/insert-sample-data")
+def insert_sample_data():
+    try:
+        # Import the function from the script
+        from insert_sample_data import insert_sample_data as insert_data
+        count = insert_data()
+        return {"success": True, "count": count, "message": f"Successfully inserted {count} sample events"}
+    except Exception as e:
+        logger.error(f"Error inserting sample data: {e}", exc_info=True)
+        return {"success": False, "error": str(e)}
+
 
 if __name__ == "__main__":
     import uvicorn

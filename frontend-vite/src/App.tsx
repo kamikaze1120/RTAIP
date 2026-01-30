@@ -1,6 +1,7 @@
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { NewHeader } from './components/NewHeader';
+import MobileNav from './components/MobileNav'; // Add mobile navigation
 
 import MapPage from './pages/Map';
 import Dashboard from './pages/Dashboard';
@@ -99,6 +100,7 @@ export default function App() {
     <div className="relative min-h-screen text-white bg-animated">
       <div className="grid-overlay"></div>
       {!booting && <NewHeader />}
+      {!booting && <MobileNav />} {/* Add mobile navigation */}
       <main>
         <div className="pt-16 relative z-10">
           {booting ? (
@@ -109,18 +111,20 @@ export default function App() {
               </div>
             </div>
           ) : (
-          <Routes>
-            <Route path="/sources" element={<Sources />} />
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/intelligence" element={<Intelligence />} />
-            <Route path="/threat-analysis" element={<ThreatAnalysis />} />
-            <Route path="/logistics" element={<Logistics />} />
-            <Route path="/map" element={<MapPage />} />
-            <Route path="/timeline" element={<Timeline />} />
-            <Route path="/security" element={<Security />} />
-            <Route path="/settings" element={<Settings />} />
-            <Route path="/" element={<Dashboard />} />
-          </Routes>
+          <div className="mobile-content"> {/* Add mobile content wrapper */}
+            <Routes>
+              <Route path="/sources" element={<Sources />} />
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/intelligence" element={<Intelligence />} />
+              <Route path="/threat-analysis" element={<ThreatAnalysis />} />
+              <Route path="/logistics" element={<Logistics />} />
+              <Route path="/map" element={<MapPage />} />
+              <Route path="/timeline" element={<Timeline />} />
+              <Route path="/security" element={<Security />} />
+              <Route path="/settings" element={<Settings />} />
+              <Route path="/" element={<Dashboard />} />
+            </Routes>
+          </div>
           )}
         </div>
       </main>
