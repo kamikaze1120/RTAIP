@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getBackendBase, runConnectivityDiagnostics, runSupabaseDiagnostics, getSupabaseConfig, type ConnectivityDiagnostics, type SupabaseDiagnostics } from '../services/data';
+import { runConnectivityDiagnostics, runSupabaseDiagnostics, type ConnectivityDiagnostics, type SupabaseDiagnostics } from '../services/data';
 import { NewHeader } from '../components/NewHeader';
 
 export default function Settings() {
@@ -32,14 +32,8 @@ export default function Settings() {
   const [aiProvider, setAiProvider] = useState<'backend'|'gemini'>('backend');
   const [geminiApiKey, setGeminiApiKey] = useState('');
   const [geminiModel, setGeminiModel] = useState('models/gemini-1.5-flash');
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
-  useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth < 768);
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  
   
 
   useEffect(() => {

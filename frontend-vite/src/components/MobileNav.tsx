@@ -6,12 +6,13 @@ const MobileNav = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
     const handleResize = () => {
       setIsMobile(window.innerWidth < 768);
     };
+    handleResize();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
@@ -26,7 +27,6 @@ const MobileNav = () => {
     { path: '/settings', icon: Settings, label: 'Settings' },
   ];
 
-  const activeItem = navItems.find(item => location.pathname === item.path);
 
   const handleNavClick = (path: string) => {
     navigate(path);
