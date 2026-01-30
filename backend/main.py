@@ -8,7 +8,7 @@ from datetime import timedelta
 import os
 import asyncio
 import threading
-from ingestion import ingest_nasa_eonet, ingest_nasa_fires, ingest_adsb_aircraft, ingest_ais_maritime, ingest_usace_hifld, ingest_gdacs_disasters
+from ingestion import ingest_nasa_eonet, ingest_nasa_fires, ingest_adsb_aircraft, ingest_ais_maritime, ingest_usace_hifld, ingest_gdacs_disasters, ingest_dtic, ingest_global_terrorism
 
 app = FastAPI()
 
@@ -19,14 +19,18 @@ def run_ingestion():
     
     async def schedule_tasks():
         while True:
+            print("[INGEST] Starting hourly data ingestion cycle...")
             await asyncio.gather(
                 ingest_nasa_fires(),          # NGA Tearline
                 ingest_nasa_eonet(),          # Janes
                 ingest_gdacs_disasters(),     # ODIN
                 ingest_adsb_aircraft(),       # Military Periscope
                 ingest_ais_maritime(),        # PUB LOG
-                ingest_usace_hifld()          # USACE
+                ingest_usace_hifld(),         # USACE
+                ingest_dtic(),                # DTIC
+                ingest_global_terrorism()     # Global Terrorism DB
             )
+            print("[INGEST] Hourly ingestion cycle completed successfully")
             await asyncio.sleep(3600) # Run every hour
 
     loop.run_until_complete(schedule_tasks())
