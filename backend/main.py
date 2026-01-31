@@ -153,14 +153,18 @@ def supabase_insert_events(rows: list[dict]) -> tuple[bool, str]:
         return False, str(e)
 
 @app.get("/events")
-async def get_events(db: Session = Depends(get_db)):
+async def get_events():
     try:
         if supabase_configured():
             se = await supabase_fetch_events()
             if isinstance(se, list):
                 logger.info(f"Fetched {len(se)} events from Supabase")
                 return se
-        rows = db.query(DataEvent).all()
+        db = DBSession()
+        try:
+            rows = db.query(DataEvent).all()
+        finally:
+            db.close()
         payload = [
             {
                 "id": e.id,
