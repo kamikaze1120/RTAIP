@@ -34,10 +34,13 @@ export default function Timeline() {
       const supa = getSupabaseConfig();
       const fallback = (window.localStorage.getItem('useOpenFallback') || 'true') === 'true';
       let all: RtaEvent[] = [];
-      if (backend) {
-        all = await fetchBackendEvents();
-      } else if (supa.url && supa.anon) {
+      if (supa.url && supa.anon) {
         all = await fetchSupabaseEvents();
+        if (all.length === 0 && backend) {
+          all = await fetchBackendEvents();
+        }
+      } else if (backend) {
+        all = await fetchBackendEvents();
       }
       
       if (all.length === 0 && fallback) {

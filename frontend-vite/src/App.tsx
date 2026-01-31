@@ -35,7 +35,7 @@ export default function App() {
       if (envSupaAnon && !window.localStorage.getItem('supabaseAnon')) {
         window.localStorage.setItem('supabaseAnon', envSupaAnon);
       }
-      const envSupaTable = (import.meta.env.VITE_SUPABASE_TABLE as string | undefined) || 'events';
+      const envSupaTable = (import.meta.env.VITE_SUPABASE_TABLE as string | undefined) || 'data_events';
       if (envSupaTable && !window.localStorage.getItem('supabaseTable')) {
         window.localStorage.setItem('supabaseTable', envSupaTable);
       }
