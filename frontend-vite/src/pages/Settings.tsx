@@ -32,6 +32,10 @@ export default function Settings() {
   const [aiProvider, setAiProvider] = useState<'backend'|'gemini'>('backend');
   const [geminiApiKey, setGeminiApiKey] = useState('');
   const [geminiModel, setGeminiModel] = useState('models/gemini-1.5-flash');
+  const [backendUrl, setBackendUrl] = useState('');
+  const [supabaseUrl, setSupabaseUrl] = useState('');
+  const [supabaseAnon, setSupabaseAnon] = useState('');
+  const [supabaseTable, setSupabaseTable] = useState('data_events');
 
   
   
@@ -64,6 +68,14 @@ export default function Settings() {
     if (gk) setGeminiApiKey(gk);
     const gm = window.localStorage.getItem('geminiModel');
     if (gm) setGeminiModel(gm);
+    const bu = window.localStorage.getItem('backendUrl');
+    if (bu) setBackendUrl(bu);
+    const su = window.localStorage.getItem('supabaseUrl');
+    if (su) setSupabaseUrl(su);
+    const sa = window.localStorage.getItem('supabaseAnon');
+    if (sa) setSupabaseAnon(sa);
+    const st = window.localStorage.getItem('supabaseTable');
+    if (st) setSupabaseTable(st);
   }, []);
 
   const saveSettings = () => {
@@ -75,6 +87,10 @@ export default function Settings() {
     window.localStorage.setItem('aiProvider', aiProvider);
     window.localStorage.setItem('geminiApiKey', geminiApiKey);
     window.localStorage.setItem('geminiModel', geminiModel);
+    if (backendUrl) window.localStorage.setItem('backendUrl', backendUrl);
+    if (supabaseUrl) window.localStorage.setItem('supabaseUrl', supabaseUrl);
+    if (supabaseAnon) window.localStorage.setItem('supabaseAnon', supabaseAnon);
+    if (supabaseTable) window.localStorage.setItem('supabaseTable', supabaseTable);
     alert('Settings saved!');
   };
   const renderSection = (title: string, description: string, children: React.ReactNode) => (
@@ -184,6 +200,16 @@ export default function Settings() {
                 <span className="text-white font-medium">Enable threat predictions</span>
               </label>
               {renderInput("Default Impact Radius (km)", String(defaultImpactRadius), e => setDefaultImpactRadius(Number(e.target.value)), "", 'number', "Default radius for impact simulations.")}
+            </>)}
+
+            {renderSection("Backend & Supabase", "Configure service endpoints for data flow.", <>
+              {renderInput("Backend Base URL", backendUrl, e => setBackendUrl(e.target.value), "https://rtaip-backend.onrender.com", 'text', "Render backend base used for health and events API.")}
+              {renderInput("Supabase URL", supabaseUrl, e => setSupabaseUrl(e.target.value), "https://YOUR-PROJECT.supabase.co", 'text', "Supabase project URL used by the app.")}
+              {renderInput("Supabase Anon Key", supabaseAnon, e => setSupabaseAnon(e.target.value), "paste anon or publishable key", 'password', "Browser key for read access.")}
+              {renderInput("Supabase Table", supabaseTable, e => setSupabaseTable(e.target.value), "events", 'text', "Table name storing events (e.g., events or data_events).")}
+              <div className="pt-2">
+                <button onClick={saveSettings} className="px-4 py-2 rounded-md bg-gradient-to-r from-emerald-500 to-green-600 text-black font-semibold shadow-lg hover:opacity-90 transition-opacity">Save Endpoints</button>
+              </div>
             </>)}
 
             {renderSection("Data Bootstrap", "Initialize database schema and insert sample events for validation.", <>
