@@ -112,13 +112,69 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-@app.get("/events")
-def get_events(db: Session = Depends(get_db)):
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+SUPABASE_TABLE = os.getenv("SUPABASE_TABLE", "data_events")
+
+def supabase_configured() -> bool:
+    return bool(SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY and SUPABASE_TABLE)
+
+async def supabase_fetch_events():
+    import aiohttp
+    if not supabase_configured():
+        return None
+    url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/{SUPABASE_TABLE}?select=*"
+    headers = {"apikey": SUPABASE_SERVICE_ROLE_KEY, "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}"}
+    async with aiohttp.ClientSession() as session:
+        try:
+            async with session.get(url, headers=headers) as r:
+                if r.status == 200:
+                    return await r.json()
+                return None
+        except:
+            return None
+
+def supabase_insert_events(rows: list[dict]) -> tuple[bool, str]:
+    import requests
+    if not supabase_configured():
+        return False, "supabase not configured"
+    url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/{SUPABASE_TABLE}"
+    headers = {
+        "apikey": SUPABASE_SERVICE_ROLE_KEY,
+        "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
+        "Content-Type": "application/json",
+        "Prefer": "return=representation"
+    }
     try:
-        logger.info("Fetching events from the database.")
-        events = db.query(DataEvent).all()
-        logger.info(f"Successfully fetched {len(events)} events.")
-        return events
+        r = requests.post(url, headers=headers, json=rows, timeout=15)
+        ok = r.status_code in (200, 201)
+        return ok, r.text if not ok else "ok"
+    except Exception as e:
+        return False, str(e)
+
+@app.get("/events")
+async def get_events(db: Session = Depends(get_db)):
+    try:
+        if supabase_configured():
+            se = await supabase_fetch_events()
+            if isinstance(se, list):
+                logger.info(f"Fetched {len(se)} events from Supabase")
+                return se
+        rows = db.query(DataEvent).all()
+        payload = [
+            {
+                "id": e.id,
+                "source": e.source,
+                "timestamp": e.timestamp.isoformat() if getattr(e, "timestamp", None) else None,
+                "latitude": e.latitude,
+                "longitude": e.longitude,
+                "confidence": e.confidence,
+                "data": e.data,
+            }
+            for e in rows
+        ]
+        logger.info(f"Fetched {len(payload)} events from DB")
+        return payload
     except Exception as e:
         logger.error(f"Error fetching events: {e}", exc_info=True)
         return {"error": "Failed to fetch events"}
@@ -139,7 +195,22 @@ def migrate():
 @app.post("/insert-sample-data")
 def insert_sample_data():
     try:
-        # Import the function from the script
+        if supabase_configured():
+            from insert_sample_data import SAMPLE_DATA
+            rows = []
+            for d in SAMPLE_DATA:
+                rows.append({
+                    "source": d["source"],
+                    "timestamp": d["timestamp"].isoformat(),
+                    "latitude": d["latitude"],
+                    "longitude": d["longitude"],
+                    "confidence": d.get("confidence", 0.5),
+                    "data": d.get("data", {})
+                })
+            ok, msg = supabase_insert_events(rows)
+            if ok:
+                return {"success": True, "count": len(rows), "message": f"Inserted {len(rows)} sample events to Supabase"}
+            return {"success": False, "error": msg}
         from insert_sample_data import insert_sample_data as insert_data
         count = insert_data()
         return {"success": True, "count": count, "message": f"Successfully inserted {count} sample events"}

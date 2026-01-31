@@ -28,9 +28,15 @@ export default function MapPage() {
     let cancelled = false;
     (async () => {
       const backend = getBackendBase();
+      const supa = getSupabaseConfig();
       const fallback = (window.localStorage.getItem('useOpenFallback') || 'true') === 'true';
       let all: RtaEvent[] = [];
-      if (backend) {
+      if (supa.url && supa.anon) {
+        all = await fetchSupabaseEvents();
+        if (all.length === 0 && backend) {
+          all = await fetchBackendEvents();
+        }
+      } else if (backend) {
         all = await fetchBackendEvents();
       } else if (fallback) {
         all = [];

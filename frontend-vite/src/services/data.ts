@@ -236,12 +236,12 @@ export function getSupabaseConfig(): { url?: string; anon?: string; table?: stri
     const lsTable = typeof window !== 'undefined' ? window.localStorage.getItem('supabaseTable') : null;
     const url = (lsUrl && lsUrl.trim()) || (import.meta.env.VITE_SUPABASE_URL as string | undefined);
     const anon = (lsAnon && lsAnon.trim()) || (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) || (import.meta.env.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY as string | undefined);
-    const table = (lsTable && lsTable.trim()) || (import.meta.env.VITE_SUPABASE_TABLE as string | undefined) || 'events';
+    const table = (lsTable && lsTable.trim()) || (import.meta.env.VITE_SUPABASE_TABLE as string | undefined) || 'data_events';
     return { url, anon, table };
   } catch {
     const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
     const anon = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) || (import.meta.env.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY as string | undefined);
-    const table = (import.meta.env.VITE_SUPABASE_TABLE as string | undefined) || 'events';
+    const table = (import.meta.env.VITE_SUPABASE_TABLE as string | undefined) || 'data_events';
     return { url, anon, table };
   }
 }

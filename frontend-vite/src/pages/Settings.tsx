@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { runConnectivityDiagnostics, runSupabaseDiagnostics, type ConnectivityDiagnostics, type SupabaseDiagnostics } from '../services/data';
+import { runConnectivityDiagnostics, runSupabaseDiagnostics, getBackendBase, type ConnectivityDiagnostics, type SupabaseDiagnostics } from '../services/data';
 import { NewHeader } from '../components/NewHeader';
 
 export default function Settings() {
@@ -101,11 +101,30 @@ export default function Settings() {
 
   const [conn, setConn] = useState<ConnectivityDiagnostics | null>(null);
   const [supa, setSupa] = useState<SupabaseDiagnostics | null>(null);
+  const [bootstrapMsg, setBootstrapMsg] = useState<string>('');
   const testConnections = async () => {
     const a = await runConnectivityDiagnostics();
     const b = await runSupabaseDiagnostics();
     setConn(a);
     setSupa(b);
+  };
+  const migrateSchema = async () => {
+    try {
+      const base = getBackendBase();
+      if (!base) { setBootstrapMsg('Backend URL not configured'); return; }
+      const r = await fetch(`${base.replace(/\/$/, '')}/migrate`, { method: 'POST' });
+      const j = await r.json();
+      setBootstrapMsg(`Migrate: ${j.message || (j.ok ? 'ok' : 'fail')}`);
+    } catch (e) { setBootstrapMsg(`Migrate error: ${String((e as Error).message || e)}`); }
+  };
+  const insertSample = async () => {
+    try {
+      const base = getBackendBase();
+      if (!base) { setBootstrapMsg('Backend URL not configured'); return; }
+      const r = await fetch(`${base.replace(/\/$/, '')}/insert-sample-data`, { method: 'POST' });
+      const j = await r.json();
+      setBootstrapMsg(j.message || `Inserted: ${j.count ?? '?'} events`);
+    } catch (e) { setBootstrapMsg(`Insert error: ${String((e as Error).message || e)}`); }
   };
   return (
     <div className="flow-gradient text-white min-h-screen">
@@ -165,6 +184,14 @@ export default function Settings() {
                 <span className="text-white font-medium">Enable threat predictions</span>
               </label>
               {renderInput("Default Impact Radius (km)", String(defaultImpactRadius), e => setDefaultImpactRadius(Number(e.target.value)), "", 'number', "Default radius for impact simulations.")}
+            </>)}
+
+            {renderSection("Data Bootstrap", "Initialize database schema and insert sample events for validation.", <>
+              <div className="flex items-center gap-3">
+                <button onClick={migrateSchema} className="px-4 py-2 rounded-md bg-gradient-to-r from-blue-500 to-cyan-500 text-black font-semibold shadow-lg hover:opacity-90 transition-opacity">Migrate Schema</button>
+                <button onClick={insertSample} className="px-4 py-2 rounded-md bg-gradient-to-r from-green-500 to-emerald-500 text-black font-semibold shadow-lg hover:opacity-90 transition-opacity">Insert Sample Data</button>
+              </div>
+              <div className="text-xs text-gray-300 min-h-[20px]">{bootstrapMsg}</div>
             </>)}
             
 
