@@ -266,58 +266,49 @@ export async function checkSupabaseHealth(): Promise<boolean> {
 
 export async function fetchSupabaseEvents(): Promise<RtaEvent[]> {
   const { url, anon, table } = getSupabaseConfig();
-  if (!url || !anon || !table) return [];
-  const client = await getSupabaseClient();
-  if (client) {
-    try {
-      const { data, error } = await client.from(table).select('*').limit(1000);
-      if (error || !Array.isArray(data)) return [];
-      type SupaRow = Record<string, unknown> & { id?: string | number; source?: unknown; timestamp?: unknown; created_at?: unknown; lat?: unknown; latitude?: unknown; lon?: unknown; longitude?: unknown; confidence?: unknown };
-      const numOrNull = (v: unknown): number | null => (typeof v === 'number' ? v : null);
-      return data.map((row: Record<string, unknown>) => {
-        const r = row as SupaRow;
-        const lat: number | null = numOrNull(r.lat) ?? numOrNull(r.latitude);
-        const lon: number | null = numOrNull(r.lon) ?? numOrNull(r.longitude);
-        const conf: number = typeof r.confidence === 'number' ? (r.confidence as number) : 0.6;
-        const ts: string = String(r.timestamp ?? r.created_at ?? new Date().toISOString());
-        const src: string = String(r.source ?? 'supabase');
-        return {
-          id: String(r.id ?? `${src}-${ts}`),
-          source: src,
-          timestamp: ts,
-          latitude: lat,
-          longitude: lon,
-          confidence: conf,
-          data: row,
-        };
-      });
-    } catch { /* fall through to REST */ }
-  }
-  try {
-    const r = await fetchWithTimeout(`${url.replace(/\/$/, '')}/rest/v1/${encodeURIComponent(table)}?select=*`, { timeoutMs: 10000, headers: { apikey: anon, Authorization: `Bearer ${anon}` } });
-    if (!r.ok) return [];
-    const rows: Record<string, unknown>[] = await r.json();
+  if (!url || !anon) return [];
+
+  const toEvents = (rows: Record<string, unknown>[]): RtaEvent[] => {
     type SupaRow = Record<string, unknown> & { id?: string | number; source?: unknown; timestamp?: unknown; created_at?: unknown; lat?: unknown; latitude?: unknown; lon?: unknown; longitude?: unknown; confidence?: unknown };
     const numOrNull = (v: unknown): number | null => (typeof v === 'number' ? v : null);
-    const events: RtaEvent[] = rows.map((row: Record<string, unknown>) => {
+    return rows.map((row: Record<string, unknown>) => {
       const r = row as SupaRow;
       const lat: number | null = numOrNull(r.lat) ?? numOrNull(r.latitude);
       const lon: number | null = numOrNull(r.lon) ?? numOrNull(r.longitude);
       const conf: number = typeof r.confidence === 'number' ? (r.confidence as number) : 0.6;
       const ts: string = String(r.timestamp ?? r.created_at ?? new Date().toISOString());
       const src: string = String(r.source ?? 'supabase');
-      return {
-        id: String(r.id ?? `${src}-${ts}`),
-        source: src,
-        timestamp: ts,
-        latitude: lat,
-        longitude: lon,
-        confidence: conf,
-        data: row,
-      };
+      return { id: String(r.id ?? `${src}-${ts}`), source: src, timestamp: ts, latitude: lat, longitude: lon, confidence: conf, data: row };
     });
-    return events;
-  } catch { return []; }
+  };
+
+  const restFetch = async (tbl: string): Promise<RtaEvent[]> => {
+    const r = await fetchWithTimeout(`${url.replace(/\/$/, '')}/rest/v1/${encodeURIComponent(tbl)}?select=*`, { timeoutMs: 10000, headers: { apikey: anon, Authorization: `Bearer ${anon}` } });
+    if (!r.ok) return [];
+    const rows: Record<string, unknown>[] = await r.json();
+    return toEvents(rows);
+  };
+
+  const client = await getSupabaseClient();
+  const tryClient = async (tbl: string): Promise<RtaEvent[]> => {
+    if (!client) return [];
+    try {
+      const { data, error } = await client.from(tbl).select('*').limit(1000);
+      if (error || !Array.isArray(data)) return [];
+      return toEvents(data as unknown as Record<string, unknown>[]);
+    } catch { return []; }
+  };
+
+  const primary = (table && table.trim()) || 'data_events';
+  const alternate = primary === 'events' ? 'data_events' : 'events';
+
+  let ev = await tryClient(primary);
+  if (ev.length === 0) ev = await restFetch(primary);
+  if (ev.length === 0) {
+    ev = await tryClient(alternate);
+    if (ev.length === 0) ev = await restFetch(alternate);
+  }
+  return ev;
 }
 
 export async function callGemini(query: string, context?: string): Promise<string | null> {
