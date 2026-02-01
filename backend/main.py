@@ -123,16 +123,19 @@ async def supabase_fetch_events():
     import aiohttp
     if not supabase_configured():
         return None
-    url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/{SUPABASE_TABLE}?select=*"
+    primary = SUPABASE_TABLE or "data_events"
+    candidates = [primary] + (["data_events"] if primary != "data_events" else []) + (["events"] if primary != "events" else [])
     headers = {"apikey": SUPABASE_SERVICE_ROLE_KEY, "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}"}
     async with aiohttp.ClientSession() as session:
-        try:
-            async with session.get(url, headers=headers) as r:
-                if r.status == 200:
-                    return await r.json()
-                return None
-        except:
-            return None
+        for tbl in candidates:
+            try:
+                url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/{tbl}?select=*"
+                async with session.get(url, headers=headers) as r:
+                    if r.status == 200:
+                        return await r.json()
+            except:
+                pass
+    return []
 
 def supabase_insert_events(rows: list[dict]) -> tuple[bool, str]:
     import requests
