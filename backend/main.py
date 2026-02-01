@@ -184,7 +184,35 @@ async def get_events():
         return payload
     except Exception as e:
         logger.error(f"Error fetching events: {e}", exc_info=True)
-        return {"error": "Failed to fetch events"}
+        return []
+
+@app.get("/events/status")
+async def events_status():
+    try:
+        if supabase_configured():
+            import aiohttp
+            headers = {"apikey": SUPABASE_SERVICE_ROLE_KEY, "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}"}
+            url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/{(SUPABASE_TABLE or 'data_events')}?select=id&limit=1"
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, headers=headers) as r:
+                    ok = r.status == 200
+                    msg = None
+                    try:
+                        if not ok:
+                            msg = await r.text()
+                    except:
+                        pass
+                    return {"supabase": True, "table": SUPABASE_TABLE, "ok": ok, "status": r.status, "error": msg}
+        # DB fallback
+        db = DBSession()
+        try:
+            n = db.query(DataEvent).limit(1).count()
+            return {"supabase": False, "db": True, "ok": True, "count_sample": n}
+        finally:
+            db.close()
+    except Exception as e:
+        logger.error(f"Status check failed: {e}")
+        return {"ok": False, "error": str(e)}
 
 @app.get("/")
 def root():
