@@ -56,7 +56,7 @@ export default function Timeline() {
   }, []);
 
   const count = useMemo(() => events.length, [events]);
-  const [replayHours, setReplayHours] = useState(12);
+  const [replayHours, setReplayHours] = useState(24 * 365);
   const filtered = useMemo(() => {
     const cutoff = Date.now() - replayHours * 3600000;
     return events.filter(e => {
