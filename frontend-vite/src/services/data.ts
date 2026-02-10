@@ -273,19 +273,39 @@ export async function fetchSupabaseEvents(): Promise<RtaEvent[]> {
   const toEvents = (rows: Record<string, unknown>[]): RtaEvent[] => {
     type SupaRow = Record<string, unknown> & { id?: string | number; source?: unknown; timestamp?: unknown; created_at?: unknown; lat?: unknown; latitude?: unknown; lon?: unknown; longitude?: unknown; confidence?: unknown };
     const numOrNull = (v: unknown): number | null => (typeof v === 'number' ? v : null);
+    const normalizeTs = (v: unknown): string => {
+      if (v == null) return new Date().toISOString();
+      if (typeof v === 'string') {
+        const s = v.trim();
+        if (s.includes('T')) {
+          // if timezone missing, assume Z
+          return /[zZ]|[+\-]\d{2}:?\d{2}$/.test(s) ? s : `${s}Z`;
+        }
+        // convert "YYYY-MM-DD HH:mm:ss" to ISO
+        const iso = s.replace(' ', 'T');
+        return `${iso}${/[zZ]|[+\-]\d{2}:?\d{2}$/.test(iso) ? '' : 'Z'}`;
+      }
+      if (typeof v === 'number') {
+        try { return new Date(Number(v)).toISOString(); } catch { return new Date().toISOString(); }
+      }
+      try { return new Date(String(v)).toISOString(); } catch { return new Date().toISOString(); }
+    };
     return rows.map((row: Record<string, unknown>) => {
       const r = row as SupaRow;
       const lat: number | null = numOrNull(r.lat) ?? numOrNull(r.latitude);
       const lon: number | null = numOrNull(r.lon) ?? numOrNull(r.longitude);
       const conf: number = typeof r.confidence === 'number' ? (r.confidence as number) : 0.6;
-      const ts: string = String(r.timestamp ?? r.created_at ?? new Date().toISOString());
+      const ts: string = normalizeTs(r.timestamp ?? r.created_at ?? new Date().toISOString());
       const src: string = String(r.source ?? 'supabase');
       return { id: String(r.id ?? `${src}-${ts}`), source: src, timestamp: ts, latitude: lat, longitude: lon, confidence: conf, data: row };
     });
   };
 
   const restFetch = async (tbl: string): Promise<RtaEvent[]> => {
-    const r = await fetchWithTimeout(`${url.replace(/\/$/, '')}/rest/v1/${encodeURIComponent(tbl)}?select=*`, { timeoutMs: 10000, headers: { apikey: anon, Authorization: `Bearer ${anon}` } });
+    const oneYearAgo = new Date(Date.now() - 365 * 24 * 3600000).toISOString();
+    const base = `${url.replace(/\/$/, '')}/rest/v1/${encodeURIComponent(tbl)}`;
+    const q = `select=*&or=(timestamp.gte.${encodeURIComponent(oneYearAgo)},created_at.gte.${encodeURIComponent(oneYearAgo)})&order=timestamp.desc.nullslast,created_at.desc.nullslast&limit=5000`;
+    const r = await fetchWithTimeout(`${base}?${q}`, { timeoutMs: 12000, headers: { apikey: anon, Authorization: `Bearer ${anon}`, Accept: 'application/json' } });
     if (!r.ok) return [];
     const rows: Record<string, unknown>[] = await r.json();
     return toEvents(rows);
@@ -295,7 +315,8 @@ export async function fetchSupabaseEvents(): Promise<RtaEvent[]> {
   const tryClient = async (tbl: string): Promise<RtaEvent[]> => {
     if (!client) return [];
     try {
-      const { data, error } = await client.from(tbl).select('*').limit(1000);
+      const iso = new Date(Date.now() - 365 * 24 * 3600000).toISOString();
+      const { data, error } = await client.from(tbl).select('*').gte('timestamp', iso).order('timestamp', { ascending: false, nullsFirst: false }).limit(5000);
       if (error || !Array.isArray(data)) return [];
       return toEvents(data as unknown as Record<string, unknown>[]);
     } catch { return []; }

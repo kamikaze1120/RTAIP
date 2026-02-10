@@ -64,7 +64,7 @@ export default function Dashboard() {
   }, []);
 
   const activeSources = useMemo(() => {
-    const cutoff = Date.now() - 24 * 3600000;
+    const cutoff = Date.now() - 365 * 24 * 3600000;
     const set = new Set<string>();
     filteredEvents.forEach(e => {
       const t = new Date(e.timestamp).getTime();
@@ -74,7 +74,7 @@ export default function Dashboard() {
   }, [filteredEvents]);
 
   const highThreats = useMemo(() => {
-    const cutoff = Date.now() - 24 * 3600000;
+    const cutoff = Date.now() - 365 * 24 * 3600000;
     return filteredEvents.reduce((acc, e) => {
       const t = new Date(e.timestamp).getTime();
       if (isNaN(t) || t < cutoff) return acc;
