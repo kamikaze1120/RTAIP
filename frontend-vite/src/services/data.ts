@@ -213,7 +213,6 @@ export async function runConnectivityDiagnostics(): Promise<ConnectivityDiagnost
     try {
       const r = await fetchWithTimeout(`${b}${p}`, { timeoutMs: 6000 });
       out.health.push({ path: p, ok: r.ok, status: r.status });
-      if (r.ok) return out;
     } catch (e: unknown) {
       out.health.push({ path: p, ok: false, error: String((e as Error).message || e) });
     }
@@ -223,7 +222,10 @@ export async function runConnectivityDiagnostics(): Promise<ConnectivityDiagnost
     out.root = { ok: r.ok, status: r.status };
   } catch (e: unknown) { out.root = { ok: false, error: String((e as Error).message || e) }; }
   try {
-    const r = await fetchWithTimeout(`${b}/events`, { timeoutMs: 6000 });
+    let r = await fetchWithTimeout(`${b}/events/status`, { timeoutMs: 6000 });
+    if (!r.ok) {
+      r = await fetchWithTimeout(`${b}/events`, { timeoutMs: 6000 });
+    }
     out.events = { ok: r.ok, status: r.status };
   } catch (e: unknown) { out.events = { ok: false, error: String((e as Error).message || e) }; }
   return out;

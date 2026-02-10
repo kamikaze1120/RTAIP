@@ -67,18 +67,14 @@ export default function App() {
           if (ping.ok) { }
         } catch {}
         try {
-          const evCandidates = endsApi ? ['/events'] : ['/events', '/api/events'];
-          let ev: Response | null = null;
+          const evCandidates = endsApi ? ['/events/status', '/events'] : ['/events/status', '/events', '/api/events'];
           for (const p of evCandidates) {
             try {
               const tmp = await fetch(`${b}${p}`, { cache: 'no-store' });
-              ev = tmp; if (tmp.ok) break;
+              if (tmp.ok) break;
             } catch {}
           }
-          if (ev && ev.ok) { }
-          else { }
-        } catch {
-        }
+        } catch {}
       } catch {
       }
     }
