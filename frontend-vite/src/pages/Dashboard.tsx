@@ -4,7 +4,7 @@ import Globe from '../components/Globe';
 import AlertList from '../components/AlertList';
 import { ShieldAlert, Activity, TrendingUp } from 'lucide-react';
 import { Globe as GlobeIcon } from 'lucide-react';
-import { fetchBackendEvents, getBackendBase, type RtaEvent, globalThreatScore, topClusters, typeProbabilities, fetchSupabaseEvents, getSupabaseConfig, eventSeverity, runConnectivityDiagnostics } from '../services/data';
+import { fetchBackendEvents, getBackendBase, type RtaEvent, globalThreatScore, topClusters, typeProbabilities, fetchSupabaseEvents, getSupabaseConfig, eventSeverity, runConnectivityDiagnostics, getCachedEvents, setCachedEvents } from '../services/data';
 import { NewHeader } from '../components/NewHeader';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, BarChart, Bar } from 'recharts';
 
@@ -30,16 +30,23 @@ export default function Dashboard() {
     let cancelled = false;
     async function load() {
       const base = getBackendBase();
-      let backend: RtaEvent[] = [];
+      let backend: RtaEvent[] = getCachedEvents();
       const supa = getSupabaseConfig();
       if (supa.url && supa.anon) {
-        try { backend = await fetchSupabaseEvents(); } catch {}
+        try {
+          const fresh = await fetchSupabaseEvents();
+          backend = fresh.length > 0 ? fresh : backend;
+        } catch {}
       } else if (base) {
-        try { backend = await fetchBackendEvents(); } catch {}
+        try {
+          const be = await fetchBackendEvents();
+          backend = be.length > 0 ? be : backend;
+        } catch {}
       }
       const all = [...backend];
       if (!cancelled) {
         setEvents(all);
+        if (all.length > 0) setCachedEvents(all);
         const t = all.map(e => new Date(e.timestamp).getTime()).filter(t=>!isNaN(t)).sort((a,b)=>b-a)[0];
         setLastUpdated(t ? new Date(t).toLocaleTimeString() : new Date().toLocaleTimeString());
       }
