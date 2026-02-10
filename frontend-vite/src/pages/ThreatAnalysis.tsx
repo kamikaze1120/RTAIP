@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import Globe from '../components/Globe';
-import { getGtdEvents, getOdinThreats, getDticThreats } from '../services/threat';
 import { NewHeader } from '../components/NewHeader';
 import { Shield, Zap, WifiOff, Satellite, Skull, Crosshair } from 'lucide-react';
+import { fetchSupabaseEvents, type RtaEvent, eventSeverity, getSupabaseConfig, fetchBackendEvents, getBackendBase } from '../services/data';
 
 interface ThreatEvent {
   [key: string]: unknown;
@@ -48,13 +48,40 @@ const ThreatAnalysis = () => {
   useEffect(() => {
     const loadEvents = async () => {
       setLoading(true);
-      const [gtdEvents, odinThreats, dticThreats] = await Promise.all([
-        getGtdEvents(),
-        getOdinThreats(),
-        getDticThreats(),
-      ]);
-      const allEvents = [...gtdEvents, ...odinThreats, ...dticThreats] as ThreatEvent[];
-      const sortedEvents = allEvents.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      const base = getBackendBase();
+      const supa = getSupabaseConfig();
+      let all: RtaEvent[] = [];
+      if (supa.url && supa.anon) {
+        all = await fetchSupabaseEvents();
+      } else if (base) {
+        all = await fetchBackendEvents();
+      }
+      const oneYearAgo = Date.now() - 365 * 24 * 3600000;
+      const relevant = all.filter(e => {
+        const t = new Date(e.timestamp).getTime();
+        if (isNaN(t) || t < oneYearAgo) return false;
+        const src = String(e.source || '').toLowerCase();
+        return src.includes('gtd') || src.includes('odin') || src.includes('dtic') || src.includes('terror');
+      });
+      const mapped: ThreatEvent[] = relevant.map((e, idx) => {
+        const d = (e.data || {}) as Record<string, unknown>;
+        const idNum = Number(e.id);
+        const title = typeof d.title === 'string' ? d.title : String(e.source || 'Event');
+        const group = typeof d.group === 'string' ? d.group : String(e.source || 'Unknown');
+        const sev = Math.round(eventSeverity(e) * 100);
+        const tl: ThreatEvent['threat_level'] = sev >= 80 ? 'Critical' : sev >= 60 ? 'High' : sev >= 40 ? 'Medium' : 'Low';
+        return {
+          id: Number.isFinite(idNum) ? idNum : idx,
+          date: e.timestamp,
+          title,
+          location: { lon: Number(e.longitude || 0), lat: Number(e.latitude || 0) },
+          description: JSON.stringify(d),
+          threat_level: tl,
+          group,
+          type: 'Strategic',
+        };
+      });
+      const sortedEvents = mapped.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       setEvents(sortedEvents);
       setLoading(false);
       if (sortedEvents.length > 0) {

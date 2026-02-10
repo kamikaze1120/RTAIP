@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Globe from '../components/Globe';
-import { getAssets } from '../services/logistics';
+import { fetchSupabaseEvents, getSupabaseConfig, fetchBackendEvents, getBackendBase } from '../services/data';
 import { NewHeader } from '../components/NewHeader';
 import { Cpu, Box, Shield, Truck, Shirt } from 'lucide-react';
 
@@ -42,11 +42,44 @@ const Logistics = () => {
   useEffect(() => {
     const loadAssets = async () => {
       setLoading(true);
-      const pubLogAssets = await getAssets() as Asset[];
-      setAssets(pubLogAssets);
+      const base = getBackendBase();
+      const supa = getSupabaseConfig();
+      let all = [] as Awaited<ReturnType<typeof fetchSupabaseEvents>>;
+      if (supa.url && supa.anon) {
+        all = await fetchSupabaseEvents();
+      } else if (base) {
+        all = await fetchBackendEvents();
+      }
+      const oneYearAgo = Date.now() - 365 * 24 * 3600000;
+      const pubLog = all.filter(e => {
+        const t = new Date(e.timestamp).getTime();
+        if (isNaN(t) || t < oneYearAgo) return false;
+        const src = String(e.source || '').toLowerCase();
+        return src.includes('pub log') || src.includes('log') || src.includes('maritime');
+      });
+      const mapped: Asset[] = pubLog.map((e, idx) => {
+        const d = (e.data || {}) as Record<string, unknown>;
+        const idNum = Number(e.id);
+        const nsn = typeof d.imo === 'string' ? d.imo : typeof d.mmsi === 'string' ? d.mmsi : 'N/A';
+        const name = typeof d.vessel_name === 'string' ? d.vessel_name : 'Logistics Item';
+        const qty = typeof d.quantity === 'number' ? d.quantity : 1;
+        const eta = typeof d.eta === 'string' ? d.eta : '';
+        return {
+          id: Number.isFinite(idNum) ? idNum : idx,
+          nsn: String(nsn),
+          name: String(name),
+          location: { lon: Number(e.longitude || 0), lat: Number(e.latitude || 0) },
+          status: 'In Transit',
+          quantity: qty,
+          eta: eta || undefined,
+          type: 'Vehicle',
+          description: JSON.stringify(d),
+        };
+      });
+      setAssets(mapped);
       setLoading(false);
-      if (pubLogAssets.length > 0) {
-        setSelectedAsset(pubLogAssets[0]);
+      if (mapped.length > 0) {
+        setSelectedAsset(mapped[0]);
       }
     };
     loadAssets();
