@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { fetchBackendEvents, type RtaEvent, eventSeverity, fetchSupabaseEvents, getSupabaseConfig, getBackendBase } from '../services/data';
+import { fetchBackendEvents, type RtaEvent, eventSeverity, fetchSupabaseEvents, getSupabaseConfig, getBackendBase, getCachedEvents, setCachedEvents } from '../services/data';
 import { NewHeader } from '../components/NewHeader';
 import EventFeed from '../components/EventFeed';
 import Map from 'ol/Map';
@@ -33,14 +33,17 @@ export default function Timeline() {
       const backend = getBackendBase();
       const supa = getSupabaseConfig();
       const fallback = (window.localStorage.getItem('useOpenFallback') || 'true') === 'true';
-      let all: RtaEvent[] = [];
+      let all: RtaEvent[] = getCachedEvents();
       if (supa.url && supa.anon) {
-        all = await fetchSupabaseEvents();
+        const fresh = await fetchSupabaseEvents();
+        all = fresh.length > 0 ? fresh : all;
         if (all.length === 0 && backend) {
-          all = await fetchBackendEvents();
+          const be = await fetchBackendEvents();
+          all = be.length > 0 ? be : all;
         }
       } else if (backend) {
-        all = await fetchBackendEvents();
+        const be = await fetchBackendEvents();
+        all = be.length > 0 ? be : all;
       }
       
       if (all.length === 0 && fallback) {
@@ -50,7 +53,10 @@ export default function Timeline() {
         all = results.flat();
       }
       all.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-      if (!cancelled) setEvents(all);
+      if (!cancelled) {
+        setEvents(all);
+        if (all.length > 0) setCachedEvents(all);
+      }
     })();
     return () => { cancelled = true; };
   }, []);

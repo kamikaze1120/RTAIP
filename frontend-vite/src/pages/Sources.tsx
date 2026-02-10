@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { type RtaEvent, fetchSupabaseEvents, getSupabaseConfig, fetchBackendEvents, getBackendBase } from '../services/data';
+import { type RtaEvent, fetchSupabaseEvents, getSupabaseConfig, fetchBackendEvents, getBackendBase, getCachedEvents, setCachedEvents } from '../services/data';
 import StatCard from '../components/StatCard';
 import { Database, Satellite, CloudDrizzle, Users, Shield, Building } from 'lucide-react';
  
@@ -33,15 +33,24 @@ export default function Sources() {
     async function load() {
       
       const base = getBackendBase();
-      let backend: RtaEvent[] = [];
+      let backend: RtaEvent[] = getCachedEvents();
       const supa = getSupabaseConfig();
       if (supa.url && supa.anon) {
-        try { backend = await fetchSupabaseEvents(); } catch {}
+        try {
+          const fresh = await fetchSupabaseEvents();
+          backend = fresh.length > 0 ? fresh : backend;
+        } catch {}
       } else if (base) {
-        try { backend = await fetchBackendEvents(); } catch {}
+        try {
+          const be = await fetchBackendEvents();
+          backend = be.length > 0 ? be : backend;
+        } catch {}
       }
       const all = [...backend];
-      if (!cancelled) setEvents(all);
+      if (!cancelled) {
+        setEvents(all);
+        if (all.length > 0) setCachedEvents(all);
+      }
     }
 
     load();

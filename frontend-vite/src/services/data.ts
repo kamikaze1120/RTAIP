@@ -504,3 +504,28 @@ export async function fetchGlobalPopulationByContinent(): Promise<{ total: numbe
     return { total: 0, continents: {} };
   }
 }
+export function getCachedEvents(maxAgeMs = 365 * 24 * 3600000): RtaEvent[] {
+  try {
+    const raw = typeof window !== 'undefined' ? window.localStorage.getItem('eventsCache') : null;
+    const whenRaw = typeof window !== 'undefined' ? window.localStorage.getItem('eventsCacheTs') : null;
+    if (!raw) return [];
+    const when = whenRaw ? Number(whenRaw) : 0;
+    if (when && Date.now() - when > maxAgeMs) return [];
+    const arr = JSON.parse(raw) as RtaEvent[];
+    if (!Array.isArray(arr)) return [];
+    return arr;
+  } catch { return []; }
+}
+
+export function setCachedEvents(events: RtaEvent[]): void {
+  try {
+    if (typeof window === 'undefined') return;
+    const lastYear = Date.now() - 365 * 24 * 3600000;
+    const clean = events.filter(e => {
+      const t = new Date(e.timestamp).getTime();
+      return !isNaN(t) && t >= lastYear;
+    });
+    window.localStorage.setItem('eventsCache', JSON.stringify(clean));
+    window.localStorage.setItem('eventsCacheTs', String(Date.now()));
+  } catch {}
+}
