@@ -162,7 +162,7 @@ export default function Timeline() {
                     <span>Playback Window</span>
                     <span className="text-gray-400">{replayHours}h</span>
                   </label>
-                  <input type="range" min="1" max="168" value={replayHours} onChange={(e) => setReplayHours(Number(e.target.value))} className="w-full mt-1" />
+                  <input type="range" min="1" max="8760" value={replayHours} onChange={(e) => setReplayHours(Number(e.target.value))} className="w-full mt-1" />
                 </div>
                 <div>
                   <div className="text-xs text-gray-300 tracking-widest uppercase mb-2">Sources</div>
