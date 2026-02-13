@@ -4,6 +4,8 @@ import { NewHeader } from './components/NewHeader';
 import MobileNav from './components/MobileNav'; // Add mobile navigation
 
 import MapPage from './pages/Map';
+import LegalPage from './pages/Legal';
+import CommandCenter from './pages/CommandCenter';
 import Dashboard from './pages/Dashboard';
 import Sources from './pages/Sources';
 import Timeline from './pages/Timeline';
@@ -12,6 +14,8 @@ import ThreatAnalysis from './pages/ThreatAnalysis';
 import Logistics from './pages/Logistics';
 import Security from './pages/Security';
 import Settings from './pages/Settings';
+import AuthPage from './pages/Auth';
+import AdminPage from './pages/Admin';
  
 import { getBackendBase, checkSupabaseHealth, getSupabaseConfig, runConnectivityDiagnostics } from './services/data';
 
@@ -86,9 +90,13 @@ export default function App() {
   useEffect(() => {
     const id = setTimeout(() => {
       setBooting(false);
-      if (location.pathname === '/') {
-        navigate('/sources');
+      const consentTs = window.localStorage.getItem('consentAcceptedTs');
+      if (!consentTs) {
+        const path = location.pathname || '/';
+        const allow = path.startsWith('/legal');
+        if (!allow) { navigate('/auth'); return; }
       }
+      if (location.pathname === '/') { navigate('/sources'); }
     }, 2000);
     return () => clearTimeout(id);
   }, [navigate, location.pathname]);
@@ -97,6 +105,21 @@ export default function App() {
       <div className="grid-overlay"></div>
       {!booting && <NewHeader />}
       {!booting && <MobileNav />} {/* Add mobile navigation */}
+      {!booting && !window.localStorage.getItem('cookieConsentTs') && (
+        <div className="fixed bottom-0 left-0 right-0 z-50 bg-black/70 text-white">
+          <div className="container mx-auto px-6 py-3 flex items-center justify-between">
+            <div className="text-sm text-gray-200">
+              We use strictly necessary cookies/local storage to remember preferences and consent. No advertising cookies are used.
+            </div>
+            <button
+              className="px-3 py-2 bg-white/20 rounded"
+              onClick={() => { try { window.localStorage.setItem('cookieConsentTs', String(Date.now())); } catch {} }}
+            >
+              Accept
+            </button>
+          </div>
+        </div>
+      )}
       <main>
         <div className="pt-16 relative z-10">
           {booting ? (
@@ -118,6 +141,10 @@ export default function App() {
               <Route path="/timeline" element={<Timeline />} />
               <Route path="/security" element={<Security />} />
               <Route path="/settings" element={<Settings />} />
+              <Route path="/auth" element={<AuthPage />} />
+              <Route path="/admin" element={<AdminPage />} />
+              <Route path="/legal" element={<LegalPage />} />
+              <Route path="/command" element={<CommandCenter />} />
               <Route path="/" element={<Dashboard />} />
             </Routes>
           </div>

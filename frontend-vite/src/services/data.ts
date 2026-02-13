@@ -10,6 +10,27 @@ export type RtaEvent = {
   data?: Record<string, unknown>;
 };
 
+export type EventTag = {
+  id: number;
+  event_id: number;
+  case_id?: number;
+  tag: string;
+  created_by?: number;
+  created_at: string;
+};
+
+export type EventAnnotation = {
+  id: number;
+  event_id: number;
+  case_id?: number;
+  author_user_id?: number;
+  text: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  data?: Record<string, unknown> | null;
+  ts: string;
+};
+
 const inMemoryCache = new Map<string, { ts: number; data: unknown }>();
 const TTL_MS = 2 * 60 * 1000;
 function getCache<T>(key: string): T | null {
@@ -51,6 +72,248 @@ export function getBackendBase(): string | null {
     const env = import.meta.env.VITE_BACKEND_URL as string | undefined;
     return (env && env.trim()) || null;
   }
+}
+
+export async function listEventTags(eventId: number): Promise<EventTag[]> {
+  const base = getBackendBase();
+  if (!base) return [];
+  try {
+    const r = await fetchWithTimeout(`${base.replace(/\/$/, '')}/events/${eventId}/tags`, { timeoutMs: 8000 });
+    if (!r.ok) return [];
+    const rows = await r.json();
+    return Array.isArray(rows) ? rows as EventTag[] : [];
+  } catch { return []; }
+}
+
+export async function addEventTag(eventId: number, tag: string, caseId?: number): Promise<number | null> {
+  const base = getBackendBase();
+  if (!base) return null;
+  try {
+    const uidRaw = typeof window !== 'undefined' ? window.localStorage.getItem('backendUserId') : null;
+    const created_by = uidRaw ? Number(uidRaw) : undefined;
+    const body = { tag, case_id: caseId, created_by };
+    const r = await fetchWithTimeout(`${base.replace(/\/$/, '')}/events/${eventId}/tags`, { timeoutMs: 8000, method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if (!r.ok) return null;
+    const jd = await r.json() as Record<string, unknown>;
+    return typeof jd['id'] === 'number' ? (jd['id'] as number) : null;
+  } catch { return null; }
+}
+
+export async function listEventAnnotations(eventId: number): Promise<EventAnnotation[]> {
+  const base = getBackendBase();
+  if (!base) return [];
+  try {
+    const r = await fetchWithTimeout(`${base.replace(/\/$/, '')}/events/${eventId}/annotations`, { timeoutMs: 8000 });
+    if (!r.ok) return [];
+    const rows = await r.json();
+    return Array.isArray(rows) ? rows as EventAnnotation[] : [];
+  } catch { return []; }
+}
+
+export async function addEventAnnotation(eventId: number, text: string, opts?: { caseId?: number; latitude?: number | null; longitude?: number | null; data?: Record<string, unknown> }): Promise<number | null> {
+  const base = getBackendBase();
+  if (!base) return null;
+  try {
+    const uidRaw = typeof window !== 'undefined' ? window.localStorage.getItem('backendUserId') : null;
+    const author_user_id = uidRaw ? Number(uidRaw) : undefined;
+    const body = { text, case_id: opts?.caseId, author_user_id, latitude: opts?.latitude, longitude: opts?.longitude, data: opts?.data };
+    const r = await fetchWithTimeout(`${base.replace(/\/$/, '')}/events/${eventId}/annotations`, { timeoutMs: 8000, method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if (!r.ok) return null;
+    const jd = await r.json() as Record<string, unknown>;
+    return typeof jd['id'] === 'number' ? (jd['id'] as number) : null;
+  } catch { return null; }
+}
+
+export type WorkspaceOut = { id: number; org_id: number; name: string; description?: string; created_by?: number; created_at: string };
+export type CaseOut = { id: number; org_id: number; name: string; description?: string; status: string; workspace_id?: number; created_by?: number; created_at: string };
+export type CaseMemberOut = { id: number; user_id: number; role: string; username?: string; email?: string };
+export type ReportOut = { id: number; case_id: number; title: string; content: string; created_by?: number; created_at: string; last_export_ts?: string | null };
+
+export async function listWorkspaces(orgId?: number): Promise<WorkspaceOut[]> {
+  const base = getBackendBase();
+  if (!base) return [];
+  const qs = orgId ? `?org_id=${orgId}` : '';
+  try {
+    const r = await fetchWithTimeout(`${base.replace(/\/$/, '')}/workspaces${qs}`, { timeoutMs: 8000 });
+    const rows = await r.json();
+    return Array.isArray(rows) ? rows as WorkspaceOut[] : [];
+  } catch { return []; }
+}
+
+export async function createWorkspace(orgId: number, name: string, description?: string): Promise<number | null> {
+  const base = getBackendBase();
+  if (!base) return null;
+  try {
+    const uidRaw = typeof window !== 'undefined' ? window.localStorage.getItem('backendUserId') : null;
+    const created_by = uidRaw ? Number(uidRaw) : undefined;
+    const r = await fetchWithTimeout(`${base.replace(/\/$/, '')}/workspaces`, { timeoutMs: 8000, method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ org_id: orgId, name, description, created_by }) });
+    if (!r.ok) return null;
+    const jd = await r.json() as Record<string, unknown>;
+    return typeof jd['id'] === 'number' ? (jd['id'] as number) : null;
+  } catch { return null; }
+}
+
+export async function listCases(orgId?: number, workspaceId?: number): Promise<CaseOut[]> {
+  const base = getBackendBase();
+  if (!base) return [];
+  const params: string[] = [];
+  if (orgId) params.push(`org_id=${orgId}`);
+  if (workspaceId) params.push(`workspace_id=${workspaceId}`);
+  const qs = params.length ? `?${params.join('&')}` : '';
+  try {
+    const r = await fetchWithTimeout(`${base.replace(/\/$/, '')}/cases${qs}`, { timeoutMs: 8000 });
+    const rows = await r.json();
+    return Array.isArray(rows) ? rows as CaseOut[] : [];
+  } catch { return []; }
+}
+
+export async function createCase(orgId: number, name: string, description?: string, workspaceId?: number): Promise<number | null> {
+  const base = getBackendBase();
+  if (!base) return null;
+  try {
+    const uidRaw = typeof window !== 'undefined' ? window.localStorage.getItem('backendUserId') : null;
+    const created_by = uidRaw ? Number(uidRaw) : undefined;
+    const body = { org_id: orgId, name, description, workspace_id: workspaceId, created_by };
+    const r = await fetchWithTimeout(`${base.replace(/\/$/, '')}/cases`, { timeoutMs: 8000, method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if (!r.ok) return null;
+    const jd = await r.json() as Record<string, unknown>;
+    return typeof jd['id'] === 'number' ? (jd['id'] as number) : null;
+  } catch { return null; }
+}
+
+export async function addCaseMember(caseId: number, userId: number, role?: string): Promise<boolean> {
+  const base = getBackendBase();
+  if (!base) return false;
+  try {
+    const r = await fetchWithTimeout(`${base.replace(/\/$/, '')}/cases/${caseId}/members`, { timeoutMs: 8000, method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_id: userId, role }) });
+    if (!r.ok) return false;
+    const jd = await r.json() as Record<string, unknown>;
+    return !!jd['ok'];
+  } catch { return false; }
+}
+
+export async function listCaseMembers(caseId: number): Promise<CaseMemberOut[]> {
+  const base = getBackendBase();
+  if (!base) return [];
+  try {
+    const r = await fetchWithTimeout(`${base.replace(/\/$/, '')}/cases/${caseId}/members`, { timeoutMs: 8000 });
+    const rows = await r.json();
+    return Array.isArray(rows) ? rows as CaseMemberOut[] : [];
+  } catch { return []; }
+}
+
+export async function createReport(caseId: number, title: string, content: string): Promise<number | null> {
+  const base = getBackendBase();
+  if (!base) return null;
+  try {
+    const uidRaw = typeof window !== 'undefined' ? window.localStorage.getItem('backendUserId') : null;
+    const created_by = uidRaw ? Number(uidRaw) : undefined;
+    const r = await fetchWithTimeout(`${base.replace(/\/$/, '')}/reports`, { timeoutMs: 8000, method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ case_id: caseId, title, content, created_by }) });
+    if (!r.ok) return null;
+    const jd = await r.json() as Record<string, unknown>;
+    return typeof jd['id'] === 'number' ? (jd['id'] as number) : null;
+  } catch { return null; }
+}
+
+export async function listCaseReports(caseId: number): Promise<ReportOut[]> {
+  const base = getBackendBase();
+  if (!base) return [];
+  try {
+    const r = await fetchWithTimeout(`${base.replace(/\/$/, '')}/cases/${caseId}/reports`, { timeoutMs: 8000 });
+    const rows = await r.json();
+    return Array.isArray(rows) ? rows as ReportOut[] : [];
+  } catch { return []; }
+}
+
+export async function exportReport(reportId: number): Promise<{ format: string; pdfBase64?: string; html?: string } | null> {
+  const base = getBackendBase();
+  if (!base) return null;
+  try {
+    const r = await fetchWithTimeout(`${base.replace(/\/$/, '')}/reports/${reportId}/export`, { timeoutMs: 12000, method: 'POST' });
+    if (!r.ok) return null;
+    const jd = await r.json() as Record<string, unknown>;
+    const format = String(jd['format'] || 'html');
+    const pdfBase64 = typeof jd['pdf_base64'] === 'string' ? (jd['pdf_base64'] as string) : undefined;
+    const html = typeof jd['html'] === 'string' ? (jd['html'] as string) : undefined;
+    return { format, pdfBase64, html };
+  } catch { return null; }
+}
+
+export type CaseCommentOut = { id: number; case_id: number; parent_id?: number | null; author_user_id: number; text: string; ts: string };
+
+export async function listCaseComments(caseId: number): Promise<CaseCommentOut[]> {
+  const base = getBackendBase();
+  if (!base) return [];
+  try {
+    const r = await fetchWithTimeout(`${base.replace(/\/$/, '')}/cases/${caseId}/comments`, { timeoutMs: 8000 });
+    const rows = await r.json();
+    return Array.isArray(rows) ? rows as CaseCommentOut[] : [];
+  } catch { return []; }
+}
+
+export async function addCaseComment(caseId: number, text: string, parentId?: number | null): Promise<number | null> {
+  const base = getBackendBase();
+  if (!base) return null;
+  try {
+    const uidRaw = typeof window !== 'undefined' ? window.localStorage.getItem('backendUserId') : null;
+    const author_user_id = uidRaw ? Number(uidRaw) : 0;
+    const r = await fetchWithTimeout(`${base.replace(/\/$/, '')}/cases/${caseId}/comments`, { timeoutMs: 8000, method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, parent_id: parentId, author_user_id }) });
+    if (!r.ok) return null;
+    const jd = await r.json() as Record<string, unknown>;
+    return typeof jd['id'] === 'number' ? (jd['id'] as number) : null;
+  } catch { return null; }
+}
+
+export type SystemMetrics = {
+  events_total: number;
+  anomalies_total: number;
+  alerts_total: number;
+  last_event_ts?: string | null;
+  perf_recent: Array<{ ts: string; fps: number; events: number; anomalies: number; zoom: number; device?: string | null }>;
+  sources: Array<{ source: string; count_total: number; last_ts?: string | null; recent_ok: boolean }>;
+};
+
+export async function getSystemMetrics(): Promise<SystemMetrics | null> {
+  const base = getBackendBase(); if (!base) return null;
+  try { const r = await fetchWithTimeout(`${base.replace(/\/$/, '')}/metrics/system`, { timeoutMs: 8000 }); if (!r.ok) return null; return await r.json() as SystemMetrics; } catch { return null; }
+}
+
+export async function getPipelineStatus(hours?: number): Promise<{ sources: Array<{ source: string; count_total: number; count_recent: number; last_ts?: string | null }> } | null> {
+  const base = getBackendBase(); if (!base) return null;
+  const qs = hours ? `?hours=${hours}` : '';
+  try { const r = await fetchWithTimeout(`${base.replace(/\/$/, '')}/pipeline/status${qs}`, { timeoutMs: 8000 }); if (!r.ok) return null; return await r.json() as { sources: Array<{ source: string; count_total: number; count_recent: number; last_ts?: string | null }> }; } catch { return null; }
+}
+
+export async function getRecentErrors(limit?: number): Promise<Array<{ ts: string; event: string; details?: Record<string, unknown> }>> {
+  const base = getBackendBase(); if (!base) return [];
+  const qs = limit ? `?limit=${limit}` : '';
+  try { const r = await fetchWithTimeout(`${base.replace(/\/$/, '')}/errors/recent${qs}`, { timeoutMs: 8000 }); if (!r.ok) return []; const rows = await r.json(); return Array.isArray(rows) ? rows as Array<{ ts: string; event: string; details?: Record<string, unknown> }> : []; } catch { return []; }
+}
+
+export async function getBillingUsage(days?: number): Promise<Record<string, number> | null> {
+  const base = getBackendBase(); if (!base) return null;
+  const qs = days ? `?days=${days}` : '';
+  try { const r = await fetchWithTimeout(`${base.replace(/\/$/, '')}/billing/usage${qs}`, { timeoutMs: 8000 }); if (!r.ok) return null; return await r.json() as Record<string, number>; } catch { return null; }
+}
+
+export async function exportBackup(): Promise<{ zip_base64: string; tables: string[] } | null> {
+  const base = getBackendBase(); if (!base) return null;
+  try { const r = await fetchWithTimeout(`${base.replace(/\/$/, '')}/backup/export`, { timeoutMs: 15000 }); if (!r.ok) return null; return await r.json() as { zip_base64: string; tables: string[] }; } catch { return null; }
+}
+
+export async function importBackup(zipBase64: string): Promise<{ inserted: Record<string, number> } | null> {
+  const base = getBackendBase(); if (!base) return null;
+  try { const r = await fetchWithTimeout(`${base.replace(/\/$/, '')}/backup/import`, { timeoutMs: 20000, method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ zip_base64: zipBase64 }) }); if (!r.ok) return null; return await r.json() as { inserted: Record<string, number> }; } catch { return null; }
+}
+
+export async function getInfraRegion(): Promise<{ region: string; primary: boolean } | null> {
+  const base = getBackendBase(); if (!base) return null;
+  try { const r = await fetchWithTimeout(`${base.replace(/\/$/, '')}/infra/region`, { timeoutMs: 5000 }); if (!r.ok) return null; return await r.json() as { region: string; primary: boolean }; } catch { return null; }
+}
+
+export async function getSla(): Promise<{ targets: Record<string, string>; as_of: string; contact: string } | null> {
+  const base = getBackendBase(); if (!base) return null;
+  try { const r = await fetchWithTimeout(`${base.replace(/\/$/, '')}/sla`, { timeoutMs: 5000 }); if (!r.ok) return null; return await r.json() as { targets: Record<string, string>; as_of: string; contact: string }; } catch { return null; }
 }
 
 export function getHealthPaths(): string[] {

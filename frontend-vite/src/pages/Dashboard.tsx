@@ -4,7 +4,7 @@ import Globe from '../components/Globe';
 import AlertList from '../components/AlertList';
 import { ShieldAlert, Activity, TrendingUp } from 'lucide-react';
 import { Globe as GlobeIcon } from 'lucide-react';
-import { fetchBackendEvents, getBackendBase, type RtaEvent, globalThreatScore, topClusters, typeProbabilities, fetchSupabaseEvents, getSupabaseConfig, eventSeverity, runConnectivityDiagnostics, getCachedEvents, setCachedEvents } from '../services/data';
+import { fetchBackendEvents, getBackendBase, type RtaEvent, globalThreatScore, topClusters, typeProbabilities, fetchSupabaseEvents, getSupabaseConfig, eventSeverity, runConnectivityDiagnostics, getCachedEvents, setCachedEvents, getSystemMetrics, getPipelineStatus, getRecentErrors, getBillingUsage, getInfraRegion, exportBackup, importBackup } from '../services/data';
 import { NewHeader } from '../components/NewHeader';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, BarChart, Bar } from 'recharts';
 import AnalystPanel from '../components/AnalystPanel';
@@ -16,6 +16,12 @@ export default function Dashboard() {
   const [mapFocus, setMapFocus] = useState<RtaEvent | null>(null);
   const [backendOnline, setBackendOnline] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<string>('—');
+  const [sysMetrics, setSysMetrics] = useState<null | { events_total: number; anomalies_total: number; alerts_total: number; last_event_ts?: string | null; perf_recent: Array<{ ts: string; fps: number; events: number; anomalies: number; zoom: number; device?: string | null }>; sources: Array<{ source: string; count_total: number; last_ts?: string | null; recent_ok: boolean }> }>(null);
+  const [pipeline, setPipeline] = useState<Array<{ source: string; count_total: number; count_recent: number; last_ts?: string | null }>>([]);
+  const [errors, setErrors] = useState<Array<{ ts: string; event: string; details?: Record<string, unknown> }>>([]);
+  const [usage, setUsage] = useState<Record<string, number> | null>(null);
+  const [region, setRegion] = useState<null | { region: string; primary: boolean }>(null);
+  const [backupStatus, setBackupStatus] = useState<null | { tables?: string[]; bytes?: number; imported?: Record<string, number> }>(null);
   const filteredEvents = useMemo(() => events.filter(e => !/usgs|noaa/i.test(String(e.source||''))), [events]);
 
   const handleSelect = (event: RtaEvent) => {
@@ -59,6 +65,40 @@ export default function Dashboard() {
     const id = setInterval(load, Math.max(10000, r));
     return () => { cancelled = true; clearInterval(id); };
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadOps() {
+      try { const m = await getSystemMetrics(); if (!cancelled) setSysMetrics(m); } catch {}
+      try { const p = await getPipelineStatus(24); if (!cancelled) setPipeline(p?.sources || []); } catch {}
+      try { const e = await getRecentErrors(20); if (!cancelled) setErrors(e); } catch {}
+      try { const u = await getBillingUsage(30); if (!cancelled) setUsage(u); } catch {}
+      try { const r = await getInfraRegion(); if (!cancelled) setRegion(r); } catch {}
+    }
+    loadOps();
+    const id = setInterval(loadOps, 15000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, []);
+
+  const doExportBackup = async () => {
+    const res = await exportBackup();
+    if (res?.zip_base64) {
+      setBackupStatus({ tables: res.tables, bytes: Math.floor((res.zip_base64.length * 3) / 4) });
+      try {
+        const a = document.createElement('a');
+        a.href = `data:application/zip;base64,${res.zip_base64}`;
+        a.download = 'rtaip-backup.zip';
+        a.click();
+      } catch {}
+    }
+  };
+
+  const doImportBackup = async () => {
+    const b64 = prompt('Paste backup zip (base64)');
+    if (!b64) return;
+    const res = await importBackup(b64);
+    if (res?.inserted) setBackupStatus({ imported: res.inserted });
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -249,6 +289,60 @@ export default function Dashboard() {
                   </LineChart>
                 </ResponsiveContainer>
               </div>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
+            <div className="bg-white/10 backdrop-blur-md rounded-lg p-4 shadow-lg">
+              <div className="text-sm text-gray-300 mb-2">System Health & Metrics</div>
+              <div className="text-xs text-gray-300">Region: {region ? `${region.region} • ${region.primary ? 'Primary' : 'Secondary'}` : '—'}</div>
+              <div className="grid grid-cols-3 gap-3 mt-3 text-xs">
+                <div className="bg-white/5 p-2 rounded">Events<br/><span className="text-lg">{sysMetrics?.events_total ?? '—'}</span></div>
+                <div className="bg-white/5 p-2 rounded">Anomalies<br/><span className="text-lg">{sysMetrics?.anomalies_total ?? '—'}</span></div>
+                <div className="bg-white/5 p-2 rounded">Alerts<br/><span className="text-lg">{sysMetrics?.alerts_total ?? '—'}</span></div>
+              </div>
+              <div className="mt-3 text-xs">Last event: {sysMetrics?.last_event_ts ?? '—'}</div>
+              <div className="mt-3 text-xs">Performance (recent)</div>
+              <div className="mt-1 max-h-28 overflow-y-auto text-xs">
+                {(sysMetrics?.perf_recent||[]).map((m,i)=>(<div key={i} className="mt-1">{m.ts} • fps {m.fps} • events {m.events} • anomalies {m.anomalies}</div>))}
+                {(sysMetrics?.perf_recent||[]).length===0 && (<div className="text-gray-400">No metrics</div>)}
+              </div>
+            </div>
+            <div className="bg-white/10 backdrop-blur-md rounded-lg p-4 shadow-lg">
+              <div className="text-sm text-gray-300 mb-2">Pipeline Status</div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                {pipeline.map(p => (
+                  <div key={p.source} className="bg-white/5 p-2 rounded">
+                    <div className="font-semibold">{p.source}</div>
+                    <div>Recent: {p.count_recent} • Total: {p.count_total}</div>
+                    <div>Last: {p.last_ts || '—'}</div>
+                  </div>
+                ))}
+                {pipeline.length===0 && (<div className="text-gray-400">No data</div>)}
+              </div>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
+            <div className="bg-white/10 backdrop-blur-md rounded-lg p-4 shadow-lg">
+              <div className="text-sm text-gray-300 mb-2">Errors (recent)</div>
+              <div className="text-xs max-h-40 overflow-y-auto">
+                {errors.map((e,i)=>(<div key={i} className="mt-1">{e.ts} — {e.event} {e.details && JSON.stringify(e.details)}</div>))}
+                {errors.length===0 && (<div className="text-gray-400">No recent errors</div>)}
+              </div>
+            </div>
+            <div className="bg-white/10 backdrop-blur-md rounded-lg p-4 shadow-lg">
+              <div className="text-sm text-gray-300 mb-2">Usage & Backup</div>
+              <div className="text-xs text-gray-300">Prompts: {usage?.prompts ?? 0} • Alerts: {usage?.alerts ?? 0} • Reports: {usage?.reports ?? 0} • Events: {usage?.events_ingested ?? 0}</div>
+              <div className="mt-2 flex gap-2">
+                <button className="px-3 py-2 bg-white/20 rounded" onClick={doExportBackup}>Export backup</button>
+                <button className="px-3 py-2 bg-white/20 rounded" onClick={doImportBackup}>Import backup</button>
+              </div>
+              {backupStatus && (
+                <div className="mt-2 text-xs">
+                  {backupStatus.tables && (<div>Exported tables: {backupStatus.tables.join(', ')}</div>)}
+                  {backupStatus.bytes && (<div>Size: {backupStatus.bytes} bytes</div>)}
+                  {backupStatus.imported && (<div>Imported: {Object.entries(backupStatus.imported).map(([k,v])=>`${k}:${v}`).join(', ')}</div>)}
+                </div>
+              )}
             </div>
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">

@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from database import Session as DBSession, User, DataEvent, ensure_schema, Organization, OrgMembership, Invitation, AuditLog, ConsentLog, IpAllowlist, OrgSettings, PromptLog, AlertRule, AlertHistory
+from database import Session as DBSession, User, DataEvent, ensure_schema, Organization, OrgMembership, Invitation, AuditLog, ConsentLog, IpAllowlist, OrgSettings, PromptLog, AlertRule, AlertHistory, Workspace, Case, CaseMembership, EventTag, EventAnnotation, CaseComment, Report, PerfMetric
 from pydantic import BaseModel
 from typing import Optional, List
 from auth import create_access_token, get_password_hash, verify_password
@@ -54,6 +54,7 @@ DEFAULT_ORIGINS = [
     "http://127.0.0.1:3010",
     "http://localhost:5173",
     "http://127.0.0.1:5173",
+    "https://rtaip.vercel.app",
 ]
 ALLOWED_ORIGINS_ENV = os.getenv("ALLOWED_ORIGINS")
 if ALLOWED_ORIGINS_ENV:
@@ -916,6 +917,800 @@ def insert_sample_data():
     except Exception as e:
         logger.error(f"Error inserting sample data: {e}", exc_info=True)
         return {"success": False, "error": str(e)}
+
+
+from pydantic import BaseModel
+from typing import Optional, List
+
+class WorkspaceIn(BaseModel):
+    org_id: int
+    name: str
+    description: Optional[str] = None
+    created_by: Optional[int] = None
+
+class WorkspaceOut(BaseModel):
+    id: int
+    org_id: int
+    name: str
+    description: Optional[str]
+    created_by: Optional[int]
+    created_at: str
+
+class CaseIn(BaseModel):
+    org_id: int
+    name: str
+    description: Optional[str] = None
+    status: Optional[str] = 'open'
+    workspace_id: Optional[int] = None
+    created_by: Optional[int] = None
+
+class CaseOut(BaseModel):
+    id: int
+    org_id: int
+    name: str
+    description: Optional[str]
+    status: str
+    workspace_id: Optional[int]
+    created_by: Optional[int]
+    created_at: str
+
+class CaseMemberIn(BaseModel):
+    user_id: int
+    role: Optional[str] = 'viewer'
+
+class CaseMemberOut(BaseModel):
+    id: int
+    user_id: int
+    role: str
+    username: Optional[str]
+    email: Optional[str]
+
+class TagIn(BaseModel):
+    tag: str
+    case_id: Optional[int] = None
+    created_by: Optional[int] = None
+
+class TagOut(BaseModel):
+    id: int
+    event_id: int
+    case_id: Optional[int]
+    tag: str
+    created_by: Optional[int]
+    created_at: str
+
+class AnnotationIn(BaseModel):
+    text: str
+    case_id: Optional[int] = None
+    author_user_id: Optional[int] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    data: Optional[dict] = None
+
+class AnnotationOut(BaseModel):
+    id: int
+    event_id: int
+    case_id: Optional[int]
+    author_user_id: Optional[int]
+    text: str
+    latitude: Optional[float]
+    longitude: Optional[float]
+    data: Optional[dict]
+    ts: str
+
+class CommentIn(BaseModel):
+    text: str
+    parent_id: Optional[int] = None
+    author_user_id: int
+
+class CommentOut(BaseModel):
+    id: int
+    case_id: int
+    parent_id: Optional[int]
+    author_user_id: int
+    text: str
+    ts: str
+
+class ReportIn(BaseModel):
+    case_id: int
+    title: str
+    content: str
+    created_by: Optional[int] = None
+
+class ReportOut(BaseModel):
+    id: int
+    case_id: int
+    title: str
+    content: str
+    created_by: Optional[int]
+    created_at: str
+    last_export_ts: Optional[str]
+
+def _get_org_role(db: Session, user_id: int, org_id: int) -> Optional[str]:
+    m = db.query(OrgMembership).filter(OrgMembership.org_id == org_id, OrgMembership.user_id == user_id).first()
+    if m:
+        return m.role
+    o = db.query(Organization).filter(Organization.id == org_id).first()
+    if o and o.owner_user_id == user_id:
+        return 'owner'
+    return None
+
+def _has_case_access(db: Session, user_id: int, case_id: int) -> bool:
+    cm = db.query(CaseMembership).filter(CaseMembership.case_id == case_id, CaseMembership.user_id == user_id).first()
+    if cm:
+        return True
+    c = db.query(Case).filter(Case.id == case_id).first()
+    if not c:
+        return False
+    return _get_org_role(db, user_id, c.org_id) is not None
+
+@app.post('/workspaces')
+def create_workspace(body: WorkspaceIn):
+    db = DBSession()
+    try:
+        if body.created_by is not None:
+            role = _get_org_role(db, int(body.created_by), int(body.org_id))
+            if role not in ('admin', 'owner'):
+                return {'error': 'forbidden'}
+        w = Workspace(org_id=body.org_id, name=body.name, description=body.description, created_by=body.created_by)
+        db.add(w)
+        db.commit()
+        db.refresh(w)
+        try:
+            db.add(AuditLog(user_id=body.created_by, org_id=body.org_id, event='workspace_created', details={'workspace_id': w.id, 'name': body.name}))
+            db.commit()
+        except Exception:
+            pass
+        return {'id': w.id}
+    finally:
+        db.close()
+
+@app.get('/workspaces')
+def list_workspaces(org_id: Optional[int] = None) -> List[WorkspaceOut]:
+    db = DBSession()
+    try:
+        q = db.query(Workspace)
+        if org_id:
+            q = q.filter(Workspace.org_id == org_id)
+        rows = q.order_by(Workspace.id.desc()).all()
+        out: List[WorkspaceOut] = []
+        for w in rows:
+            out.append(WorkspaceOut(id=w.id, org_id=w.org_id, name=w.name or '', description=w.description or None, created_by=w.created_by, created_at=(w.created_at.isoformat() if isinstance(w.created_at, datetime.datetime) else str(w.created_at))))
+        return out
+    finally:
+        db.close()
+
+@app.post('/cases')
+def create_case(body: CaseIn):
+    db = DBSession()
+    try:
+        if body.created_by is not None:
+            role = _get_org_role(db, int(body.created_by), int(body.org_id))
+            if role not in ('admin', 'owner', 'analyst'):
+                return {'error': 'forbidden'}
+        c = Case(org_id=body.org_id, name=body.name, description=body.description, status=body.status or 'open', workspace_id=body.workspace_id, created_by=body.created_by)
+        db.add(c)
+        db.commit()
+        db.refresh(c)
+        try:
+            db.add(AuditLog(user_id=body.created_by, org_id=body.org_id, event='case_created', details={'case_id': c.id, 'name': body.name, 'workspace_id': body.workspace_id}))
+            db.commit()
+        except Exception:
+            pass
+        return {'id': c.id}
+    finally:
+        db.close()
+
+@app.get('/cases')
+def list_cases(org_id: Optional[int] = None, workspace_id: Optional[int] = None) -> List[CaseOut]:
+    db = DBSession()
+    try:
+        q = db.query(Case)
+        if org_id:
+            q = q.filter(Case.org_id == org_id)
+        if workspace_id:
+            q = q.filter(Case.workspace_id == workspace_id)
+        rows = q.order_by(Case.id.desc()).all()
+        out: List[CaseOut] = []
+        for c in rows:
+            out.append(CaseOut(id=c.id, org_id=c.org_id, name=c.name or '', description=c.description or None, status=c.status or 'open', workspace_id=c.workspace_id, created_by=c.created_by, created_at=(c.created_at.isoformat() if isinstance(c.created_at, datetime.datetime) else str(c.created_at))))
+        return out
+    finally:
+        db.close()
+
+@app.post('/cases/{cid}/members')
+def add_case_member(cid: int, body: CaseMemberIn):
+    db = DBSession()
+    try:
+        c = db.query(Case).filter(Case.id == cid).first()
+        if not c:
+            return {'error': 'not found'}
+        cm = CaseMembership(case_id=cid, user_id=body.user_id, role=body.role or 'viewer')
+        db.add(cm)
+        db.commit()
+        try:
+            db.add(AuditLog(user_id=None, org_id=c.org_id, event='case_member_added', details={'case_id': cid, 'user_id': body.user_id, 'role': body.role or 'viewer'}))
+            db.commit()
+        except Exception:
+            pass
+        return {'ok': True}
+    finally:
+        db.close()
+
+@app.get('/cases/{cid}/members')
+def list_case_members(cid: int) -> List[CaseMemberOut]:
+    db = DBSession()
+    try:
+        rows = db.query(CaseMembership).filter(CaseMembership.case_id == cid).all()
+        out: List[CaseMemberOut] = []
+        for r in rows:
+            u = db.query(User).filter(User.id == r.user_id).first()
+            out.append(CaseMemberOut(id=r.id, user_id=r.user_id, role=r.role or 'viewer', username=(u.username if u else None), email=(u.email if u else None)))
+        return out
+    finally:
+        db.close()
+
+@app.post('/events/{eid}/tags')
+def add_event_tag(eid: int, body: TagIn):
+    db = DBSession()
+    try:
+        if body.case_id and body.created_by:
+            if not _has_case_access(db, int(body.created_by), int(body.case_id)):
+                return {'error': 'forbidden'}
+        t = EventTag(event_id=eid, case_id=body.case_id, tag=body.tag, created_by=body.created_by)
+        db.add(t)
+        db.commit()
+        db.refresh(t)
+        try:
+            db.add(AuditLog(user_id=body.created_by, org_id=None, event='event_tag_added', details={'event_id': eid, 'case_id': body.case_id, 'tag': body.tag}))
+            db.commit()
+        except Exception:
+            pass
+        return {'id': t.id}
+    finally:
+        db.close()
+
+@app.get('/events/{eid}/tags')
+def list_event_tags(eid: int) -> List[TagOut]:
+    db = DBSession()
+    try:
+        rows = db.query(EventTag).filter(EventTag.event_id == eid).order_by(EventTag.created_at.desc()).all()
+        out: List[TagOut] = []
+        for t in rows:
+            out.append(TagOut(id=t.id, event_id=t.event_id, case_id=t.case_id, tag=t.tag or '', created_by=t.created_by, created_at=(t.created_at.isoformat() if isinstance(t.created_at, datetime.datetime) else str(t.created_at))))
+        return out
+    finally:
+        db.close()
+
+@app.get('/cases/{cid}/tags')
+def list_case_tags(cid: int) -> List[TagOut]:
+    db = DBSession()
+    try:
+        rows = db.query(EventTag).filter(EventTag.case_id == cid).order_by(EventTag.created_at.desc()).all()
+        out: List[TagOut] = []
+        for t in rows:
+            out.append(TagOut(id=t.id, event_id=t.event_id, case_id=t.case_id, tag=t.tag or '', created_by=t.created_by, created_at=(t.created_at.isoformat() if isinstance(t.created_at, datetime.datetime) else str(t.created_at))))
+        return out
+    finally:
+        db.close()
+
+@app.post('/events/{eid}/annotations')
+def add_event_annotation(eid: int, body: AnnotationIn):
+    db = DBSession()
+    try:
+        if body.case_id and body.author_user_id:
+            if not _has_case_access(db, int(body.author_user_id), int(body.case_id)):
+                return {'error': 'forbidden'}
+        a = EventAnnotation(event_id=eid, case_id=body.case_id, author_user_id=body.author_user_id, text=body.text, latitude=body.latitude, longitude=body.longitude, data=body.data)
+        db.add(a)
+        db.commit()
+        db.refresh(a)
+        try:
+            db.add(AuditLog(user_id=body.author_user_id, org_id=None, event='event_annotation_added', details={'event_id': eid, 'case_id': body.case_id}))
+            db.commit()
+        except Exception:
+            pass
+        return {'id': a.id}
+    finally:
+        db.close()
+
+@app.get('/events/{eid}/annotations')
+def list_event_annotations(eid: int) -> List[AnnotationOut]:
+    db = DBSession()
+    try:
+        rows = db.query(EventAnnotation).filter(EventAnnotation.event_id == eid).order_by(EventAnnotation.ts.desc()).all()
+        out: List[AnnotationOut] = []
+        for a in rows:
+            out.append(AnnotationOut(id=a.id, event_id=a.event_id, case_id=a.case_id, author_user_id=a.author_user_id, text=a.text or '', latitude=a.latitude, longitude=a.longitude, data=a.data or None, ts=(a.ts.isoformat() if isinstance(a.ts, datetime.datetime) else str(a.ts))))
+        return out
+    finally:
+        db.close()
+
+@app.get('/cases/{cid}/annotations')
+def list_case_annotations(cid: int) -> List[AnnotationOut]:
+    db = DBSession()
+    try:
+        rows = db.query(EventAnnotation).filter(EventAnnotation.case_id == cid).order_by(EventAnnotation.ts.desc()).all()
+        out: List[AnnotationOut] = []
+        for a in rows:
+            out.append(AnnotationOut(id=a.id, event_id=a.event_id, case_id=a.case_id, author_user_id=a.author_user_id, text=a.text or '', latitude=a.latitude, longitude=a.longitude, data=a.data or None, ts=(a.ts.isoformat() if isinstance(a.ts, datetime.datetime) else str(a.ts))))
+        return out
+    finally:
+        db.close()
+
+@app.post('/cases/{cid}/comments')
+def add_case_comment(cid: int, body: CommentIn):
+    db = DBSession()
+    try:
+        c = CaseComment(case_id=cid, parent_id=body.parent_id, author_user_id=body.author_user_id, text=body.text)
+        db.add(c)
+        db.commit()
+        db.refresh(c)
+        try:
+            db.add(AuditLog(user_id=body.author_user_id, event='case_comment_added', details={'case_id': cid, 'comment_id': c.id}))
+            db.commit()
+        except Exception:
+            pass
+        return {'id': c.id}
+    finally:
+        db.close()
+
+@app.get('/cases/{cid}/comments')
+def list_case_comments(cid: int) -> List[CommentOut]:
+    db = DBSession()
+    try:
+        rows = db.query(CaseComment).filter(CaseComment.case_id == cid).order_by(CaseComment.ts.asc()).all()
+        out: List[CommentOut] = []
+        for c in rows:
+            out.append(CommentOut(id=c.id, case_id=c.case_id, parent_id=c.parent_id, author_user_id=c.author_user_id, text=c.text or '', ts=(c.ts.isoformat() if isinstance(c.ts, datetime.datetime) else str(c.ts))))
+        return out
+    finally:
+        db.close()
+
+@app.post('/reports')
+def create_report(body: ReportIn):
+    db = DBSession()
+    try:
+        r = Report(case_id=body.case_id, title=body.title, content=body.content, created_by=body.created_by)
+        db.add(r)
+        db.commit()
+        db.refresh(r)
+        try:
+            db.add(AuditLog(user_id=body.created_by, event='report_created', details={'report_id': r.id, 'case_id': body.case_id}))
+            db.commit()
+        except Exception:
+            pass
+        return {'id': r.id}
+    finally:
+        db.close()
+
+@app.get('/cases/{cid}/reports')
+def list_case_reports(cid: int) -> List[ReportOut]:
+    db = DBSession()
+    try:
+        rows = db.query(Report).filter(Report.case_id == cid).order_by(Report.created_at.desc()).all()
+        out: List[ReportOut] = []
+        for r in rows:
+            out.append(ReportOut(id=r.id, case_id=r.case_id, title=r.title or '', content=r.content or '', created_by=r.created_by, created_at=(r.created_at.isoformat() if isinstance(r.created_at, datetime.datetime) else str(r.created_at)), last_export_ts=(r.last_export_ts.isoformat() if isinstance(r.last_export_ts, datetime.datetime) else (str(r.last_export_ts) if r.last_export_ts else None))))
+        return out
+    finally:
+        db.close()
+
+@app.post('/reports/{rid}/export')
+def export_report(rid: int, format: str = 'pdf'):
+    db = DBSession()
+    try:
+        r = db.query(Report).filter(Report.id == rid).first()
+        if not r:
+            return {'error': 'not found'}
+        title = r.title or f'Report {rid}'
+        content = r.content or ''
+        if (format or 'pdf').lower() == 'pdf':
+            try:
+                from reportlab.lib.pagesizes import letter
+                from reportlab.pdfgen import canvas
+                import io, base64
+                buf = io.BytesIO()
+                c = canvas.Canvas(buf, pagesize=letter)
+                y = 750
+                c.setFont("Helvetica-Bold", 14)
+                c.drawString(72, y, title[:90])
+                y -= 24
+                c.setFont("Helvetica", 12)
+                for line in content.splitlines():
+                    c.drawString(72, y, line[:90])
+                    y -= 16
+                    if y < 72:
+                        c.showPage()
+                        y = 750
+                        c.setFont("Helvetica", 12)
+                c.showPage()
+                c.save()
+                b64 = base64.b64encode(buf.getvalue()).decode('ascii')
+                r.last_export_ts = datetime.datetime.utcnow()
+                db.commit()
+                try:
+                    db.add(AuditLog(event='report_exported', details={'report_id': rid, 'format': 'pdf'}))
+                    db.commit()
+                except Exception:
+                    pass
+                return {'format': 'pdf', 'pdf_base64': b64}
+            except Exception:
+                html = f"<h1>{title}</h1><pre>{content}</pre>"
+                try:
+                    db.add(AuditLog(event='report_exported', details={'report_id': rid, 'format': 'html'}))
+                    db.commit()
+                except Exception:
+                    pass
+                return {'format': 'html', 'html': html}
+        html = f"<h1>{title}</h1><pre>{content}</pre>"
+        return {'format': 'html', 'html': html}
+    finally:
+        db.close()
+
+class RetentionUpdate(BaseModel):
+    retention_days_events: Optional[int] = None
+    retention_days_alerts: Optional[int] = None
+    retention_days_prompts: Optional[int] = None
+    retention_days_annotations: Optional[int] = None
+
+@app.post('/orgs/{org_id}/retention')
+def update_retention(org_id: int, body: RetentionUpdate):
+    db = DBSession()
+    try:
+        s = db.query(OrgSettings).filter(OrgSettings.org_id == org_id).first()
+        if not s:
+            s = OrgSettings(org_id=org_id)
+            db.add(s)
+            db.commit()
+            db.refresh(s)
+        if body.retention_days_events is not None:
+            s.retention_days_events = int(body.retention_days_events)
+        if body.retention_days_alerts is not None:
+            s.retention_days_alerts = int(body.retention_days_alerts)
+        if body.retention_days_prompts is not None:
+            s.retention_days_prompts = int(body.retention_days_prompts)
+        if body.retention_days_annotations is not None:
+            s.retention_days_annotations = int(body.retention_days_annotations)
+        db.commit()
+        try:
+            db.add(AuditLog(event='retention_updated', org_id=org_id, details={'events': s.retention_days_events, 'alerts': s.retention_days_alerts, 'prompts': s.retention_days_prompts, 'annotations': s.retention_days_annotations}))
+            db.commit()
+        except Exception:
+            pass
+        return {'ok': True}
+    finally:
+        db.close()
+
+@app.post('/retention/run')
+def run_retention(org_id: Optional[int] = None):
+    db = DBSession()
+    try:
+        s = None
+        if org_id:
+            s = db.query(OrgSettings).filter(OrgSettings.org_id == org_id).first()
+        if not s:
+            s = db.query(OrgSettings).first()
+        if not s:
+            return {'ok': True}
+        now = datetime.datetime.utcnow()
+        if s.retention_days_events and s.retention_days_events > 0:
+            cutoff = now - datetime.timedelta(days=int(s.retention_days_events))
+            db.query(DataEvent).filter(DataEvent.timestamp < cutoff).delete(synchronize_session=False)
+        if s.retention_days_alerts and s.retention_days_alerts > 0:
+            cutoff = now - datetime.timedelta(days=int(s.retention_days_alerts))
+            db.query(AlertHistory).filter(AlertHistory.ts < cutoff).delete(synchronize_session=False)
+        if s.retention_days_prompts and s.retention_days_prompts > 0:
+            cutoff = now - datetime.timedelta(days=int(s.retention_days_prompts))
+            db.query(PromptLog).filter(PromptLog.ts < cutoff).delete(synchronize_session=False)
+        if s.retention_days_annotations and s.retention_days_annotations > 0:
+            cutoff = now - datetime.timedelta(days=int(s.retention_days_annotations))
+            db.query(EventAnnotation).filter(EventAnnotation.ts < cutoff).delete(synchronize_session=False)
+        db.commit()
+        try:
+            db.add(AuditLog(event='retention_run', org_id=org_id, details={'org_id': org_id}))
+            db.commit()
+        except Exception:
+            pass
+        return {'ok': True}
+    finally:
+        db.close()
+
+@app.get('/security/encryption')
+def encryption_status():
+    try:
+        import os
+        db_url = os.environ.get('DATABASE_URL', 'sqlite:///rtaip.db')
+        transport_tls = True
+        db_encrypted = db_url.startswith('postgresql')
+        db_ssl_required = 'sslmode=require' in db_url if db_encrypted else False
+        return {'transport_tls': transport_tls, 'db_encrypted': db_encrypted, 'db_ssl_required': db_ssl_required}
+    except Exception:
+        return {'transport_tls': True}
+
+HEALTH_FAIL_UNTIL: Optional[datetime.datetime] = None
+
+@app.get('/health')
+def health():
+    now = datetime.datetime.utcnow()
+    if HEALTH_FAIL_UNTIL and now < HEALTH_FAIL_UNTIL:
+        return {'ok': False, 'until': HEALTH_FAIL_UNTIL.isoformat()}
+    return {'ok': True}
+
+@app.post('/health/fail')
+def health_fail(seconds: int = 60):
+    global HEALTH_FAIL_UNTIL
+    HEALTH_FAIL_UNTIL = datetime.datetime.utcnow() + datetime.timedelta(seconds=int(max(1, min(seconds, 600))))
+    return {'ok': True, 'until': HEALTH_FAIL_UNTIL.isoformat()}
+
+# --- Monitoring & Reliability ---
+@app.get('/metrics/system')
+def system_metrics():
+    db = DBSession()
+    try:
+        total_events = db.query(DataEvent).count()
+        total_anomalies = db.query(Anomaly).count() if 'Anomaly' in globals() else 0
+        total_alerts = db.query(AlertHistory).count()
+        last_event = db.query(DataEvent).order_by(DataEvent.timestamp.desc()).first()
+        last_event_ts = (last_event.timestamp.isoformat() if last_event and isinstance(last_event.timestamp, datetime.datetime) else (str(last_event.timestamp) if last_event else None))
+        mm = db.query(PerfMetric).order_by(PerfMetric.ts.desc()).limit(10).all()
+        perf = [
+            {
+                'ts': (m.ts.isoformat() if isinstance(m.ts, datetime.datetime) else str(m.ts)),
+                'fps': float(m.fps or 0),
+                'events': int(m.events or 0),
+                'anomalies': int(m.anomalies or 0),
+                'zoom': int(m.zoom or 0),
+                'device': m.device or None
+            }
+            for m in mm
+        ]
+        sources = ['ODIN','DTIC','USACE','PUB LOG','NGA Tearline','Military Periscope','Janes','Global Terrorism DB']
+        src_stats = []
+        six_hours_ago = datetime.datetime.utcnow() - datetime.timedelta(hours=6)
+        for s in sources:
+            row = db.query(DataEvent).filter(DataEvent.source == s).order_by(DataEvent.timestamp.desc()).first()
+            ts = row.timestamp if row else None
+            src_stats.append({
+                'source': s,
+                'count_total': db.query(DataEvent).filter(DataEvent.source == s).count(),
+                'last_ts': (ts.isoformat() if ts and isinstance(ts, datetime.datetime) else (str(ts) if ts else None)),
+                'recent_ok': bool(ts and isinstance(ts, datetime.datetime) and ts >= six_hours_ago)
+            })
+        return {
+            'events_total': total_events,
+            'anomalies_total': total_anomalies,
+            'alerts_total': total_alerts,
+            'last_event_ts': last_event_ts,
+            'perf_recent': perf,
+            'sources': src_stats,
+        }
+    finally:
+        db.close()
+
+@app.get('/pipeline/status')
+def pipeline_status(hours: int = 24):
+    db = DBSession()
+    try:
+        horizon = datetime.datetime.utcnow() - datetime.timedelta(hours=int(max(1, min(hours, 168))))
+        sources = ['ODIN','DTIC','USACE','PUB LOG','NGA Tearline','Military Periscope','Janes','Global Terrorism DB']
+        items = []
+        for s in sources:
+            q = db.query(DataEvent).filter(DataEvent.source == s)
+            total = q.count()
+            recent = db.query(DataEvent).filter(DataEvent.source == s, DataEvent.timestamp >= horizon).count()
+            last = db.query(DataEvent).filter(DataEvent.source == s).order_by(DataEvent.timestamp.desc()).first()
+            items.append({
+                'source': s,
+                'count_total': total,
+                'count_recent': recent,
+                'last_ts': ((last.timestamp.isoformat() if last and isinstance(last.timestamp, datetime.datetime) else (str(last.timestamp) if last else None)))
+            })
+        return {'sources': items}
+    finally:
+        db.close()
+
+@app.get('/billing/usage')
+def billing_usage(days: int = 30):
+    db = DBSession()
+    try:
+        start = datetime.datetime.utcnow() - datetime.timedelta(days=int(max(1, min(days, 365))))
+        logs = db.query(PromptLog).filter(PromptLog.ts >= start).all()
+        alerts = db.query(AlertHistory).filter(AlertHistory.ts >= start).all()
+        reports = db.query(Report).filter(Report.created_at >= start).all()
+        usage = {
+            'prompts': len(logs),
+            'alerts': len(alerts),
+            'reports': len(reports),
+            'events_ingested': db.query(DataEvent).filter(DataEvent.timestamp >= start).count(),
+        }
+        return usage
+    finally:
+        db.close()
+
+@app.post('/billing/webhook')
+def billing_webhook(payload: dict):
+    db = DBSession()
+    try:
+        db.add(AuditLog(event='billing_webhook', details=payload))
+        db.commit()
+        return {'ok': True}
+    finally:
+        db.close()
+
+@app.get('/infra/region')
+def infra_region():
+    region = os.environ.get('REGION') or os.environ.get('FLY_REGION') or os.environ.get('AWS_REGION') or 'local'
+    is_primary = os.environ.get('IS_PRIMARY', 'true').lower() in ('1','true','yes')
+    return {'region': region, 'primary': is_primary}
+
+@app.get('/sla')
+def sla_status():
+    targets = {'uptime': '99.5%', 'mttr': '4h', 'rpo': '24h', 'rto': '4h'}
+    now = datetime.datetime.utcnow().isoformat()
+    return {'targets': targets, 'as_of': now, 'contact': 'support@nexumcloud.com'}
+
+@app.get('/backup/export')
+def backup_export():
+    db = DBSession()
+    try:
+        tables = {
+            'users': db.query(User).all(),
+            'organizations': db.query(Organization).all(),
+            'org_memberships': db.query(OrgMembership).all(),
+            'org_settings': db.query(OrgSettings).all(),
+            'ip_allowlists': db.query(IpAllowlist).all(),
+            'data_events': db.query(DataEvent).all(),
+            'anomalies': db.query(Anomaly).all() if 'Anomaly' in globals() else [],
+            'alert_rules': db.query(AlertRule).all(),
+            'alert_history': db.query(AlertHistory).all(),
+            'workspaces': db.query(Workspace).all(),
+            'cases': db.query(Case).all(),
+            'case_memberships': db.query(CaseMembership).all(),
+            'event_tags': db.query(EventTag).all(),
+            'event_annotations': db.query(EventAnnotation).all(),
+            'case_comments': db.query(CaseComment).all(),
+            'reports': db.query(Report).all(),
+            'consent_logs': db.query(ConsentLog).all(),
+            'prompt_logs': db.query(PromptLog).all(),
+            'audit_logs': db.query(AuditLog).all(),
+            'perf_metrics': db.query(PerfMetric).all(),
+        }
+        import json, io, zipfile, base64
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, mode='w', compression=zipfile.ZIP_DEFLATED) as z:
+            for name, rows in tables.items():
+                arr = []
+                for r in rows:
+                    d = {c.name: getattr(r, c.name) for c in r.__table__.columns}
+                    # serialize datetimes
+                    for k, v in list(d.items()):
+                        import datetime as _dt
+                        if isinstance(v, _dt.datetime):
+                            d[k] = v.isoformat()
+                    arr.append(d)
+                z.writestr(f'{name}.json', json.dumps(arr))
+        b64 = base64.b64encode(buf.getvalue()).decode('ascii')
+        return {'zip_base64': b64, 'tables': list(tables.keys())}
+    finally:
+        db.close()
+
+class BackupImport(BaseModel):
+    zip_base64: str
+
+@app.post('/backup/import')
+def backup_import(body: BackupImport):
+    db = DBSession()
+    try:
+        import json, io, zipfile, base64
+        data = base64.b64decode(body.zip_base64)
+        zf = zipfile.ZipFile(io.BytesIO(data), mode='r')
+        inserted = {}
+        def _load(name):
+            try:
+                raw = zf.read(f'{name}.json').decode('utf-8')
+                return json.loads(raw)
+            except Exception:
+                return []
+        # helper to check existence by id
+        def exists(model, idval):
+            try:
+                return db.query(model).filter(model.id == idval).first() is not None
+            except Exception:
+                return False
+        # insert in order to satisfy FKs
+        for name, model in [
+            ('users', User), ('organizations', Organization), ('org_settings', OrgSettings), ('ip_allowlists', IpAllowlist), ('org_memberships', OrgMembership),
+            ('workspaces', Workspace), ('cases', Case), ('case_memberships', CaseMembership),
+            ('data_events', DataEvent), ('anomalies', globals().get('Anomaly')), ('alert_rules', AlertRule), ('alert_history', AlertHistory),
+            ('event_tags', EventTag), ('event_annotations', EventAnnotation), ('case_comments', CaseComment), ('reports', Report), ('consent_logs', ConsentLog), ('prompt_logs', PromptLog), ('audit_logs', AuditLog), ('perf_metrics', PerfMetric)
+        ]:
+            if model is None:
+                continue
+            rows = _load(name)
+            cnt = 0
+            for d in rows:
+                idval = d.get('id')
+                if idval and exists(model, idval):
+                    continue
+                obj = model()
+                for k, v in d.items():
+                    try:
+                        setattr(obj, k, v)
+                    except Exception:
+                        pass
+                db.add(obj)
+                cnt += 1
+            if cnt:
+                db.commit()
+            inserted[name] = cnt
+        try:
+            db.add(AuditLog(event='backup_import', details={'inserted': inserted}))
+            db.commit()
+        except Exception:
+            pass
+        return {'inserted': inserted}
+    finally:
+        db.close()
+
+class PerfIn(BaseModel):
+    fps: Optional[float] = None
+    events: Optional[int] = None
+    anomalies: Optional[int] = None
+    zoom: Optional[int] = None
+    device: Optional[str] = None
+
+@app.post('/metrics/perf')
+def record_perf(body: PerfIn):
+    db = DBSession()
+    try:
+        m = PerfMetric(fps=body.fps, events=body.events, anomalies=body.anomalies, zoom=body.zoom, device=body.device)
+        db.add(m)
+        db.commit()
+        db.refresh(m)
+        return {'id': m.id}
+    finally:
+        db.close()
+
+@app.get('/metrics/perf')
+def list_perf(limit: int = 100):
+    db = DBSession()
+    try:
+        mm = db.query(PerfMetric).order_by(PerfMetric.ts.desc()).limit(int(max(1, min(limit, 1000)))).all()
+        return [{
+            'ts': (m.ts.isoformat() if isinstance(m.ts, datetime.datetime) else str(m.ts)),
+            'fps': float(m.fps or 0),
+            'events': int(m.events or 0),
+            'anomalies': int(m.anomalies or 0),
+            'zoom': int(m.zoom or 0),
+            'device': m.device or None
+        } for m in mm]
+    finally:
+        db.close()
+
+class ErrorReport(BaseModel):
+    user_id: Optional[int] = None
+    context: Optional[str] = None
+    message: str
+    stack: Optional[str] = None
+
+@app.post('/errors/report')
+def report_error(body: ErrorReport):
+    db = DBSession()
+    try:
+        db.add(AuditLog(user_id=body.user_id, event='client_error', details={'context': body.context, 'message': body.message, 'stack': body.stack}))
+        db.commit()
+        return {'ok': True}
+    finally:
+        db.close()
+
+@app.get('/errors/recent')
+def recent_errors(limit: int = 50):
+    db = DBSession()
+    try:
+        rows = db.query(AuditLog).filter(AuditLog.event.in_(['client_error','ingest_failed'])).order_by(AuditLog.ts.desc()).limit(int(max(1, min(limit, 500)))).all()
+        return [{'ts': (r.ts.isoformat() if isinstance(r.ts, datetime.datetime) else str(r.ts)), 'event': r.event, 'details': r.details} for r in rows]
+    finally:
+        db.close()
 
 
 if __name__ == "__main__":
