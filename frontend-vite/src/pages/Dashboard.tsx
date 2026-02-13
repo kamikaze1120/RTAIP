@@ -7,6 +7,7 @@ import { Globe as GlobeIcon } from 'lucide-react';
 import { fetchBackendEvents, getBackendBase, type RtaEvent, globalThreatScore, topClusters, typeProbabilities, fetchSupabaseEvents, getSupabaseConfig, eventSeverity, runConnectivityDiagnostics, getCachedEvents, setCachedEvents } from '../services/data';
 import { NewHeader } from '../components/NewHeader';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, BarChart, Bar } from 'recharts';
+import AnalystPanel from '../components/AnalystPanel';
 
 
 export default function Dashboard() {
@@ -277,6 +278,12 @@ export default function Dashboard() {
                 ))}
               </div>
             </div>
+          </div>
+        </div>
+        <div className="container mx-auto p-4">
+          <div className="bg-white/10 backdrop-blur-md rounded-lg p-4 shadow-lg">
+            <div className="text-sm text-gray-300 mb-2">AI Analyst Assistant</div>
+            <AnalystPanel events={filteredEvents} />
           </div>
         </div>
       </main>

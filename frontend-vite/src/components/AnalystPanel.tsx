@@ -2,6 +2,16 @@ import { useMemo, useState } from 'react';
 import type { RtaEvent } from '../services/data';
 import { getBackendBase } from '../services/data';
 
+type Citation = {
+  id: number;
+  source?: string;
+  timestamp?: string;
+  latitude?: number;
+  longitude?: number;
+  snippet?: string;
+  confidence?: number;
+};
+
 function brief(events: RtaEvent[]) {
   const now = new Date();
   const start = new Date(now.getTime() - 60 * 60000);
@@ -73,12 +83,32 @@ export default function AnalystPanel({ events, onAsk }: { events: RtaEvent[]; on
       const b = baseUrl.replace(/\/$/, '');
       const endsApi = /\/api$/.test(b);
       const p = endsApi && /^\/api\//.test(aiPath) ? aiPath.replace(/^\/api/, '') : aiPath;
+      const uid = Number(window.localStorage.getItem('backendUserId') || '0');
       const r = await fetch(`${b}${p}`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: q })
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: q, user_id: uid })
       });
       const jd = await r.json();
-      const text = typeof jd === 'string' ? jd : JSON.stringify(jd, null, 2);
-      setAnswer(a => (a ? a + '\n' : '') + text);
+      if (jd && typeof jd === 'object' && jd.answer) {
+        const conf = typeof jd.confidence === 'number' ? `Confidence: ${Math.round(jd.confidence * 100)}%` : '';
+        let cites = '';
+        try {
+          const arr: Citation[] = Array.isArray(jd.citations) ? jd.citations as Citation[] : [];
+          if (arr.length > 0) {
+            const lines = arr.map((c: Citation, i: number) => {
+              const ts = c.timestamp ? String(c.timestamp).replace('T',' ').replace('Z','') : 'unknown time';
+              const src = c.source || 'unknown source';
+              const sn = c.snippet ? ` — ${c.snippet}` : '';
+              return `${i+1}. ${src} @ ${ts}${sn}`;
+            });
+            cites = `\nCitations:\n${lines.join('\n')}`;
+          }
+        } catch {}
+        const out = `${jd.answer}${cites}${jd.insufficient ? '\nNote: insufficient grounded data for high confidence.' : ''}${conf ? ('\n' + conf) : ''}`;
+        setAnswer(a => (a ? a + '\n' : '') + out);
+      } else {
+        const text = typeof jd === 'string' ? jd : JSON.stringify(jd, null, 2);
+        setAnswer(a => (a ? a + '\n' : '') + text);
+      }
     } catch {
       setAnswer(a => (a ? a + '\n' : '') + ('Analyst service unreachable. Falling back to local brief.\n' + brief(events)));
     }

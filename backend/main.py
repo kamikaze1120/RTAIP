@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from database import Session as DBSession, User, DataEvent, ensure_schema, Organization, OrgMembership, Invitation, AuditLog, ConsentLog, IpAllowlist, OrgSettings
+from database import Session as DBSession, User, DataEvent, ensure_schema, Organization, OrgMembership, Invitation, AuditLog, ConsentLog, IpAllowlist, OrgSettings, PromptLog
 from pydantic import BaseModel
 from typing import Optional, List
 from auth import create_access_token, get_password_hash, verify_password
@@ -390,10 +390,181 @@ def root():
 def health():
     return {"status": "ok"}
 
+# --- AI Analyst (RAG) ---
+class AIQuery(BaseModel):
+    query: str
+    user_id: Optional[int] = None
+    top_k: Optional[int] = 5
+    since_hours: Optional[int] = 24 * 365
+    min_confidence: Optional[float] = None
+
+class CitationOut(BaseModel):
+    id: int
+    source: Optional[str]
+    timestamp: Optional[str]
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    snippet: Optional[str] = None
+    confidence: Optional[float] = None
+
+class AIResponse(BaseModel):
+    answer: str
+    citations: List[CitationOut]
+    confidence: float
+    insufficient: bool
+    log_id: Optional[int] = None
+
 @app.post("/migrate")
 def migrate():
     ok, msg = ensure_schema()
     return {"ok": ok, "message": msg}
+
+# --- AI Analyst ---
+import re
+import json
+
+STOPWORDS = set("the a an and or of for to from with without on in at by about into over after before under again further then once here there when where why how all any both each few more most other some such no nor not only own same so than too very can will just don should now".split())
+
+def _serialize_event(e: DataEvent) -> str:
+    try:
+        d = e.data or {}
+        head = d.get('headline') or d.get('title') or d.get('summary') or ''
+        src = e.source or ''
+        body = json.dumps(d, separators=(',', ':'))
+        return f"{src} {head} {body}".lower()
+    except Exception:
+        try:
+            return json.dumps(e.data or {}).lower()
+        except Exception:
+            return ''
+
+def _score_event(e: DataEvent, terms: List[str], now: datetime.datetime, min_conf: Optional[float]) -> float:
+    text = _serialize_event(e)
+    match = sum(1 for t in terms if t and t in text)
+    if match == 0:
+        return 0.0
+    t = e.timestamp or now
+    if isinstance(t, str):
+        try:
+            t = datetime.datetime.fromisoformat(t)
+        except Exception:
+            t = now
+    delta = now - t if isinstance(t, datetime.datetime) else datetime.timedelta(days=365)
+    days = max(0.0, delta.total_seconds() / 86400.0)
+    recency = max(0.1, 1.0 - min(1.0, days / 30.0))
+    geo = 1.0 if (e.latitude is not None and e.longitude is not None) else 0.8
+    conf = float(e.confidence) if e.confidence is not None else 0.5
+    if isinstance(min_conf, (float, int)) and conf < float(min_conf):
+        return 0.0
+    score = match * 0.6 + recency * 0.2 + geo * 0.1 + conf * 0.1
+    return score
+
+@app.post('/ai-analyst')
+def ai_analyst(q: AIQuery):
+    db = DBSession()
+    try:
+        now = datetime.datetime.utcnow()
+        terms = [t for t in re.findall(r"\w+", q.query.lower()) if t not in STOPWORDS]
+        since = now - datetime.timedelta(hours=q.since_hours or 24)
+        events = db.query(DataEvent).filter(DataEvent.timestamp >= since).order_by(DataEvent.timestamp.desc()).limit(2000).all()
+        scored = []
+        for e in events:
+            s = _score_event(e, terms, now, q.min_confidence)
+            if s > 0:
+                scored.append((e, s))
+        scored.sort(key=lambda x: x[1], reverse=True)
+        top_k = max(1, min(int(q.top_k or 5), 10))
+        top = scored[: top_k]
+        citations = []
+        if not top:
+            answer = "Insufficient data to provide a grounded answer. No matching events found in the selected timeframe."
+            confidence = 0.2
+            insufficient = True
+        else:
+            avg_conf = sum(float(e.confidence or 0.5) for e, _ in top) / len(top)
+            avg_score = sum(s for _, s in top) / len(top)
+            confidence = max(0.2, min(0.95, 0.5 * avg_conf + 0.5 * (avg_score / (avg_score + 1e-6))))
+            sources = list({(e.source or '').lower() for e, _ in top if e.source})
+            tmin = min(datetime.datetime.fromisoformat(e.timestamp) if isinstance(e.timestamp, str) else e.timestamp for e, _ in top)
+            tmax = max(datetime.datetime.fromisoformat(e.timestamp) if isinstance(e.timestamp, str) else e.timestamp for e, _ in top)
+            answer = (
+                f"Observed {len(top)} relevant events from {', '.join(sources[:4])} between {tmin.isoformat()} and {tmax.isoformat()}. "
+                f"Key signals align with query terms: {', '.join(terms[:6])}. "
+                f"Confidence {round(confidence * 100)}%."
+            )
+            insufficient = False
+            for e, s in top:
+                d = e.data or {}
+                snippet = d.get('headline') or d.get('title') or d.get('summary') or None
+                citations.append({
+                    'id': int(e.id),
+                    'source': e.source,
+                    'timestamp': e.timestamp if isinstance(e.timestamp, str) else (e.timestamp.isoformat() if e.timestamp else None),
+                    'latitude': e.latitude,
+                    'longitude': e.longitude,
+                    'snippet': snippet,
+                    'confidence': float(e.confidence or 0.5)
+                })
+        log = PromptLog(
+            user_id=q.user_id, org_id=None, query=q.query, answer=answer, confidence=float(confidence), insufficient=1 if insufficient else 0,
+            citations=citations, provider='local', model='deterministic-v1'
+        )
+        db.add(log)
+        db.commit()
+        db.refresh(log)
+        return {
+            'answer': answer,
+            'citations': citations,
+            'confidence': float(confidence),
+            'insufficient': bool(insufficient),
+            'log_id': log.id,
+        }
+    finally:
+        db.close()
+
+@app.get('/prompts')
+def list_prompts(user_id: Optional[int] = None, limit: int = 200):
+    db = DBSession()
+    try:
+        q = db.query(PromptLog).order_by(PromptLog.ts.desc())
+        if user_id:
+            q = q.filter(PromptLog.user_id == user_id)
+        rows = q.limit(limit).all()
+        return [
+            {
+                'id': r.id,
+                'ts': r.ts.isoformat() if isinstance(r.ts, datetime.datetime) else r.ts,
+                'user_id': r.user_id,
+                'query': r.query,
+                'confidence': r.confidence,
+                'insufficient': bool(r.insufficient),
+                'citations_count': len(r.citations or []),
+            } for r in rows
+        ]
+    finally:
+        db.close()
+
+@app.get('/prompts/{pid}')
+def get_prompt(pid: int):
+    db = DBSession()
+    try:
+        r = db.query(PromptLog).filter(PromptLog.id == pid).first()
+        if not r:
+            return {'error': 'not found'}
+        return {
+            'id': r.id,
+            'ts': r.ts.isoformat() if isinstance(r.ts, datetime.datetime) else r.ts,
+            'user_id': r.user_id,
+            'query': r.query,
+            'answer': r.answer,
+            'confidence': r.confidence,
+            'insufficient': bool(r.insufficient),
+            'citations': r.citations or [],
+            'provider': r.provider,
+            'model': r.model,
+        }
+    finally:
+        db.close()
 
 @app.post("/insert-sample-data")
 def insert_sample_data():
