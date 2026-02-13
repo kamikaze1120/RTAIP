@@ -37,7 +37,8 @@ export default function Dashboard() {
           const fresh = await fetchSupabaseEvents();
           backend = fresh.length > 0 ? fresh : backend;
         } catch {}
-      } else if (base) {
+      }
+      if ((!backend || backend.length === 0) && base) {
         try {
           const be = await fetchBackendEvents();
           backend = be.length > 0 ? be : backend;

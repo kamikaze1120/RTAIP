@@ -38,6 +38,7 @@ class DataEvent(Base):
     longitude = Column(Float)
     data = Column(JSON)
     confidence = Column(Float, default=0.5)
+    fingerprint = Column(String, unique=True)
 
 class Anomaly(Base):
     __tablename__ = 'anomalies'
@@ -83,6 +84,71 @@ class User(Base):
     role = Column(String, default='user')
     created_at = Column(DateTime, default=datetime.utcnow)
 
+class Organization(Base):
+    __tablename__ = 'organizations'
+    id = Column(Integer, primary_key=True)
+    name = Column(String, unique=True, nullable=False)
+    owner_user_id = Column(Integer, ForeignKey('users.id'))
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class OrgMembership(Base):
+    __tablename__ = 'org_memberships'
+    id = Column(Integer, primary_key=True)
+    org_id = Column(Integer, ForeignKey('organizations.id'))
+    user_id = Column(Integer, ForeignKey('users.id'))
+    role = Column(String, default='viewer')
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class Invitation(Base):
+    __tablename__ = 'invitations'
+    id = Column(Integer, primary_key=True)
+    org_id = Column(Integer, ForeignKey('organizations.id'))
+    email = Column(String)
+    role = Column(String, default='viewer')
+    token = Column(String, unique=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    expires_at = Column(DateTime)
+    accepted_at = Column(DateTime)
+
+class AuditLog(Base):
+    __tablename__ = 'audit_logs'
+    id = Column(Integer, primary_key=True)
+    ts = Column(DateTime, default=datetime.utcnow)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=True)
+    org_id = Column(Integer, ForeignKey('organizations.id'), nullable=True)
+    event = Column(String)
+    ip = Column(String)
+    session_id = Column(String)
+    details = Column(JSON)
+
+class ConsentLog(Base):
+    __tablename__ = 'consent_logs'
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'))
+    ts = Column(DateTime, default=datetime.utcnow)
+    accepted_privacy = Column(Integer, default=1)
+    accepted_terms = Column(Integer, default=1)
+    version = Column(String)
+    ip = Column(String)
+
+class IpAllowlist(Base):
+    __tablename__ = 'ip_allowlists'
+    id = Column(Integer, primary_key=True)
+    org_id = Column(Integer, ForeignKey('organizations.id'))
+    cidr = Column(String)
+    label = Column(String)
+    active = Column(Integer, default=1)
+
+class OrgSettings(Base):
+    __tablename__ = 'org_settings'
+    id = Column(Integer, primary_key=True)
+    org_id = Column(Integer, ForeignKey('organizations.id'))
+    sso_provider = Column(String)
+    oidc_issuer = Column(String)
+    oidc_client_id = Column(String)
+    saml_entity_id = Column(String)
+    saml_metadata_url = Column(String)
+
 def _safe_init_schema():
     try:
         if DIRECT_URL and DIRECT_URL.startswith('postgresql'):
@@ -122,8 +188,17 @@ def ensure_schema():
                     cols = [r[0] for r in res]
                     if 'confidence' not in cols:
                         conn.execute("ALTER TABLE data_events ADD COLUMN confidence DOUBLE PRECISION DEFAULT 0.5")
+                    if 'fingerprint' not in cols:
+                        conn.execute("ALTER TABLE data_events ADD COLUMN fingerprint TEXT")
                     conn.execute("CREATE INDEX IF NOT EXISTS idx_data_events_lat_lon ON data_events(latitude, longitude)")
                     conn.execute("CREATE INDEX IF NOT EXISTS idx_anomalies_event_id ON anomalies(event_id)")
+                    conn.execute("CREATE INDEX IF NOT EXISTS idx_memberships_org_user ON org_memberships(org_id, user_id)")
+                    conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_logs(ts)")
+                    conn.execute("CREATE INDEX IF NOT EXISTS idx_invitations_token ON invitations(token)")
+                    try:
+                        conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_data_events_fingerprint ON data_events(fingerprint)")
+                    except Exception:
+                        pass
             except Exception:
                 pass
             return True, "schema ensured via DIRECT_URL"
@@ -139,16 +214,37 @@ def ensure_schema():
                     cols = [r[1] for r in rows]
                     if 'confidence' not in cols:
                         conn.execute("ALTER TABLE data_events ADD COLUMN confidence REAL DEFAULT 0.5")
+                    if 'fingerprint' not in cols:
+                        try:
+                            conn.execute("ALTER TABLE data_events ADD COLUMN fingerprint TEXT")
+                        except Exception:
+                            pass
                     conn.execute("CREATE INDEX IF NOT EXISTS idx_data_events_lat_lon ON data_events(latitude, longitude)")
                     conn.execute("CREATE INDEX IF NOT EXISTS idx_anomalies_event_id ON anomalies(event_id)")
+                    conn.execute("CREATE INDEX IF NOT EXISTS idx_memberships_org_user ON org_memberships(org_id, user_id)")
+                    conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_logs(ts)")
+                    conn.execute("CREATE INDEX IF NOT EXISTS idx_invitations_token ON invitations(token)")
+                    try:
+                        conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_data_events_fingerprint ON data_events(fingerprint)")
+                    except Exception:
+                        pass
             elif DATABASE_URL.startswith('postgresql'):
                 with engine.connect() as conn:
                     res = conn.execute("SELECT column_name FROM information_schema.columns WHERE table_name='data_events'").fetchall()
                     cols = [r[0] for r in res]
                     if 'confidence' not in cols:
                         conn.execute("ALTER TABLE data_events ADD COLUMN confidence DOUBLE PRECISION DEFAULT 0.5")
+                    if 'fingerprint' not in cols:
+                        conn.execute("ALTER TABLE data_events ADD COLUMN fingerprint TEXT")
                     conn.execute("CREATE INDEX IF NOT EXISTS idx_data_events_lat_lon ON data_events(latitude, longitude)")
                     conn.execute("CREATE INDEX IF NOT EXISTS idx_anomalies_event_id ON anomalies(event_id)")
+                    conn.execute("CREATE INDEX IF NOT EXISTS idx_memberships_org_user ON org_memberships(org_id, user_id)")
+                    conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_logs(ts)")
+                    conn.execute("CREATE INDEX IF NOT EXISTS idx_invitations_token ON invitations(token)")
+                    try:
+                        conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_data_events_fingerprint ON data_events(fingerprint)")
+                    except Exception:
+                        pass
         except Exception as _:
             pass
         return True, "schema ensured via runtime engine"

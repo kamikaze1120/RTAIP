@@ -31,7 +31,7 @@ export default function Security() {
 
     const fetchAuditLogs = async () => {
         try {
-            const response = await api.get('/security/audit-logs');
+            const response = await api.get('/audit');
             setAuditLogs(response.data);
         } catch (error) {
             console.error('Failed to fetch audit logs:', error);

@@ -12,7 +12,7 @@ function latLonToVector3(lat: number, lon: number, radius: number): THREE.Vector
   return new THREE.Vector3(x, y, z);
 }
 
-const Globe: React.FC<{ events: RtaEvent[], focus: RtaEvent | null, onSelect?: (e: RtaEvent) => void }> = ({ events, focus, onSelect }) => {
+const Globe: React.FC<{ events: RtaEvent[], focus: RtaEvent | null, onSelect?: (e: RtaEvent) => void, onHoverLatLon?: (lat: number, lon: number) => void }> = ({ events, focus, onSelect, onHoverLatLon }) => {
   const mountRef = useRef<HTMLDivElement>(null);
   const [texture, setTexture] = useState<THREE.Texture | null>(null);
   const markersRef = useRef<THREE.Group>(new THREE.Group());
@@ -45,6 +45,7 @@ const Globe: React.FC<{ events: RtaEvent[], focus: RtaEvent | null, onSelect?: (
       : new THREE.MeshPhongMaterial({ color: 0x0b1220, specular: new THREE.Color(0x222222), shininess: 12 });
     const sphereGeom = new THREE.SphereGeometry(5, 64, 64);
     const sphere = new THREE.Mesh(sphereGeom, material);
+    sphere.name = 'globe';
     scene.add(sphere);
 
     const texLoader = new THREE.TextureLoader();
@@ -140,6 +141,17 @@ const Globe: React.FC<{ events: RtaEvent[], focus: RtaEvent | null, onSelect?: (
         if (e) setHovered({ e, x: event.clientX - rect.left, y: event.clientY - rect.top });
       } else {
         setHovered(null);
+        const globeObj = scene.getObjectByName('globe') as THREE.Mesh | undefined;
+        if (globeObj) {
+          const globeHits = raycasterRef.current.intersectObject(globeObj, true);
+          if (globeHits.length > 0) {
+            const p = globeHits[0].point.clone();
+            const r = 5;
+            const lat = 90 - (Math.acos(p.y / r) * 180 / Math.PI);
+            const lon = ((Math.atan2(p.z, -p.x) * 180 / Math.PI) - 180);
+            if (onHoverLatLon) onHoverLatLon(lat, lon);
+          }
+        }
       }
     };
 

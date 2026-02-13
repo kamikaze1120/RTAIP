@@ -3,20 +3,99 @@ import asyncio
 import json
 import schedule
 import time
-from datetime import datetime
+from datetime import datetime, timezone
+from hashlib import sha256
 from sqlalchemy.orm import sessionmaker
 from database import engine, DataEvent, Anomaly
 
 Session = sessionmaker(bind=engine)
 
 async def fetch_data(url, params=None):
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url, params=params) as response:
-            if response.status == 200:
-                return await response.json()
-            else:
-                print(f"Error fetching {url}: {response.status}")
+    delays = [1, 2, 4]
+    for d in delays + [0]:
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, params=params, timeout=10) as response:
+                    if response.status == 200:
+                        return await response.json()
+                    if response.status >= 500:
+                        await asyncio.sleep(d)
+                        continue
+                    print(f"Error fetching {url}: {response.status}")
+                    return None
+        except Exception as e:
+            await asyncio.sleep(d)
+            continue
     return None
+
+def _normalize_timestamp(ts: datetime | None) -> datetime:
+    try:
+        if ts is None:
+            return datetime.utcnow().replace(tzinfo=timezone.utc)
+        if ts.tzinfo is None:
+            return ts.replace(tzinfo=timezone.utc)
+        return ts.astimezone(timezone.utc)
+    except Exception:
+        return datetime.utcnow().replace(tzinfo=timezone.utc)
+
+def _round_coord(x):
+    try:
+        if x is None:
+            return None
+        return round(float(x), 4)
+    except Exception:
+        return None
+
+def _fingerprint(source: str, ts: datetime, lat, lon, data: dict | list | None) -> str:
+    base = f"{source}|{ts.isoformat()[:16]}|{'' if lat is None else round(lat,3)}|{'' if lon is None else round(lon,3)}"
+    key = ''
+    try:
+        if isinstance(data, dict):
+            for k in ('incident_id','id','event_id','title','name'):
+                v = data.get(k)
+                if v is not None:
+                    key = str(v); break
+    except Exception:
+        pass
+    return sha256((base+'|'+key).encode('utf-8')).hexdigest()
+
+def save_event(source: str, ts: datetime, latitude, longitude, payload: dict | list | None, confidence: float) -> int:
+    tsn = _normalize_timestamp(ts)
+    lat = _round_coord(latitude)
+    lon = _round_coord(longitude)
+    fp = _fingerprint(source, tsn, lat, lon, payload if isinstance(payload, dict) else None)
+    with Session() as s:
+        try:
+            existing = s.query(DataEvent).filter(DataEvent.fingerprint == fp).first()
+            if existing:
+                try:
+                    existing.confidence = max(float(confidence or 0.0), float(existing.confidence or 0.0))
+                    if isinstance(existing.data, dict):
+                        d = dict(existing.data)
+                        d['dup_count'] = int(d.get('dup_count', 0)) + 1
+                        existing.data = d
+                except Exception:
+                    pass
+                s.commit()
+                return 0
+            ev = DataEvent(
+                source=source,
+                timestamp=tsn.replace(tzinfo=None),
+                latitude=lat,
+                longitude=lon,
+                data=payload if isinstance(payload, (dict, list)) else {},
+                confidence=float(confidence or 0.5),
+                fingerprint=fp,
+            )
+            s.add(ev)
+            s.commit()
+            return 1
+        except Exception:
+            try:
+                s.rollback()
+            except Exception:
+                pass
+            return 0
 
 async def ingest_nasa_fires():
     """NGA Tearline - NASA FIRMS fire data"""
@@ -33,16 +112,14 @@ async def ingest_nasa_fires():
                         for line in data.splitlines()[1:]:
                             try:
                                 lat, lon, bright_ti4, scan, track, acq_date, acq_time, satellite, confidence, version, bright_ti5, frp, daynight = line.split(',')
-                                event = DataEvent(
-                                    source="NGA Tearline",
-                                    timestamp=datetime.strptime(f"{acq_date} {acq_time}", "%Y-%m-%d %H%M"),
-                                    latitude=float(lat),
-                                    longitude=float(lon),
-                                    data={"confidence": confidence, "frp": float(frp)},
-                                    confidence=float(confidence) / 100.0
+                                count += save_event(
+                                    "NGA Tearline",
+                                    datetime.strptime(f"{acq_date} {acq_time}", "%Y-%m-%d %H%M"),
+                                    float(lat),
+                                    float(lon),
+                                    {"confidence": confidence, "frp": float(frp)},
+                                    float(confidence) / 100.0,
                                 )
-                                db_session.add(event)
-                                count += 1
                             except ValueError:
                                 continue  # Skip malformed lines
                         db_session.commit()
@@ -84,9 +161,7 @@ async def ingest_nasa_eonet():
                             continue
                     except Exception:
                         pass
-                    event = DataEvent(source="Janes", timestamp=ts, latitude=lat, longitude=lon, data=ev, confidence=conf)
-                    session.add(event)
-                    count += 1
+                    count += save_event("Janes", ts, lat, lon, ev, conf)
                 session.commit()
             print(f"[INGEST] Janes: Successfully ingested {count} events")
         else:
@@ -131,8 +206,7 @@ async def ingest_gdacs_disasters():
                             continue
                     except Exception:
                         pass
-                    event = DataEvent(source="ODIN", timestamp=ts, latitude=lat, longitude=lon, data=feat, confidence=conf)
-                    session.add(event)
+                    save_event("ODIN", ts, lat, lon, feat, conf)
                 session.commit()
     except Exception as e:
         print(f"GDACS ingestion failed: {e}")
@@ -158,15 +232,7 @@ async def ingest_noaa_weather():
             props = data.get('properties', {})
             with Session() as session:
                 conf = _confidence_for_noaa(props)
-                event = DataEvent(
-                    source="DTIC",  # Changed to DTIC as requested
-                    timestamp=datetime.utcnow(), 
-                    latitude=34.0, 
-                    longitude=-118.0, 
-                    data=props, 
-                    confidence=conf
-                )
-                session.add(event)
+                save_event("DTIC", datetime.utcnow(), 34.0, -118.0, props, conf)
                 session.commit()
             print("[INGEST] DTIC (NOAA Weather): Successfully ingested 1 event")
         else:
@@ -200,16 +266,7 @@ async def ingest_adsb_aircraft():
             with Session() as session:
                 for state in states[:10]:  # Limit for demo
                     conf = _confidence_for_adsb(state)
-                    event = DataEvent(
-                        source="Military Periscope", 
-                        timestamp=datetime.utcnow(), 
-                        latitude=state[6], 
-                        longitude=state[5], 
-                        data=state, 
-                        confidence=conf
-                    )
-                    session.add(event)
-                    count += 1
+                    count += save_event("Military Periscope", datetime.utcnow(), state[6], state[5], state, conf)
                 session.commit()
             print(f"[INGEST] Military Periscope: Successfully ingested {count} events")
         else:
@@ -246,17 +303,7 @@ async def ingest_ais_maritime():
                 if data.get('class') == 'AIS' and 'lat' in data and 'lon' in data:
                     with Session() as session:
                         conf = _confidence_for_ais(data)
-                        event = DataEvent(
-                            source="PUB LOG",
-                            timestamp=datetime.utcnow(),
-                            latitude=data.get('lat'),
-                            longitude=data.get('lon'),
-                            data=data,
-                            confidence=conf
-                        )
-                        session.add(event)
-                        session.commit()
-                        count += 1
+                        count += save_event("PUB LOG", datetime.utcnow(), data.get('lat'), data.get('lon'), data, conf)
             except (json.JSONDecodeError, UnicodeDecodeError):
                 continue # Ignore malformed lines
         print(f"[INGEST] PUB LOG: Successfully ingested {count} events")
@@ -353,22 +400,7 @@ async def ingest_usace_hifld():
                                     lon = geom.get("x")
                                     lat = geom.get("y")
                                     if lat is not None and lon is not None:
-                                        ev = DataEvent(
-                                            source="USACE",
-                                            timestamp=datetime.utcnow(),
-                                            latitude=float(lat),
-                                            longitude=float(lon),
-                                            data={
-                                                "name": attr.get("name"), 
-                                                "type": attr.get("type"), 
-                                                "state": attr.get("state"),
-                                                "address": attr.get("address"),
-                                                "city": attr.get("city")
-                                            },
-                                            confidence=0.8
-                                        )
-                                        s.add(ev)
-                                        count += 1
+                                        count += save_event("USACE", datetime.utcnow(), float(lat), float(lon), {"name": attr.get("name"), "type": attr.get("type"), "state": attr.get("state"), "address": attr.get("address"), "city": attr.get("city")}, 0.8)
                                 s.commit()
                             print(f"[INGEST] USACE: Successfully ingested {count} events from {endpoint['url']}")
                             return  # Success, exit function
@@ -391,16 +423,7 @@ async def ingest_usace_hifld():
         with Session() as s:
             count = 0
             for item in sample_data:
-                ev = DataEvent(
-                    source="USACE",
-                    timestamp=datetime.utcnow(),
-                    latitude=item["lat"],
-                    longitude=item["lon"],
-                    data=item,
-                    confidence=0.9
-                )
-                s.add(ev)
-                count += 1
+                count += save_event("USACE", datetime.utcnow(), item["lat"], item["lon"], item, 0.9)
             s.commit()
         print(f"[INGEST] USACE: Successfully ingested {count} sample events for testing")
         
@@ -440,22 +463,7 @@ async def ingest_dtic():
                                 lat = float(coords[1])
                                 lon = float(coords[0])
                         
-                        ev = DataEvent(
-                            source="DTIC",
-                            timestamp=datetime.utcnow(),
-                            latitude=lat,
-                            longitude=lon,
-                            data={
-                                "title": doc.get("title"),
-                                "author": doc.get("author"),
-                                "date": doc.get("publicationDate"),
-                                "abstract": doc.get("abstract"),
-                                "category": doc.get("category")
-                            },
-                            confidence=0.8
-                        )
-                        s.add(ev)
-                        count += 1
+                        count += save_event("DTIC", datetime.utcnow(), lat, lon, {"title": doc.get("title"), "author": doc.get("author"), "date": doc.get("publicationDate"), "abstract": doc.get("abstract"), "category": doc.get("category")}, 0.8)
                     s.commit()
                 print(f"[INGEST] DTIC: Successfully ingested {count} events")
     except Exception as e:
@@ -489,26 +497,7 @@ async def ingest_global_terrorism():
                         if not lat or not lon:
                             continue
                             
-                        ev = DataEvent(
-                            source="Global Terrorism DB",
-                            timestamp=datetime.utcnow(),
-                            latitude=float(lat),
-                            longitude=float(lon),
-                            data={
-                                "incident_id": incident.get("incident_id"),
-                                "date": incident.get("date"),
-                                "country": incident.get("country", {}).get("name"),
-                                "region": incident.get("region", {}).get("name"),
-                                "attack_type": incident.get("attack_type", {}).get("name"),
-                                "target_type": incident.get("target_type", {}).get("name"),
-                                "weapon_type": incident.get("weapon_type", {}).get("name"),
-                                "fatalities": incident.get("nkill", 0),
-                                "wounded": incident.get("nwound", 0)
-                            },
-                            confidence=0.9
-                        )
-                        s.add(ev)
-                        count += 1
+                        count += save_event("Global Terrorism DB", datetime.utcnow(), float(lat), float(lon), {"incident_id": incident.get("incident_id"), "date": incident.get("date"), "country": incident.get("country", {}).get("name"), "region": incident.get("region", {}).get("name"), "attack_type": incident.get("attack_type", {}).get("name"), "target_type": incident.get("target_type", {}).get("name"), "weapon_type": incident.get("weapon_type", {}).get("name"), "fatalities": incident.get("nkill", 0), "wounded": incident.get("nwound", 0)}, 0.9)
                     s.commit()
                 print(f"[INGEST] Global Terrorism DB: Successfully ingested {count} events")
     except Exception as e:
@@ -571,6 +560,30 @@ def run_ingestion():
             pass
     finally:
         loop.close()
+
+# Connector registry
+CONNECTORS = {
+    "nasa_fires": ingest_nasa_fires,
+    "adsb_aircraft": ingest_adsb_aircraft,
+    "ais_maritime": ingest_ais_maritime,
+    "nasa_eonet": ingest_nasa_eonet,
+    "gdacs_disasters": ingest_gdacs_disasters,
+    "usace_hifld": ingest_usace_hifld,
+    "dtic": ingest_dtic,
+    "global_terrorism": ingest_global_terrorism,
+}
+ENABLED = set(CONNECTORS.keys())
+
+def list_connectors():
+    return sorted(CONNECTORS.keys())
+
+def set_enabled(names):
+    global ENABLED
+    ENABLED = set(n for n in names if n in CONNECTORS)
+
+async def run_selected(names=None):
+    sel = list(ENABLED if not names else [n for n in names if n in CONNECTORS])
+    await asyncio.gather(*[CONNECTORS[n]() for n in sel])
 
 def schedule_ingestion():
     schedule.every(30).seconds.do(run_ingestion)
