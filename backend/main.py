@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from database import Session as DBSession, User, DataEvent, ensure_schema, Organization, OrgMembership, Invitation, AuditLog, ConsentLog, IpAllowlist, OrgSettings, PromptLog
+from database import Session as DBSession, User, DataEvent, ensure_schema, Organization, OrgMembership, Invitation, AuditLog, ConsentLog, IpAllowlist, OrgSettings, PromptLog, AlertRule, AlertHistory
 from pydantic import BaseModel
 from typing import Optional, List
 from auth import create_access_token, get_password_hash, verify_password
@@ -418,6 +418,331 @@ class AIResponse(BaseModel):
 def migrate():
     ok, msg = ensure_schema()
     return {"ok": ok, "message": msg}
+
+# --- Alerts & Notifications ---
+class AlertRuleIn(BaseModel):
+    name: str
+    org_id: Optional[int] = None
+    source: Optional[str] = None
+    severity_threshold: Optional[int] = 5
+    min_confidence: Optional[float] = 0.5
+    min_lat: Optional[float] = None
+    min_lon: Optional[float] = None
+    max_lat: Optional[float] = None
+    max_lon: Optional[float] = None
+    geofence_center_lat: Optional[float] = None
+    geofence_center_lon: Optional[float] = None
+    geofence_radius_m: Optional[int] = None
+    keywords: Optional[str] = None
+    email_to: Optional[str] = None
+    sms_to: Optional[str] = None
+    webhook_url: Optional[str] = None
+    priority: Optional[int] = 3
+    enabled: Optional[bool] = True
+    dedup_window_s: Optional[int] = 600
+
+class AlertRuleOut(BaseModel):
+    id: int
+    name: str
+    org_id: Optional[int]
+    source: Optional[str]
+    severity_threshold: Optional[int]
+    min_confidence: Optional[float]
+    min_lat: Optional[float]
+    min_lon: Optional[float]
+    max_lat: Optional[float]
+    max_lon: Optional[float]
+    geofence_center_lat: Optional[float]
+    geofence_center_lon: Optional[float]
+    geofence_radius_m: Optional[int]
+    keywords: Optional[str]
+    email_to: Optional[str]
+    sms_to: Optional[str]
+    webhook_url: Optional[str]
+    priority: int
+    enabled: bool
+    dedup_window_s: int
+
+class AlertHistoryOut(BaseModel):
+    id: int
+    ts: str
+    rule_id: int
+    org_id: Optional[int]
+    event_id: Optional[int]
+    priority: int
+    message: str
+    delivered_email: int
+    delivered_sms: int
+    delivered_webhook: int
+    status: str
+
+def _haversine_km(lat1, lon1, lat2, lon2):
+    try:
+        from math import radians, sin, cos, atan2, sqrt
+        R = 6371.0
+        dlat = radians(lat2 - lat1)
+        dlon = radians(lon2 - lon1)
+        a = sin(dlat/2)**2 + cos(radians(lat1))*cos(radians(lat2))*sin(dlon/2)**2
+        c = 2 * atan2(sqrt(a), sqrt(1-a))
+        return R * c
+    except Exception:
+        return 1e9
+
+def _event_text(e: DataEvent) -> str:
+    import json
+    try:
+        d = e.data or {}
+        head = d.get('headline') or d.get('title') or d.get('summary') or ''
+        body = json.dumps(d, separators=(',',':'))
+        return f"{e.source or ''} {head} {body}".lower()
+    except Exception:
+        try:
+            return json.dumps(e.data or {}).lower()
+        except Exception:
+            return ''
+
+def _send_email(to_addr: str, subject: str, text: str) -> bool:
+    try:
+        import os, smtplib
+        from email.mime.text import MIMEText
+        host = os.getenv('SMTP_HOST')
+        port = int(os.getenv('SMTP_PORT', '587'))
+        user = os.getenv('SMTP_USERNAME')
+        pwd = os.getenv('SMTP_PASSWORD')
+        from_addr = os.getenv('EMAIL_FROM')
+        if not (host and user and pwd and from_addr and to_addr):
+            return False
+        msg = MIMEText(text)
+        msg['Subject'] = subject
+        msg['From'] = from_addr
+        msg['To'] = to_addr
+        s = smtplib.SMTP(host, port)
+        s.starttls()
+        s.login(user, pwd)
+        s.sendmail(from_addr, [to_addr], msg.as_string())
+        s.quit()
+        return True
+    except Exception:
+        return False
+
+def _send_sms(to_number: str, text: str) -> bool:
+    try:
+        import os
+        sid = os.getenv('TWILIO_ACCOUNT_SID')
+        token = os.getenv('TWILIO_AUTH_TOKEN')
+        from_num = os.getenv('TWILIO_FROM_NUMBER')
+        if sid and token and from_num:
+            from twilio.rest import Client  # type: ignore
+            client = Client(sid, token)
+            m = client.messages.create(body=text, from_=from_num, to=to_number)
+            return bool(m.sid)
+        hook = os.getenv('SMS_WEBHOOK_URL')
+        if hook:
+            import requests
+            r = requests.post(hook, json={'to': to_number, 'text': text}, timeout=10)
+            return r.status_code in (200, 201)
+        return False
+    except Exception:
+        return False
+
+def _send_webhook(url: str, payload: dict) -> bool:
+    try:
+        import requests
+        r = requests.post(url, json=payload, timeout=10)
+        return r.status_code in (200, 201)
+    except Exception:
+        return False
+
+def _evaluate_rule_on_event(rule: AlertRule, e: DataEvent) -> bool:
+    try:
+        if not (rule.enabled or 0):
+            return False
+        if rule.source and e.source and rule.source != e.source:
+            return False
+        sev = int(round(float(e.confidence or 0.5) * 10))
+        if rule.severity_threshold and sev < int(rule.severity_threshold or 0):
+            return False
+        if rule.min_confidence and float(e.confidence or 0.0) < float(rule.min_confidence or 0.0):
+            return False
+        lat, lon = e.latitude, e.longitude
+        if (rule.min_lat is not None and rule.min_lon is not None and rule.max_lat is not None and rule.max_lon is not None):
+            if lat is None or lon is None:
+                return False
+            if not (rule.min_lat <= lat <= rule.max_lat and rule.min_lon <= lon <= rule.max_lon):
+                return False
+        if (rule.geofence_center_lat is not None and rule.geofence_center_lon is not None and rule.geofence_radius_m is not None):
+            if lat is None or lon is None:
+                return False
+            d = _haversine_km(rule.geofence_center_lat, rule.geofence_center_lon, lat, lon) * 1000.0
+            if d > float(rule.geofence_radius_m or 0):
+                return False
+        if rule.keywords:
+            text = _event_text(e)
+            terms = [t.strip().lower() for t in str(rule.keywords).split(',') if t.strip()]
+            if terms and not any(t in text for t in terms):
+                return False
+        return True
+    except Exception:
+        return False
+
+def _dedup_key(rule: AlertRule, e: DataEvent) -> str:
+    t = e.timestamp or datetime.datetime.utcnow()
+    try:
+        if isinstance(t, str):
+            t = datetime.datetime.fromisoformat(t)
+    except Exception:
+        t = datetime.datetime.utcnow()
+    base = f"{rule.id}|{e.fingerprint or (e.source or '')}|{int(t.timestamp())//60}|{round((e.latitude or 0.0)*100)}|{round((e.longitude or 0.0)*100)}"
+    return base
+
+def evaluate_alerts_for_event(e: DataEvent):
+    db = DBSession()
+    try:
+        rules = db.query(AlertRule).filter((AlertRule.enabled == 1) | (AlertRule.enabled == None)).all()
+        for r in rules:
+            if not _evaluate_rule_on_event(r, e):
+                continue
+            dk = _dedup_key(r, e)
+            win_s = int(r.dedup_window_s or 600)
+            since = (e.timestamp if isinstance(e.timestamp, datetime.datetime) else datetime.datetime.utcnow()) - datetime.timedelta(seconds=win_s)
+            dup = db.query(AlertHistory).filter(AlertHistory.rule_id == r.id, AlertHistory.dedup_key == dk, AlertHistory.ts >= since).first()
+            if dup:
+                continue
+            msg = f"Alert: {r.name} src={e.source} ts={(e.timestamp.isoformat() if isinstance(e.timestamp, datetime.datetime) else e.timestamp)} lat={e.latitude} lon={e.longitude}"
+            hist = AlertHistory(rule_id=r.id, event_id=e.id, org_id=r.org_id, priority=int(r.priority or 3), message=msg, dedup_key=dk, status='pending')
+            db.add(hist)
+            db.commit()
+            db.refresh(hist)
+            delivered_email = 0
+            delivered_sms = 0
+            delivered_webhook = 0
+            if r.email_to:
+                delivered_email = 1 if _send_email(r.email_to, f"RTAIP Alert: {r.name}", msg) else 0
+            if r.sms_to:
+                delivered_sms = 1 if _send_sms(r.sms_to, msg) else 0
+            if r.webhook_url:
+                delivered_webhook = 1 if _send_webhook(r.webhook_url, {'message': msg, 'event_id': e.id, 'rule_id': r.id}) else 0
+            hist.delivered_email = delivered_email
+            hist.delivered_sms = delivered_sms
+            hist.delivered_webhook = delivered_webhook
+            hist.status = 'delivered' if (delivered_email or delivered_sms or delivered_webhook) else 'queued'
+            db.commit()
+    finally:
+        db.close()
+
+class EventSim(BaseModel):
+    source: str
+    timestamp: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    confidence: Optional[float] = 0.5
+    data: Optional[Dict[str, Any]] = None
+
+@app.post('/alerts/test')
+def alerts_test(body: EventSim) -> Dict[str, Any]:
+    db = DBSession()
+    try:
+        ts = None
+        try:
+            ts = datetime.datetime.fromisoformat((body.timestamp or '').replace('Z',''))
+        except Exception:
+            ts = datetime.datetime.utcnow()
+        ev = DataEvent(source=body.source, timestamp=ts, latitude=body.latitude, longitude=body.longitude, confidence=float(body.confidence or 0.5), data=body.data or {})
+        db.add(ev)
+        db.commit()
+        db.refresh(ev)
+        try:
+            evaluate_alerts_for_event(ev)
+        except Exception:
+            pass
+        return {'event_id': ev.id}
+    finally:
+        db.close()
+
+@app.get('/alert-rules')
+def list_alert_rules(org_id: Optional[int] = None) -> List[AlertRuleOut]:
+    db = DBSession()
+    try:
+        q = db.query(AlertRule)
+        if org_id:
+            q = q.filter(AlertRule.org_id == org_id)
+        rows = q.order_by(AlertRule.id.desc()).all()
+        out: List[AlertRuleOut] = []
+        for r in rows:
+            out.append(AlertRuleOut(
+                id=r.id, name=r.name, org_id=r.org_id, source=r.source, severity_threshold=r.severity_threshold, min_confidence=r.min_confidence,
+                min_lat=r.min_lat, min_lon=r.min_lon, max_lat=r.max_lat, max_lon=r.max_lon, geofence_center_lat=r.geofence_center_lat,
+                geofence_center_lon=r.geofence_center_lon, geofence_radius_m=r.geofence_radius_m, keywords=r.keywords, email_to=r.email_to,
+                sms_to=r.sms_to, webhook_url=r.webhook_url, priority=int(r.priority or 3), enabled=bool(r.enabled or 0), dedup_window_s=int(r.dedup_window_s or 600)
+            ))
+        return out
+    finally:
+        db.close()
+
+@app.post('/alert-rules')
+def create_alert_rule(body: AlertRuleIn) -> Dict[str, Any]:
+    db = DBSession()
+    try:
+        r = AlertRule(
+            name=body.name, org_id=body.org_id, source=body.source, severity_threshold=body.severity_threshold or 5, min_confidence=body.min_confidence or 0.5,
+            min_lat=body.min_lat, min_lon=body.min_lon, max_lat=body.max_lat, max_lon=body.max_lon, geofence_center_lat=body.geofence_center_lat,
+            geofence_center_lon=body.geofence_center_lon, geofence_radius_m=body.geofence_radius_m, keywords=body.keywords, email_to=body.email_to,
+            sms_to=body.sms_to, webhook_url=body.webhook_url, priority=body.priority or 3, enabled=1 if (body.enabled is None or body.enabled) else 0,
+            dedup_window_s=body.dedup_window_s or 600
+        )
+        db.add(r)
+        db.commit()
+        db.refresh(r)
+        return {'id': r.id}
+    finally:
+        db.close()
+
+@app.put('/alert-rules/{rid}')
+def update_alert_rule(rid: int, body: AlertRuleIn) -> Dict[str, Any]:
+    db = DBSession()
+    try:
+        r = db.query(AlertRule).filter(AlertRule.id == rid).first()
+        if not r:
+            return {'error': 'not found'}
+        for k, v in body.dict().items():
+            if v is not None:
+                setattr(r, k if k != 'enabled' else 'enabled', (1 if v is True else (0 if v is False else v)))
+        db.commit()
+        return {'ok': True}
+    finally:
+        db.close()
+
+@app.delete('/alert-rules/{rid}')
+def delete_alert_rule(rid: int) -> Dict[str, Any]:
+    db = DBSession()
+    try:
+        r = db.query(AlertRule).filter(AlertRule.id == rid).first()
+        if not r:
+            return {'error': 'not found'}
+        db.delete(r)
+        db.commit()
+        return {'ok': True}
+    finally:
+        db.close()
+
+@app.get('/alerts')
+def list_alerts(org_id: Optional[int] = None, limit: int = 200) -> List[AlertHistoryOut]:
+    db = DBSession()
+    try:
+        q = db.query(AlertHistory).order_by(AlertHistory.ts.desc())
+        if org_id:
+            q = q.filter(AlertHistory.org_id == org_id)
+        rows = q.limit(limit).all()
+        out: List[AlertHistoryOut] = []
+        for h in rows:
+            out.append(AlertHistoryOut(
+                id=h.id, ts=(h.ts.isoformat() if isinstance(h.ts, datetime.datetime) else str(h.ts)), rule_id=int(h.rule_id), org_id=h.org_id,
+                event_id=h.event_id, priority=int(h.priority or 3), message=h.message or '', delivered_email=int(h.delivered_email or 0),
+                delivered_sms=int(h.delivered_sms or 0), delivered_webhook=int(h.delivered_webhook or 0), status=h.status or ''
+            ))
+        return out
+    finally:
+        db.close()
 
 # --- AI Analyst ---
 import re
