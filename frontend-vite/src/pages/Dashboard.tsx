@@ -8,6 +8,7 @@ import { fetchBackendEvents, getBackendBase, type RtaEvent, globalThreatScore, t
 import { NewHeader } from '../components/NewHeader';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, BarChart, Bar } from 'recharts';
 import AnalystPanel from '../components/AnalystPanel';
+import { Skeleton, DataTableVirtualized } from '../components/DesignSystem';
 
 
 export default function Dashboard() {
@@ -296,15 +297,16 @@ export default function Dashboard() {
               <div className="text-sm text-gray-300 mb-2">System Health & Metrics</div>
               <div className="text-xs text-gray-300">Region: {region ? `${region.region} • ${region.primary ? 'Primary' : 'Secondary'}` : '—'}</div>
               <div className="grid grid-cols-3 gap-3 mt-3 text-xs">
-                <div className="bg-white/5 p-2 rounded">Events<br/><span className="text-lg">{sysMetrics?.events_total ?? '—'}</span></div>
-                <div className="bg-white/5 p-2 rounded">Anomalies<br/><span className="text-lg">{sysMetrics?.anomalies_total ?? '—'}</span></div>
-                <div className="bg-white/5 p-2 rounded">Alerts<br/><span className="text-lg">{sysMetrics?.alerts_total ?? '—'}</span></div>
+                <div className="bg-white/5 p-2 rounded">Events<br/>{sysMetrics ? (<span className="text-lg">{sysMetrics.events_total}</span>) : (<Skeleton style={{ height: 24 }} />)}</div>
+                <div className="bg-white/5 p-2 rounded">Anomalies<br/>{sysMetrics ? (<span className="text-lg">{sysMetrics.anomalies_total}</span>) : (<Skeleton style={{ height: 24 }} />)}</div>
+                <div className="bg-white/5 p-2 rounded">Alerts<br/>{sysMetrics ? (<span className="text-lg">{sysMetrics.alerts_total}</span>) : (<Skeleton style={{ height: 24 }} />)}</div>
               </div>
               <div className="mt-3 text-xs">Last event: {sysMetrics?.last_event_ts ?? '—'}</div>
               <div className="mt-3 text-xs">Performance (recent)</div>
               <div className="mt-1 max-h-28 overflow-y-auto text-xs">
-                {(sysMetrics?.perf_recent||[]).map((m,i)=>(<div key={i} className="mt-1">{m.ts} • fps {m.fps} • events {m.events} • anomalies {m.anomalies}</div>))}
-                {(sysMetrics?.perf_recent||[]).length===0 && (<div className="text-gray-400">No metrics</div>)}
+                {!sysMetrics && (<div className="space-y-1">{Array.from({ length: 4 }).map((_,i)=>(<Skeleton key={i} style={{ height: 18 }} />))}</div>)}
+                {sysMetrics && (sysMetrics.perf_recent||[]).map((m,i)=>(<div key={i} className="mt-1">{m.ts} • fps {m.fps} • events {m.events} • anomalies {m.anomalies}</div>))}
+                {sysMetrics && (sysMetrics.perf_recent||[]).length===0 && (<div className="text-gray-400">No metrics</div>)}
               </div>
             </div>
             <div className="bg-white/10 backdrop-blur-md rounded-lg p-4 shadow-lg">
@@ -343,6 +345,12 @@ export default function Dashboard() {
                   {backupStatus.imported && (<div>Imported: {Object.entries(backupStatus.imported).map(([k,v])=>`${k}:${v}`).join(', ')}</div>)}
                 </div>
               )}
+            </div>
+          </div>
+          <div className="grid grid-cols-1 mt-4">
+            <div className="bg-white/10 backdrop-blur-md rounded-lg p-4 shadow-lg">
+              <div className="text-sm text-gray-300 mb-2">Recent Events (table)</div>
+              <DataTableVirtualized rows={filteredEvents.slice(0, 200).map(e => ({ id: e.id, source: String(e.source||'unknown'), ts: e.timestamp, lat: e.latitude ?? '', lon: e.longitude ?? '', sev: Math.round(eventSeverity(e)*100) }))} columns={[{ key: 'id', label: 'ID', width: 100 }, { key: 'source', label: 'Source' }, { key: 'ts', label: 'Timestamp', width: 200 }, { key: 'lat', label: 'Lat', width: 90, align: 'right' }, { key: 'lon', label: 'Lon', width: 90, align: 'right' }, { key: 'sev', label: 'Severity', width: 100 }]} height={260} rowHeight={28} />
             </div>
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">

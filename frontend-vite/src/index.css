@@ -54,6 +54,39 @@
     --sidebar-ring: 180 100% 50%;
   }
   .dark { --background: 222 47% 5%; --foreground: 180 100% 95%; }
+  .light {
+    --background: 210 20% 98%;
+    --foreground: 220 15% 20%;
+    --card: 0 0% 100%;
+    --card-foreground: 220 15% 20%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 15% 20%;
+    --primary: 210 90% 40%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 15% 92%;
+    --secondary-foreground: 220 15% 25%;
+    --muted: 220 15% 92%;
+    --muted-foreground: 220 15% 35%;
+    --accent: 200 90% 40%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 85% 50%;
+    --destructive-foreground: 0 0% 100%;
+    --warning: 35 100% 45%;
+    --warning-foreground: 0 0% 0%;
+    --success: 150 70% 40%;
+    --success-foreground: 0 0% 0%;
+    --border: 220 10% 85%;
+    --input: 220 10% 92%;
+    --ring: 210 90% 40%;
+    --sidebar-background: 220 10% 96%;
+    --sidebar-foreground: 220 15% 30%;
+    --sidebar-primary: 210 90% 40%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 10% 92%;
+    --sidebar-accent-foreground: 220 15% 30%;
+    --sidebar-border: 220 10% 85%;
+    --sidebar-ring: 210 90% 40%;
+  }
 }
 
 @layer base {
@@ -107,6 +140,30 @@ html { font-family: "Sora", "JetBrains Mono", system-ui, -apple-system, Segoe UI
     animation: move-bg 30s ease-in-out infinite;
   }
   .font-orbitron { font-family: "Orbitron", "Sora", system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+  .focus-ring { outline: none; box-shadow: 0 0 0 2px hsl(var(--ring) / 0.8), 0 0 0 4px hsl(var(--ring) / 0.2); }
+  .transition-soft { transition: all 180ms ease; }
+  .hover-lift:hover { transform: translateY(-1px); }
+  .hover-bleed:hover { filter: brightness(1.06); }
+  
+  .severity-critical { background: hsl(0 70% 40% / 0.18); color: hsl(0 90% 70%); border: 1px solid hsl(0 80% 50% / 0.25); }
+  .severity-warning { background: hsl(35 80% 40% / 0.18); color: hsl(35 90% 70%); border: 1px solid hsl(35 80% 50% / 0.25); }
+  .severity-info { background: hsl(210 90% 45% / 0.18); color: hsl(210 90% 70%); border: 1px solid hsl(210 80% 55% / 0.25); }
+  .severity-stable { background: hsl(150 50% 35% / 0.18); color: hsl(150 70% 65%); border: 1px solid hsl(150 60% 45% / 0.25); }
+  .severity-unknown { background: hsl(0 0% 30% / 0.18); color: hsl(0 0% 70%); border: 1px solid hsl(0 0% 50% / 0.25); }
+  
+  @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+  .skeleton {
+    background: linear-gradient(90deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.15) 50%, rgba(255,255,255,0.05) 100%);
+    background-size: 200% 100%;
+    animation: shimmer 1.6s linear infinite;
+    border-radius: 6px;
+  }
+  .skeleton-dark { background: linear-gradient(90deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.12) 50%, rgba(255,255,255,0.03) 100%); }
+  .skeleton-light { background: linear-gradient(90deg, rgba(0,0,0,0.04) 0%, rgba(0,0,0,0.12) 50%, rgba(0,0,0,0.04) 100%); }
+  
+  .tooltip-wrap { position: relative; display: inline-block; }
+  .tooltip-panel { position: absolute; z-index: 50; background: hsl(var(--popover)); color: hsl(var(--popover-foreground)); border: 1px solid hsl(var(--border)); border-radius: 6px; padding: 6px 8px; font-size: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.35); opacity: 0; transform: translateY(-4px); transition: all 140ms ease; pointer-events: none; }
+  .tooltip-wrap:hover .tooltip-panel, .tooltip-wrap:focus-within .tooltip-panel { opacity: 1; transform: translateY(0); pointer-events: auto; }
   
   /* Mobile Responsive Utilities */
   .mobile-safe-padding { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
