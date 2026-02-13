@@ -131,6 +131,20 @@ class ConsentLog(Base):
     version = Column(String)
     ip = Column(String)
 
+class PromptLog(Base):
+    __tablename__ = 'prompt_logs'
+    id = Column(Integer, primary_key=True)
+    ts = Column(DateTime, default=datetime.utcnow)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=True)
+    org_id = Column(Integer, ForeignKey('organizations.id'), nullable=True)
+    query = Column(Text)
+    answer = Column(Text)
+    confidence = Column(Float, default=0.0)
+    insufficient = Column(Integer, default=0)  # 0/1
+    citations = Column(JSON)
+    provider = Column(String)
+    model = Column(String)
+
 class IpAllowlist(Base):
     __tablename__ = 'ip_allowlists'
     id = Column(Integer, primary_key=True)
@@ -194,6 +208,7 @@ def ensure_schema():
                     conn.execute("CREATE INDEX IF NOT EXISTS idx_anomalies_event_id ON anomalies(event_id)")
                     conn.execute("CREATE INDEX IF NOT EXISTS idx_memberships_org_user ON org_memberships(org_id, user_id)")
                     conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_logs(ts)")
+                    conn.execute("CREATE INDEX IF NOT EXISTS idx_prompt_ts ON prompt_logs(ts)")
                     conn.execute("CREATE INDEX IF NOT EXISTS idx_invitations_token ON invitations(token)")
                     try:
                         conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_data_events_fingerprint ON data_events(fingerprint)")
@@ -223,6 +238,7 @@ def ensure_schema():
                     conn.execute("CREATE INDEX IF NOT EXISTS idx_anomalies_event_id ON anomalies(event_id)")
                     conn.execute("CREATE INDEX IF NOT EXISTS idx_memberships_org_user ON org_memberships(org_id, user_id)")
                     conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_logs(ts)")
+                    conn.execute("CREATE INDEX IF NOT EXISTS idx_prompt_ts ON prompt_logs(ts)")
                     conn.execute("CREATE INDEX IF NOT EXISTS idx_invitations_token ON invitations(token)")
                     try:
                         conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_data_events_fingerprint ON data_events(fingerprint)")
