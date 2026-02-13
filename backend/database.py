@@ -63,6 +63,16 @@ class AlertRule(Base):
     max_lat = Column(Float)
     max_lon = Column(Float)
     email_to = Column(String)  # optional notification target
+    org_id = Column(Integer, ForeignKey('organizations.id'), nullable=True)
+    priority = Column(Integer, default=3)  # 1 urgent, 2 high, 3 normal, 4 low
+    enabled = Column(Integer, default=1)
+    keywords = Column(Text)  # comma-separated terms
+    geofence_center_lat = Column(Float)
+    geofence_center_lon = Column(Float)
+    geofence_radius_m = Column(Integer)
+    sms_to = Column(String)
+    webhook_url = Column(String)
+    dedup_window_s = Column(Integer, default=600)
 
 class PerfMetric(Base):
     __tablename__ = 'perf_metrics'
@@ -145,6 +155,22 @@ class PromptLog(Base):
     provider = Column(String)
     model = Column(String)
 
+class AlertHistory(Base):
+    __tablename__ = 'alert_history'
+    id = Column(Integer, primary_key=True)
+    ts = Column(DateTime, default=datetime.utcnow)
+    rule_id = Column(Integer, ForeignKey('alert_rules.id'))
+    event_id = Column(Integer, ForeignKey('data_events.id'), nullable=True)
+    anomaly_id = Column(Integer, ForeignKey('anomalies.id'), nullable=True)
+    org_id = Column(Integer, ForeignKey('organizations.id'), nullable=True)
+    priority = Column(Integer, default=3)
+    message = Column(Text)
+    dedup_key = Column(String)
+    delivered_email = Column(Integer, default=0)
+    delivered_sms = Column(Integer, default=0)
+    delivered_webhook = Column(Integer, default=0)
+    status = Column(String)
+
 class IpAllowlist(Base):
     __tablename__ = 'ip_allowlists'
     id = Column(Integer, primary_key=True)
@@ -209,6 +235,9 @@ def ensure_schema():
                     conn.execute("CREATE INDEX IF NOT EXISTS idx_memberships_org_user ON org_memberships(org_id, user_id)")
                     conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_logs(ts)")
                     conn.execute("CREATE INDEX IF NOT EXISTS idx_prompt_ts ON prompt_logs(ts)")
+                    conn.execute("CREATE INDEX IF NOT EXISTS idx_alert_rules_org ON alert_rules(org_id)")
+                    conn.execute("CREATE INDEX IF NOT EXISTS idx_alert_history_rule_ts ON alert_history(rule_id, ts)")
+                    conn.execute("CREATE INDEX IF NOT EXISTS idx_alert_history_dedup ON alert_history(dedup_key)")
                     conn.execute("CREATE INDEX IF NOT EXISTS idx_invitations_token ON invitations(token)")
                     try:
                         conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_data_events_fingerprint ON data_events(fingerprint)")
@@ -239,6 +268,9 @@ def ensure_schema():
                     conn.execute("CREATE INDEX IF NOT EXISTS idx_memberships_org_user ON org_memberships(org_id, user_id)")
                     conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_logs(ts)")
                     conn.execute("CREATE INDEX IF NOT EXISTS idx_prompt_ts ON prompt_logs(ts)")
+                    conn.execute("CREATE INDEX IF NOT EXISTS idx_alert_rules_org ON alert_rules(org_id)")
+                    conn.execute("CREATE INDEX IF NOT EXISTS idx_alert_history_rule_ts ON alert_history(rule_id, ts)")
+                    conn.execute("CREATE INDEX IF NOT EXISTS idx_alert_history_dedup ON alert_history(dedup_key)")
                     conn.execute("CREATE INDEX IF NOT EXISTS idx_invitations_token ON invitations(token)")
                     try:
                         conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_data_events_fingerprint ON data_events(fingerprint)")

@@ -89,6 +89,11 @@ def save_event(source: str, ts: datetime, latitude, longitude, payload: dict | l
             )
             s.add(ev)
             s.commit()
+            try:
+                from main import evaluate_alerts_for_event
+                evaluate_alerts_for_event(ev)
+            except Exception:
+                pass
             return 1
         except Exception:
             try:
