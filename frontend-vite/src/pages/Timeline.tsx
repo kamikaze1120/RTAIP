@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { fetchBackendEvents, type RtaEvent, eventSeverity, fetchSupabaseEvents, getSupabaseConfig, getBackendBase, getCachedEvents, setCachedEvents } from '../services/data';
+import { fetchBackendEvents, type RtaEvent, eventSeverity, fetchSupabaseEvents, getSupabaseConfig, getBackendBase, getCachedEvents, setCachedEvents, snapshotAt, correlateEvents, buildIncidentChains, sourcePatternStats } from '../services/data';
 import { NewHeader } from '../components/NewHeader';
 import EventFeed from '../components/EventFeed';
 import Map from 'ol/Map';
@@ -62,30 +62,45 @@ export default function Timeline() {
   }, []);
 
   const count = useMemo(() => events.length, [events]);
-  const [replayHours, setReplayHours] = useState(24 * 365);
+  const [replayHours, setReplayHours] = useState(24 * 72);
+  const [playheadMs, setPlayheadMs] = useState<number>(Date.now());
+  const minMax = useMemo(() => {
+    const ts = events.map(e => new Date(e.timestamp).getTime()).filter(t => !isNaN(t));
+    if (ts.length === 0) return { min: Date.now() - 365 * 24 * 3600000, max: Date.now() };
+    return { min: Math.min(...ts), max: Math.max(...ts) };
+  }, [events]);
+  useEffect(() => {
+    if (events.length > 0) {
+      const latest = events.map(e => new Date(e.timestamp).getTime()).filter(t => !isNaN(t)).sort((a,b)=>b-a)[0];
+      if (latest) setPlayheadMs(latest);
+    }
+  }, [events]);
   const filtered = useMemo(() => {
-    const cutoff = Date.now() - replayHours * 3600000;
-    return events.filter(e => {
-      const t = new Date(e.timestamp).getTime();
-      if (isNaN(t) || t < cutoff) return false;
-      
-
-      
+    const snap = snapshotAt(events, playheadMs, replayHours);
+    return snap.filter(e => {
       const sev = eventSeverity(e);
       if (Math.round(sev * 100) < minSev) return false;
       if (query && !JSON.stringify(e.data || {}).toLowerCase().includes(query.toLowerCase())) return false;
       return true;
     });
-  }, [events, replayHours, minSev, query]);
+  }, [events, playheadMs, replayHours, minSev, query]);
+  const groups = useMemo(() => correlateEvents(filtered, { timeWindowMs: 2 * 3600000, distanceKm: 50 }), [filtered]);
+  const chains = useMemo(() => buildIncidentChains(groups, 6 * 3600000, 75), [groups]);
+  const patterns = useMemo(() => sourcePatternStats(groups).slice(0, 6), [groups]);
   
 
   useEffect(() => {
     if (!autoplay) return;
+    const stepMs = 30 * 60 * 1000;
     const id = setInterval(() => {
-      setReplayHours((h) => (h > 1 ? h - 1 : 12));
-    }, 1500);
+      setPlayheadMs((ms) => {
+        const next = ms + stepMs;
+        if (next > minMax.max) return minMax.min;
+        return next;
+      });
+    }, 800);
     return () => clearInterval(id);
-  }, [autoplay]);
+  }, [autoplay, minMax.min, minMax.max]);
 
   function extractRoute(ev: RtaEvent | null): Array<[number, number]> {
     if (!ev) return [];
@@ -165,6 +180,33 @@ export default function Timeline() {
                   <input type="range" min="1" max="8760" value={replayHours} onChange={(e) => setReplayHours(Number(e.target.value))} className="w-full mt-1" />
                 </div>
                 <div>
+                  <label className="flex items-center justify-between text-xs text-gray-300 tracking-widest uppercase">
+                    <span>Time Scrubber</span>
+                    <span className="text-gray-400">{new Date(playheadMs).toLocaleString()}</span>
+                  </label>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    value={(() => {
+                      const span = Math.max(1, minMax.max - minMax.min);
+                      const pos = Math.max(0, Math.min(1, (playheadMs - minMax.min) / span));
+                      return Math.round(pos * 100);
+                    })()}
+                    onChange={(e) => {
+                      const p = Number(e.target.value) / 100;
+                      const span = Math.max(1, minMax.max - minMax.min);
+                      setPlayheadMs(minMax.min + Math.round(span * p));
+                    }}
+                    className="w-full mt-1"
+                  />
+                  <div className="mt-2 flex items-center gap-2">
+                    <button className="px-2 py-1 text-xs rounded-md bg-white/20" onClick={() => setAutoplay(a => !a)}>{autoplay ? 'Pause' : 'Play'}</button>
+                    <button className="px-2 py-1 text-xs rounded-md bg-white/10" onClick={() => setPlayheadMs(ms => Math.max(minMax.min, ms - 60 * 60 * 1000))}>-1h</button>
+                    <button className="px-2 py-1 text-xs rounded-md bg-white/10" onClick={() => setPlayheadMs(ms => Math.min(minMax.max, ms + 60 * 60 * 1000))}>+1h</button>
+                  </div>
+                </div>
+                <div>
                   <div className="text-xs text-gray-300 tracking-widest uppercase mb-2">Sources</div>
                   <div className="flex flex-wrap gap-3 text-xs">
 
@@ -181,13 +223,7 @@ export default function Timeline() {
                   <label className="text-xs text-gray-300 tracking-widest uppercase">Search</label>
                   <input className="w-full px-2 py-1 bg-black/20 border border-gray-700 rounded-md text-white mt-1" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Headline or data" />
                 </div>
-                <div className="pt-2">
-                  <label className="flex items-center gap-2 text-sm">
-                    <input type="checkbox" checked={autoplay} onChange={(e) => setAutoplay(e.target.checked)} />
-                    Autoplay
-                    <span className="text-xs text-gray-400">({filtered.length} / {count})</span>
-                  </label>
-                </div>
+                <div className="pt-2 text-xs text-gray-400">{filtered.length} / {count} events</div>
               </div>
             </div>
           </div>
@@ -200,10 +236,47 @@ export default function Timeline() {
               )}
             </div>
           </div>
-          <div className="lg:col-span-1">
+          <div className="lg:col-span-1 space-y-4">
             <div className="bg-white/10 backdrop-blur-md rounded-lg shadow-lg p-4 h-[420px]">
               <div className="text-sm text-gray-300 mb-2">Route Map</div>
               <div ref={mapRef} style={{ width: '100%', height: '360px' }} />
+            </div>
+            <div className="bg-white/10 backdrop-blur-md rounded-lg shadow-lg p-4">
+              <div className="text-sm text-gray-300 mb-2">Incident Chains</div>
+              <ul className="text-xs text-gray-300 space-y-2 max-h-[220px] overflow-y-auto">
+                {chains.map((chain, idx) => {
+                  const start = chain[0]?.start ? new Date(chain[0].start).toLocaleString() : '—';
+                  const end = chain[chain.length - 1]?.end ? new Date(chain[chain.length - 1].end).toLocaleString() : '—';
+                  const total = chain.reduce((acc, g) => acc + g.events.length, 0);
+                  const srcs = Array.from(new Set(chain.flatMap(g => g.sources))).slice(0, 4);
+                  return (
+                    <li key={`chain-${idx}`} className="flex items-center justify-between">
+                      <div>
+                        <div className="font-semibold">Chain {idx + 1} • {total} events</div>
+                        <div className="text-gray-400">{start} → {end}</div>
+                      </div>
+                      <div className="text-gray-400">{srcs.join(', ')}</div>
+                    </li>
+                  );
+                })}
+                {chains.length === 0 && (
+                  <li className="text-gray-400">No correlated chains in window.</li>
+                )}
+              </ul>
+            </div>
+            <div className="bg-white/10 backdrop-blur-md rounded-lg shadow-lg p-4">
+              <div className="text-sm text-gray-300 mb-2">Source Patterns</div>
+              <ul className="text-xs text-gray-300 space-y-1">
+                {patterns.map((p, i) => (
+                  <li key={`pat-${i}`} className="flex items-center justify-between">
+                    <div>{p.pattern}</div>
+                    <div className="text-gray-400">{p.count}</div>
+                  </li>
+                ))}
+                {patterns.length === 0 && (
+                  <li className="text-gray-400">No patterns detected.</li>
+                )}
+              </ul>
             </div>
           </div>
         </div>

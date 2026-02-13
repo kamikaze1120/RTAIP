@@ -69,7 +69,7 @@ export async function fetchBackendEvents(): Promise<RtaEvent[]> {
     const r = await fetchWithTimeout(`${base.replace(/\/$/, '')}/events`, { timeoutMs: 7000 });
     const jd = await r.json();
     const arr: Record<string, unknown>[] = Array.isArray(jd) ? jd : [];
-    return arr.map((e: Record<string, unknown>, i) => ({
+    const mapped = arr.map((e: Record<string, unknown>, i) => ({
       id: String(e.id ?? i),
       timestamp: (e.timestamp as string) ?? new Date().toISOString(),
       source: String(e.source || 'unknown'),
@@ -78,6 +78,8 @@ export async function fetchBackendEvents(): Promise<RtaEvent[]> {
       confidence: typeof e.confidence === 'number' ? e.confidence : 0.5,
       data: (e.data as Record<string, unknown>) || {},
     }));
+    const filtered = mapped.filter(ev => !/usgs|noaa/i.test(String(ev.source || '')));
+    return filtered;
   } catch {
     return [];
   }
@@ -160,6 +162,105 @@ export function correlationMatrix(events: RtaEvent[]): Record<string, Record<str
     }
   }
   return mat;
+}
+
+export type IncidentGroup = {
+  id: string;
+  start: string;
+  end: string;
+  center: { lat: number; lon: number };
+  sources: string[];
+  events: RtaEvent[];
+};
+
+function haversineKm(aLat: number, aLon: number, bLat: number, bLon: number): number {
+  const R = 6371;
+  const dLat = ((bLat - aLat) * Math.PI) / 180;
+  const dLon = ((bLon - aLon) * Math.PI) / 180;
+  const s1 = Math.sin(dLat / 2) ** 2 + Math.cos((aLat * Math.PI) / 180) * Math.cos((bLat * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(s1), Math.sqrt(1 - s1));
+  return R * c;
+}
+
+export function timeFilter(events: RtaEvent[], startMs: number, endMs: number): RtaEvent[] {
+  return events.filter(e => {
+    const t = new Date(e.timestamp).getTime();
+    return !isNaN(t) && t >= startMs && t <= endMs;
+  }).sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+}
+
+export function snapshotAt(events: RtaEvent[], playheadMs: number, windowHours: number): RtaEvent[] {
+  const startMs = playheadMs - windowHours * 3600000;
+  return timeFilter(events, startMs, playheadMs);
+}
+
+export function correlateEvents(events: RtaEvent[], opts?: { timeWindowMs?: number; distanceKm?: number; minConfidence?: number }): IncidentGroup[] {
+  const timeWindowMs = opts?.timeWindowMs ?? 2 * 3600000;
+  const distanceKm = opts?.distanceKm ?? 50;
+  const minConf = opts?.minConfidence ?? 0;
+  const pts = events.filter(e => e.latitude != null && e.longitude != null && (typeof e.confidence !== 'number' || (e.confidence as number) >= minConf));
+  const sorted = pts.slice().sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  const groups: IncidentGroup[] = [];
+  for (const e of sorted) {
+    const et = new Date(e.timestamp).getTime();
+    let placed = false;
+    for (const g of groups) {
+      const gt = new Date(g.end).getTime();
+      if (et - gt > timeWindowMs) continue;
+      const d = haversineKm(g.center.lat, g.center.lon, e.latitude as number, e.longitude as number);
+      if (d <= distanceKm) {
+        g.events.push(e);
+        g.end = e.timestamp;
+        const n = g.events.length;
+        const latAvg = (g.center.lat * (n - 1) + (e.latitude as number)) / n;
+        const lonAvg = (g.center.lon * (n - 1) + (e.longitude as number)) / n;
+        g.center = { lat: latAvg, lon: lonAvg };
+        if (e.source) {
+          const s = String(e.source).toLowerCase();
+          if (!g.sources.includes(s)) g.sources.push(s);
+        }
+        placed = true;
+        break;
+      }
+    }
+    if (!placed) {
+      const s = String(e.source || '').toLowerCase();
+      groups.push({ id: `${s}-${e.id}-${et}`, start: e.timestamp, end: e.timestamp, center: { lat: e.latitude as number, lon: e.longitude as number }, sources: s ? [s] : [], events: [e] });
+    }
+  }
+  return groups.sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+}
+
+export function buildIncidentChains(groups: IncidentGroup[], chainWindowMs?: number, distanceKm?: number): IncidentGroup[][] {
+  const tw = chainWindowMs ?? 6 * 3600000;
+  const dk = distanceKm ?? 75;
+  const chains: IncidentGroup[][] = [];
+  for (const g of groups) {
+    let attached = false;
+    for (const c of chains) {
+      const last = c[c.length - 1];
+      const tGap = new Date(g.start).getTime() - new Date(last.end).getTime();
+      if (tGap > tw) continue;
+      const d = haversineKm(last.center.lat, last.center.lon, g.center.lat, g.center.lon);
+      if (d <= dk) {
+        c.push(g);
+        attached = true;
+        break;
+      }
+    }
+    if (!attached) chains.push([g]);
+  }
+  return chains.map(chain => chain.sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime()));
+}
+
+export function sourcePatternStats(groups: IncidentGroup[]): Array<{ pattern: string; count: number }>{
+  const counts = new Map<string, number>();
+  for (const g of groups) {
+    const uniq = Array.from(new Set(g.sources)).sort();
+    const key = uniq.join('+') || 'unknown';
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+  return Array.from(counts.entries()).map(([pattern, count]) => ({ pattern, count })).sort((a, b) => b.count - a.count);
 }
 
 export async function reverseGeocode(lat: number, lon: number): Promise<{ name?: string; city?: string; county?: string; state?: string; country?: string } | null> {
@@ -331,7 +432,8 @@ export async function fetchSupabaseEvents(): Promise<RtaEvent[]> {
     ev = await tryClient(alternate);
     if (ev.length === 0) ev = await restFetch(alternate);
   }
-  return ev;
+  const filtered = ev.filter(e => !/usgs|noaa/i.test(String(e.source || '')));
+  return filtered;
 }
 
 export async function callGemini(query: string, context?: string): Promise<string | null> {
@@ -503,6 +605,21 @@ export async function fetchGlobalPopulationByContinent(): Promise<{ total: numbe
   } catch {
     return { total: 0, continents: {} };
   }
+}
+
+export async function getCurrentRole(orgId: number): Promise<string | null> {
+  try {
+    const uidRaw = typeof window !== 'undefined' ? window.localStorage.getItem('backendUserId') : null
+    const uid = uidRaw ? Number(uidRaw) : 0
+    const base = getBackendBase()
+    if (!base || !orgId || !uid) return null
+    const r = await fetchWithTimeout(`${base.replace(/\/$/, '')}/orgs/${orgId}/members`, { timeoutMs: 7000 })
+    if (!r.ok) return null
+    const rows = await r.json() as Array<Record<string, unknown>>
+    const me = rows.find(x => Number(x['user_id']) === uid)
+    if (!me) return null
+    return String(me['role'] || '')
+  } catch { return null }
 }
 export function getCachedEvents(maxAgeMs = 365 * 24 * 3600000): RtaEvent[] {
   try {

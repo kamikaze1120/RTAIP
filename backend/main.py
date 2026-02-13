@@ -1,14 +1,17 @@
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from database import Session as DBSession, User, DataEvent, ensure_schema
+from database import Session as DBSession, User, DataEvent, ensure_schema, Organization, OrgMembership, Invitation, AuditLog, ConsentLog, IpAllowlist, OrgSettings
 from pydantic import BaseModel
+from typing import Optional, List
 from auth import create_access_token, get_password_hash, verify_password
 from datetime import timedelta
+import datetime
 import os
 import asyncio
 import threading
 from ingestion import ingest_nasa_eonet, ingest_nasa_fires, ingest_adsb_aircraft, ingest_ais_maritime, ingest_usace_hifld, ingest_gdacs_disasters, ingest_dtic, ingest_global_terrorism
+from ingestion import save_event, list_connectors, set_enabled, run_selected
 
 app = FastAPI()
 
@@ -75,6 +78,20 @@ class UserLogin(BaseModel):
     username: str
     password: str
 
+class OrgCreate(BaseModel):
+    name: str
+
+class InviteCreate(BaseModel):
+    email: str
+    role: str
+
+class ConsentInput(BaseModel):
+    user_id: int
+    accepted_privacy: bool
+    accepted_terms: bool
+    version: str
+    ip: str | None = None
+
 def get_db():
     db = DBSession()
     try:
@@ -104,6 +121,12 @@ def login_for_access_token(user: UserLogin, db: Session = Depends(get_db)):
     access_token = create_access_token(
         data={"sub": user.username}, expires_delta=access_token_expires
     )
+    try:
+        al = AuditLog(user_id=db_user.id, event="login", ip=None, session_id=None, details={"username": user.username})
+        db.add(al)
+        db.commit()
+    except Exception:
+        pass
     return {"access_token": access_token, "token_type": "bearer"}
 
 import logging
@@ -186,6 +209,125 @@ async def get_events():
         logger.error(f"Error fetching events: {e}", exc_info=True)
         return []
 
+@app.post("/orgs")
+def create_org(payload: OrgCreate, db: Session = Depends(get_db)):
+    o = Organization(name=payload.name)
+    db.add(o)
+    db.commit()
+    db.refresh(o)
+    return {"id": o.id, "name": o.name}
+
+@app.get("/orgs")
+def list_orgs(db: Session = Depends(get_db)):
+    rows = db.query(Organization).all()
+    return [{"id": r.id, "name": r.name} for r in rows]
+
+@app.post("/orgs/{org_id}/invite")
+def invite_user(org_id: int, payload: InviteCreate, db: Session = Depends(get_db)):
+    import secrets
+    import datetime
+    token = secrets.token_urlsafe(24)
+    inv = Invitation(org_id=org_id, email=payload.email, role=payload.role, token=token, created_at=datetime.datetime.utcnow())
+    db.add(inv)
+    db.commit()
+    db.refresh(inv)
+    try:
+        al = AuditLog(event="invite_created", org_id=org_id, details={"email": payload.email, "role": payload.role, "token": token})
+        db.add(al)
+        db.commit()
+    except Exception:
+        pass
+    return {"token": token}
+
+class InviteAccept(BaseModel):
+    token: str
+    user_id: int
+
+@app.post("/invites/accept")
+def accept_invite(payload: InviteAccept, db: Session = Depends(get_db)):
+    inv = db.query(Invitation).filter(Invitation.token == payload.token).first()
+    if not inv:
+        return {"error": "invalid"}
+    mem = OrgMembership(org_id=inv.org_id, user_id=payload.user_id, role=inv.role)
+    db.add(mem)
+    inv.accepted_at = datetime.datetime.utcnow()
+    db.commit()
+    try:
+        al = AuditLog(event="invite_accepted", org_id=inv.org_id, user_id=payload.user_id, details={"email": inv.email, "role": inv.role})
+        db.add(al)
+        db.commit()
+    except Exception:
+        pass
+    return {"ok": True}
+
+@app.get("/orgs/{org_id}/members")
+def org_members(org_id: int, db: Session = Depends(get_db)):
+    rows = db.query(OrgMembership).filter(OrgMembership.org_id == org_id).all()
+    out = []
+    for r in rows:
+        u = db.query(User).filter(User.id == r.user_id).first()
+        out.append({"id": r.id, "role": r.role, "user_id": r.user_id, "username": u.username if u else None, "email": u.email if u else None})
+    return out
+
+@app.get("/audit")
+def list_audit(db: Session = Depends(get_db)):
+    rows = db.query(AuditLog).order_by(AuditLog.ts.desc()).limit(500).all()
+    return [{"timestamp": r.ts.isoformat(), "event": r.event, "user": r.user_id, "details": r.details} for r in rows]
+
+@app.post("/consent")
+def record_consent(payload: ConsentInput, db: Session = Depends(get_db)):
+    cl = ConsentLog(user_id=payload.user_id, accepted_privacy=1 if payload.accepted_privacy else 0, accepted_terms=1 if payload.accepted_terms else 0, version=payload.version, ip=payload.ip or None)
+    db.add(cl)
+    try:
+        al = AuditLog(user_id=payload.user_id, event="consent_accepted", details={"version": payload.version})
+        db.add(al)
+    except Exception:
+        pass
+    db.commit()
+    return {"ok": True}
+
+class IpItem(BaseModel):
+    org_id: int
+    cidr: str
+    label: str | None = None
+    active: bool = True
+
+@app.post("/ip-allowlists")
+def add_ip(item: IpItem, db: Session = Depends(get_db)):
+    row = IpAllowlist(org_id=item.org_id, cidr=item.cidr, label=item.label or None, active=1 if item.active else 0)
+    db.add(row)
+    db.commit()
+    return {"ok": True}
+
+@app.get("/ip-allowlists")
+def list_ip(org_id: int, db: Session = Depends(get_db)):
+    rows = db.query(IpAllowlist).filter(IpAllowlist.org_id == org_id, IpAllowlist.active == 1).all()
+    return [{"cidr": r.cidr, "label": r.label} for r in rows]
+
+@app.get("/session/policy")
+def session_policy():
+    return {"minutes": 30}
+
+@app.get("/connectors")
+def connectors():
+    return {"available": list_connectors()}
+
+class ConnectorsEnable(BaseModel):
+    names: List[str]
+
+@app.post("/connectors/enable")
+def connectors_enable(payload: ConnectorsEnable):
+    set_enabled(payload.names)
+    return {"enabled": payload.names}
+
+class ConnectorsRun(BaseModel):
+    names: Optional[List[str]] = None
+
+@app.post("/connectors/run")
+async def connectors_run(payload: ConnectorsRun):
+    await run_selected(payload.names or None)
+    return {"ok": True}
+
 @app.get("/events/status")
 async def events_status():
     try:
@@ -213,6 +355,32 @@ async def events_status():
     except Exception as e:
         logger.error(f"Status check failed: {e}")
         return {"ok": False, "error": str(e)}
+
+@app.post("/ingest/webhook/{source}")
+def ingest_webhook(source: str, body: dict):
+    try:
+        ts = None
+        for k in ("timestamp","time","date"):
+            v = body.get(k)
+            if v:
+                try:
+                    ts = datetime.datetime.fromisoformat(str(v).replace('Z',''))
+                    break
+                except Exception:
+                    try:
+                        ts = datetime.datetime.utcfromtimestamp(float(v))
+                        break
+                    except Exception:
+                        pass
+        if ts is None:
+            ts = datetime.datetime.utcnow()
+        lat = body.get('latitude') if body.get('latitude') is not None else body.get('lat')
+        lon = body.get('longitude') if body.get('longitude') is not None else body.get('lon')
+        conf = float(body.get('confidence', 0.6))
+        saved = save_event(source, ts, lat, lon, body, conf)
+        return {"saved": saved}
+    except Exception as e:
+        return {"error": str(e)}
 
 @app.get("/")
 def root():
@@ -257,3 +425,18 @@ def insert_sample_data():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+class UserSync(BaseModel):
+    email: str
+    username: str | None = None
+
+@app.post("/users/sync")
+def sync_user(payload: UserSync, db: Session = Depends(get_db)):
+    u = db.query(User).filter(User.email == payload.email).first()
+    if u:
+        return {"id": u.id, "username": u.username, "email": u.email}
+    name = payload.username or payload.email.split("@")[0]
+    u = User(username=name, email=payload.email, hashed_password=get_password_hash("external"))
+    db.add(u)
+    db.commit()
+    db.refresh(u)
+    return {"id": u.id, "username": u.username, "email": u.email}

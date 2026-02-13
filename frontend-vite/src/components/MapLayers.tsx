@@ -3,18 +3,26 @@ import React from 'react';
 const MapLayers = ({ onLayerChange }: { onLayerChange: (layer: string, enabled: boolean) => void }) => {
   return (
     <div className="absolute top-4 right-4 bg-white/10 backdrop-blur-md rounded-lg shadow-lg p-4 space-y-2">
-      <h3 className="text-lg font-bold text-white">Map Layers</h3>
+      <h3 className="text-lg font-bold text-white">Layers</h3>
       <div className="flex items-center justify-between">
-        <label htmlFor="usace" className="text-gray-300">USACE Infrastructure</label>
-        <input type="checkbox" id="usace" name="usace" className="form-checkbox h-5 w-5 text-blue-600 bg-gray-800 border-gray-600 rounded" onChange={(e) => onLayerChange('usace', e.target.checked)} />
+        <label htmlFor="aviation" className="text-gray-300">Aviation</label>
+        <input type="checkbox" id="aviation" className="h-5 w-5 bg-gray-800 border-gray-600 rounded" defaultChecked onChange={(e) => onLayerChange('aviation', e.target.checked)} />
       </div>
       <div className="flex items-center justify-between">
-        <label htmlFor="nga" className="text-gray-300">NGA Tearline</label>
-        <input type="checkbox" id="nga" name="nga" className="form-checkbox h-5 w-5 text-blue-600 bg-gray-800 border-gray-600 rounded" onChange={(e) => onLayerChange('nga', e.target.checked)} />
+        <label htmlFor="maritime" className="text-gray-300">Maritime</label>
+        <input type="checkbox" id="maritime" className="h-5 w-5 bg-gray-800 border-gray-600 rounded" defaultChecked onChange={(e) => onLayerChange('maritime', e.target.checked)} />
       </div>
       <div className="flex items-center justify-between">
-        <label htmlFor="gtd" className="text-gray-300">Global Terrorism Data</label>
-        <input type="checkbox" id="gtd" name="gtd" className="form-checkbox h-5 w-5 text-blue-600 bg-gray-800 border-gray-600 rounded" onChange={(e) => onLayerChange('gtd', e.target.checked)} />
+        <label htmlFor="weather" className="text-gray-300">Weather & Disasters</label>
+        <input type="checkbox" id="weather" className="h-5 w-5 bg-gray-800 border-gray-600 rounded" defaultChecked onChange={(e) => onLayerChange('weather', e.target.checked)} />
+      </div>
+      <div className="flex items-center justify-between">
+        <label htmlFor="government" className="text-gray-300">Government Data</label>
+        <input type="checkbox" id="government" className="h-5 w-5 bg-gray-800 border-gray-600 rounded" defaultChecked onChange={(e) => onLayerChange('government', e.target.checked)} />
+      </div>
+      <div className="flex items-center justify-between">
+        <label htmlFor="news" className="text-gray-300">News/OSINT</label>
+        <input type="checkbox" id="news" className="h-5 w-5 bg-gray-800 border-gray-600 rounded" defaultChecked onChange={(e) => onLayerChange('news', e.target.checked)} />
       </div>
     </div>
   );
