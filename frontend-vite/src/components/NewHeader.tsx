@@ -1,6 +1,7 @@
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '../lib/utils';
 import React from 'react';
+import { SearchInput } from './DesignSystem';
 
 const navItems = [
   { label: 'Sources', path: '/sources' },
@@ -19,6 +20,13 @@ const navItems = [
 
 export function NewHeader() {
   const location = useLocation();
+  const [q, setQ] = React.useState('');
+  const suggestions = React.useMemo(() => ['Dashboard', 'Intelligence', 'Threat Analysis', 'Logistics', 'Map', 'Timeline', 'Security', 'Auth', 'Admin', 'Legal', 'Command'], []);
+  const [theme, setTheme] = React.useState<string>(() => (typeof window !== 'undefined' ? (window.localStorage.getItem('theme') || 'dark') : 'dark'));
+  React.useEffect(() => {
+    const root = document.documentElement; root.classList.remove('dark', 'light'); root.classList.add(theme);
+    try { window.localStorage.setItem('theme', theme); } catch {}
+  }, [theme]);
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-black/30 backdrop-blur-2xl shadow-lg">
       <div className="container mx-auto flex items-center justify-between px-6 py-4">
@@ -45,9 +53,13 @@ export function NewHeader() {
               </Link>
             );
           })}
-          <Link to="/settings" className="ml-2 px-3 py-1.5 rounded-md bg-gradient-to-r from-cyan-500 to-violet-500 text-black font-semibold shadow-lg hover:opacity-90 transition-opacity">
+          <div className="w-[220px]">
+            <SearchInput value={q} onChange={setQ} suggestions={suggestions} />
+          </div>
+          <Link to="/settings" className="px-3 py-1.5 rounded-md bg-gradient-to-r from-cyan-500 to-violet-500 text-black font-semibold shadow-lg hover:opacity-90 transition-opacity">
             Configure
           </Link>
+          <button className="ml-2 px-3 py-1.5 rounded-md bg-white/10 border border-white/20 text-xs text-gray-200 transition-soft hover-bleed" onClick={()=>setTheme(t=>t==='dark'?'light':'dark')}>{theme==='dark'?'Dark':'Light'}</button>
           <div className="ml-4 flex items-center gap-2 px-2 py-1 rounded-md bg-green-600/10 border border-green-500/20">
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
