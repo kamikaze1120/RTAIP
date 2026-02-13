@@ -67,7 +67,7 @@ export default function AuthPage() {
     const { data, error } = await client.auth.mfa.enroll({ factorType: 'totp' })
     if (error) { setMessage(error.message); return }
     setMfaFactorId(data.id)
-    setMfaUri(data.uri)
+    setMfaUri(data.totp.uri)
   }
 
   const verifyMfa = async () => {

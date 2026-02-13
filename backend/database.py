@@ -188,6 +188,77 @@ class OrgSettings(Base):
     oidc_client_id = Column(String)
     saml_entity_id = Column(String)
     saml_metadata_url = Column(String)
+    retention_days_events = Column(Integer, default=180)
+    retention_days_alerts = Column(Integer, default=365)
+    retention_days_prompts = Column(Integer, default=365)
+    retention_days_annotations = Column(Integer, default=365)
+class Workspace(Base):
+    __tablename__ = 'workspaces'
+    id = Column(Integer, primary_key=True)
+    org_id = Column(Integer, ForeignKey('organizations.id'))
+    name = Column(String)
+    description = Column(Text)
+    created_by = Column(Integer, ForeignKey('users.id'))
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class Case(Base):
+    __tablename__ = 'cases'
+    id = Column(Integer, primary_key=True)
+    org_id = Column(Integer, ForeignKey('organizations.id'))
+    workspace_id = Column(Integer, ForeignKey('workspaces.id'), nullable=True)
+    name = Column(String)
+    description = Column(Text)
+    status = Column(String, default='open')
+    created_by = Column(Integer, ForeignKey('users.id'))
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class CaseMembership(Base):
+    __tablename__ = 'case_memberships'
+    id = Column(Integer, primary_key=True)
+    case_id = Column(Integer, ForeignKey('cases.id'))
+    user_id = Column(Integer, ForeignKey('users.id'))
+    role = Column(String, default='viewer')
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class EventTag(Base):
+    __tablename__ = 'event_tags'
+    id = Column(Integer, primary_key=True)
+    event_id = Column(Integer, ForeignKey('data_events.id'))
+    case_id = Column(Integer, ForeignKey('cases.id'), nullable=True)
+    tag = Column(String)
+    created_by = Column(Integer, ForeignKey('users.id'))
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class EventAnnotation(Base):
+    __tablename__ = 'event_annotations'
+    id = Column(Integer, primary_key=True)
+    event_id = Column(Integer, ForeignKey('data_events.id'))
+    case_id = Column(Integer, ForeignKey('cases.id'), nullable=True)
+    author_user_id = Column(Integer, ForeignKey('users.id'))
+    text = Column(Text)
+    latitude = Column(Float)
+    longitude = Column(Float)
+    data = Column(JSON)
+    ts = Column(DateTime, default=datetime.utcnow)
+
+class CaseComment(Base):
+    __tablename__ = 'case_comments'
+    id = Column(Integer, primary_key=True)
+    case_id = Column(Integer, ForeignKey('cases.id'))
+    parent_id = Column(Integer, ForeignKey('case_comments.id'), nullable=True)
+    author_user_id = Column(Integer, ForeignKey('users.id'))
+    text = Column(Text)
+    ts = Column(DateTime, default=datetime.utcnow)
+
+class Report(Base):
+    __tablename__ = 'reports'
+    id = Column(Integer, primary_key=True)
+    case_id = Column(Integer, ForeignKey('cases.id'))
+    title = Column(String)
+    content = Column(Text)
+    created_by = Column(Integer, ForeignKey('users.id'))
+    created_at = Column(DateTime, default=datetime.utcnow)
+    last_export_ts = Column(DateTime)
 
 def _safe_init_schema():
     try:
@@ -240,6 +311,27 @@ def ensure_schema():
                     conn.execute("CREATE INDEX IF NOT EXISTS idx_alert_history_dedup ON alert_history(dedup_key)")
                     conn.execute("CREATE INDEX IF NOT EXISTS idx_invitations_token ON invitations(token)")
                     try:
+                        res2 = conn.execute("SELECT column_name FROM information_schema.columns WHERE table_name='org_settings'").fetchall()
+                        cols2 = [r[0] for r in res2]
+                        if 'retention_days_events' not in cols2:
+                            conn.execute("ALTER TABLE org_settings ADD COLUMN retention_days_events INTEGER DEFAULT 180")
+                        if 'retention_days_alerts' not in cols2:
+                            conn.execute("ALTER TABLE org_settings ADD COLUMN retention_days_alerts INTEGER DEFAULT 365")
+                        if 'retention_days_prompts' not in cols2:
+                            conn.execute("ALTER TABLE org_settings ADD COLUMN retention_days_prompts INTEGER DEFAULT 365")
+                        if 'retention_days_annotations' not in cols2:
+                            conn.execute("ALTER TABLE org_settings ADD COLUMN retention_days_annotations INTEGER DEFAULT 365")
+                    except Exception:
+                        pass
+                    conn.execute("CREATE INDEX IF NOT EXISTS idx_workspaces_org ON workspaces(org_id)")
+                    conn.execute("CREATE INDEX IF NOT EXISTS idx_cases_org ON cases(org_id)")
+                    conn.execute("CREATE INDEX IF NOT EXISTS idx_cases_workspace ON cases(workspace_id)")
+                    conn.execute("CREATE INDEX IF NOT EXISTS idx_case_memberships_case_user ON case_memberships(case_id, user_id)")
+                    conn.execute("CREATE INDEX IF NOT EXISTS idx_event_tags_event ON event_tags(event_id)")
+                    conn.execute("CREATE INDEX IF NOT EXISTS idx_event_annotations_event ON event_annotations(event_id)")
+                    conn.execute("CREATE INDEX IF NOT EXISTS idx_case_comments_case_ts ON case_comments(case_id, ts)")
+                    conn.execute("CREATE INDEX IF NOT EXISTS idx_reports_case_ts ON reports(case_id, created_at)")
+                    try:
                         conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_data_events_fingerprint ON data_events(fingerprint)")
                     except Exception:
                         pass
@@ -273,6 +365,27 @@ def ensure_schema():
                     conn.execute("CREATE INDEX IF NOT EXISTS idx_alert_history_dedup ON alert_history(dedup_key)")
                     conn.execute("CREATE INDEX IF NOT EXISTS idx_invitations_token ON invitations(token)")
                     try:
+                        rows2 = conn.execute("PRAGMA table_info('org_settings')").fetchall()
+                        cols2 = [r[1] for r in rows2]
+                        if 'retention_days_events' not in cols2:
+                            conn.execute("ALTER TABLE org_settings ADD COLUMN retention_days_events INTEGER DEFAULT 180")
+                        if 'retention_days_alerts' not in cols2:
+                            conn.execute("ALTER TABLE org_settings ADD COLUMN retention_days_alerts INTEGER DEFAULT 365")
+                        if 'retention_days_prompts' not in cols2:
+                            conn.execute("ALTER TABLE org_settings ADD COLUMN retention_days_prompts INTEGER DEFAULT 365")
+                        if 'retention_days_annotations' not in cols2:
+                            conn.execute("ALTER TABLE org_settings ADD COLUMN retention_days_annotations INTEGER DEFAULT 365")
+                    except Exception:
+                        pass
+                    conn.execute("CREATE INDEX IF NOT EXISTS idx_workspaces_org ON workspaces(org_id)")
+                    conn.execute("CREATE INDEX IF NOT EXISTS idx_cases_org ON cases(org_id)")
+                    conn.execute("CREATE INDEX IF NOT EXISTS idx_cases_workspace ON cases(workspace_id)")
+                    conn.execute("CREATE INDEX IF NOT EXISTS idx_case_memberships_case_user ON case_memberships(case_id, user_id)")
+                    conn.execute("CREATE INDEX IF NOT EXISTS idx_event_tags_event ON event_tags(event_id)")
+                    conn.execute("CREATE INDEX IF NOT EXISTS idx_event_annotations_event ON event_annotations(event_id)")
+                    conn.execute("CREATE INDEX IF NOT EXISTS idx_case_comments_case_ts ON case_comments(case_id, ts)")
+                    conn.execute("CREATE INDEX IF NOT EXISTS idx_reports_case_ts ON reports(case_id, created_at)")
+                    try:
                         conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_data_events_fingerprint ON data_events(fingerprint)")
                     except Exception:
                         pass
@@ -289,6 +402,27 @@ def ensure_schema():
                     conn.execute("CREATE INDEX IF NOT EXISTS idx_memberships_org_user ON org_memberships(org_id, user_id)")
                     conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_logs(ts)")
                     conn.execute("CREATE INDEX IF NOT EXISTS idx_invitations_token ON invitations(token)")
+                    try:
+                        res2 = conn.execute("SELECT column_name FROM information_schema.columns WHERE table_name='org_settings'").fetchall()
+                        cols2 = [r[0] for r in res2]
+                        if 'retention_days_events' not in cols2:
+                            conn.execute("ALTER TABLE org_settings ADD COLUMN retention_days_events INTEGER DEFAULT 180")
+                        if 'retention_days_alerts' not in cols2:
+                            conn.execute("ALTER TABLE org_settings ADD COLUMN retention_days_alerts INTEGER DEFAULT 365")
+                        if 'retention_days_prompts' not in cols2:
+                            conn.execute("ALTER TABLE org_settings ADD COLUMN retention_days_prompts INTEGER DEFAULT 365")
+                        if 'retention_days_annotations' not in cols2:
+                            conn.execute("ALTER TABLE org_settings ADD COLUMN retention_days_annotations INTEGER DEFAULT 365")
+                    except Exception:
+                        pass
+                    conn.execute("CREATE INDEX IF NOT EXISTS idx_workspaces_org ON workspaces(org_id)")
+                    conn.execute("CREATE INDEX IF NOT EXISTS idx_cases_org ON cases(org_id)")
+                    conn.execute("CREATE INDEX IF NOT EXISTS idx_cases_workspace ON cases(workspace_id)")
+                    conn.execute("CREATE INDEX IF NOT EXISTS idx_case_memberships_case_user ON case_memberships(case_id, user_id)")
+                    conn.execute("CREATE INDEX IF NOT EXISTS idx_event_tags_event ON event_tags(event_id)")
+                    conn.execute("CREATE INDEX IF NOT EXISTS idx_event_annotations_event ON event_annotations(event_id)")
+                    conn.execute("CREATE INDEX IF NOT EXISTS idx_case_comments_case_ts ON case_comments(case_id, ts)")
+                    conn.execute("CREATE INDEX IF NOT EXISTS idx_reports_case_ts ON reports(case_id, created_at)")
                     try:
                         conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_data_events_fingerprint ON data_events(fingerprint)")
                     except Exception:

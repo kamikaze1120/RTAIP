@@ -11,6 +11,10 @@ const navItems = [
   { label: 'Map', path: '/map' },
   { label: 'Timeline', path: '/timeline' },
   { label: 'Security', path: '/security' },
+  { label: 'Auth', path: '/auth' },
+  { label: 'Admin', path: '/admin' },
+  { label: 'Legal', path: '/legal' },
+  { label: 'Command', path: '/command' },
 ];
 
 export function NewHeader() {
@@ -21,6 +25,7 @@ export function NewHeader() {
         <Link to="/" className="text-2xl font-extrabold text-white tracking-tight font-orbitron">
           <span className="inline-block px-2 py-1 rounded-md bg-white/10 box-glow">RTAIP</span>
         </Link>
+        <div className="ml-3 text-xs text-gray-300">Operated by Nexum Cloud</div>
         <nav className="flex items-center gap-6">
           {navItems.map((item) => {
             const isActive = location.pathname === item.path;

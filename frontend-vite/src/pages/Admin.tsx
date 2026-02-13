@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { NewHeader } from '../components/NewHeader'
 import api from '../services/api'
-import { getCurrentRole } from '../services/data'
+import { getCurrentRole, listWorkspaces, createWorkspace, listCases, createCase, listCaseMembers, addCaseMember, listEventTags, addEventTag, listEventAnnotations, addEventAnnotation, listCaseReports, createReport, exportReport, listCaseComments, addCaseComment } from '../services/data'
 
 interface Org { id: number; name: string }
 interface Member { id: number; role: string; user_id: number; username?: string; email?: string }
@@ -31,6 +31,29 @@ export default function AdminPage() {
   const [alerts, setAlerts] = useState<AlertHistoryOut[]>([])
   const [ruleForm, setRuleForm] = useState<{ name: string; source: string; severity_threshold: number; min_confidence: number; keywords: string; org_id?: number; email_to?: string; sms_to?: string; webhook_url?: string; priority: number; enabled: boolean; geofence_center_lat?: number; geofence_center_lon?: number; geofence_radius_m?: number; min_lat?: number; min_lon?: number; max_lat?: number; max_lon?: number; dedup_window_s: number }>({ name: '', source: '', severity_threshold: 5, min_confidence: 0.5, keywords: '', org_id: undefined, email_to: '', sms_to: '', webhook_url: '', priority: 3, enabled: true, geofence_center_lat: undefined, geofence_center_lon: undefined, geofence_radius_m: undefined, min_lat: undefined, min_lon: undefined, max_lat: undefined, dedup_window_s: 600 })
   const [roleOk, setRoleOk] = useState<boolean>(true)
+  const [workspaces, setWorkspaces] = useState<Array<{ id: number; org_id: number; name: string }>>([])
+  const [newWorkspaceName, setNewWorkspaceName] = useState('')
+  const [newWorkspaceDesc, setNewWorkspaceDesc] = useState('')
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<number | null>(null)
+  const [cases, setCases] = useState<Array<{ id: number; org_id: number; name: string; status: string; workspace_id?: number }>>([])
+  const [newCaseName, setNewCaseName] = useState('')
+  const [newCaseDesc, setNewCaseDesc] = useState('')
+  const [selectedCaseId, setSelectedCaseId] = useState<number | null>(null)
+  const [caseMembersList, setCaseMembersList] = useState<Array<{ id: number; user_id: number; role: string; username?: string; email?: string }>>([])
+  const [newMemberUserId, setNewMemberUserId] = useState('')
+  const [newMemberRole, setNewMemberRole] = useState('viewer')
+  const [tagEventId, setTagEventId] = useState('')
+  const [tagText, setTagText] = useState('')
+  const [eventTags, setEventTags] = useState<Array<{ id: number; tag: string; created_at: string }>>([])
+  const [annotationEventId, setAnnotationEventId] = useState('')
+  const [annotationText, setAnnotationText] = useState('')
+  const [eventAnnotations, setEventAnnotations] = useState<Array<{ id: number; text: string; ts: string }>>([])
+  const [caseComments, setCaseComments] = useState<Array<{ id: number; text: string; ts: string }>>([])
+  const [newCommentText, setNewCommentText] = useState('')
+  const [reportTitle, setReportTitle] = useState('')
+  const [reportContent, setReportContent] = useState('')
+  const [reports, setReports] = useState<Array<{ id: number; title: string; created_at: string }>>([])
+  const [exportInfo, setExportInfo] = useState<{ reportId?: number; format?: string; pdfBase64?: string; html?: string } | null>(null)
 
   const loadOrgs = async () => {
     const r = await api.get('/orgs')
@@ -118,8 +141,81 @@ export default function AdminPage() {
     const oid = orgStr ? Number(orgStr) : null
     if (oid) {
       getCurrentRole(oid).then(r => setRoleOk(r === 'admin'))
+      listWorkspaces(oid).then(ws => setWorkspaces(ws))
+      listCases(oid, selectedWorkspaceId || undefined).then(cs => setCases(cs))
     }
   }, [])
+
+  useEffect(() => {
+    const orgStr = typeof window !== 'undefined' ? window.localStorage.getItem('currentOrgId') : null
+    const oid = orgStr ? Number(orgStr) : null
+    if (oid) listCases(oid, selectedWorkspaceId || undefined).then(cs => setCases(cs))
+  }, [selectedWorkspaceId])
+
+  useEffect(() => {
+    if (selectedCaseId) {
+      listCaseMembers(selectedCaseId).then(ms => setCaseMembersList(ms))
+      listCaseReports(selectedCaseId).then(rs => setReports(rs.map(r => ({ id: r.id, title: r.title, created_at: r.created_at }))))
+      listCaseComments(selectedCaseId).then(cs => setCaseComments(cs.map(c => ({ id: c.id, text: c.text, ts: c.ts }))))
+    } else {
+      setCaseMembersList([]); setReports([]); setCaseComments([])
+    }
+  }, [selectedCaseId])
+
+  const createWorkspaceUi = async () => {
+    const orgStr = typeof window !== 'undefined' ? window.localStorage.getItem('currentOrgId') : null
+    const oid = orgStr ? Number(orgStr) : 0
+    if (!oid || !newWorkspaceName.trim()) return
+    const id = await createWorkspace(oid, newWorkspaceName.trim(), newWorkspaceDesc.trim() || undefined)
+    if (id) { setNewWorkspaceName(''); setNewWorkspaceDesc(''); listWorkspaces(oid).then(ws => setWorkspaces(ws)) }
+  }
+  const createCaseUi = async () => {
+    const orgStr = typeof window !== 'undefined' ? window.localStorage.getItem('currentOrgId') : null
+    const oid = orgStr ? Number(orgStr) : 0
+    if (!oid || !newCaseName.trim()) return
+    const id = await createCase(oid, newCaseName.trim(), newCaseDesc.trim() || undefined, selectedWorkspaceId || undefined)
+    if (id) { setNewCaseName(''); setNewCaseDesc(''); listCases(oid, selectedWorkspaceId || undefined).then(cs => setCases(cs)) }
+  }
+  const addCaseMemberUi = async () => {
+    if (!selectedCaseId) return
+    const uid = Number(newMemberUserId || '0'); if (!uid) return
+    const ok = await addCaseMember(selectedCaseId, uid, newMemberRole || 'viewer')
+    if (ok) { setNewMemberUserId(''); listCaseMembers(selectedCaseId).then(ms => setCaseMembersList(ms)) }
+  }
+  const addTagUi = async () => {
+    const eid = Number(tagEventId || '0'); if (!eid || !tagText.trim()) return
+    const id = await addEventTag(eid, tagText.trim(), selectedCaseId || undefined)
+    if (id) { setTagText(''); listEventTags(eid).then(ts => setEventTags(ts.map(t => ({ id: t.id, tag: t.tag, created_at: t.created_at })))) }
+  }
+  const refreshTags = async () => {
+    const eid = Number(tagEventId || '0'); if (!eid) return
+    const ts = await listEventTags(eid)
+    setEventTags(ts.map(t => ({ id: t.id, tag: t.tag, created_at: t.created_at })))
+  }
+  const addAnnotationUi = async () => {
+    const eid = Number(annotationEventId || '0'); if (!eid || !annotationText.trim()) return
+    const id = await addEventAnnotation(eid, annotationText.trim(), { caseId: selectedCaseId || undefined })
+    if (id) { setAnnotationText(''); listEventAnnotations(eid).then(as => setEventAnnotations(as.map(a => ({ id: a.id, text: a.text, ts: a.ts })))) }
+  }
+  const refreshAnnotations = async () => {
+    const eid = Number(annotationEventId || '0'); if (!eid) return
+    const as = await listEventAnnotations(eid)
+    setEventAnnotations(as.map(a => ({ id: a.id, text: a.text, ts: a.ts })))
+  }
+  const addCommentUi = async () => {
+    if (!selectedCaseId || !newCommentText.trim()) return
+    const id = await addCaseComment(selectedCaseId, newCommentText.trim(), null)
+    if (id) { setNewCommentText(''); listCaseComments(selectedCaseId).then(cs => setCaseComments(cs.map(c => ({ id: c.id, text: c.text, ts: c.ts })))) }
+  }
+  const createReportUi = async () => {
+    if (!selectedCaseId || !reportTitle.trim()) return
+    const id = await createReport(selectedCaseId, reportTitle.trim(), reportContent)
+    if (id) { setReportTitle(''); setReportContent(''); listCaseReports(selectedCaseId).then(rs => setReports(rs.map(r => ({ id: r.id, title: r.title, created_at: r.created_at })))) }
+  }
+  const exportReportUi = async (rid: number) => {
+    const res = await exportReport(rid)
+    if (res) setExportInfo({ reportId: rid, ...res })
+  }
 
   return (
     <div className="flow-gradient text-white min-h-screen">
@@ -239,6 +335,113 @@ export default function AdminPage() {
                 </div>
               ))}
               {alerts.length===0 && (<div className="text-xs text-gray-400">No alerts</div>)}
+            </div>
+          </div>
+        </div>
+        <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="bg-white/10 p-4 rounded border border-white/10">
+            <div className="font-semibold">Workspaces & Cases</div>
+            <div className="mt-2 grid md:grid-cols-2 gap-2">
+              <input className="px-2 py-1 bg-black/20 border border-white/10 rounded" placeholder="Workspace name" value={newWorkspaceName} onChange={e=>setNewWorkspaceName(e.target.value)} />
+              <input className="px-2 py-1 bg-black/20 border border-white/10 rounded" placeholder="Workspace description" value={newWorkspaceDesc} onChange={e=>setNewWorkspaceDesc(e.target.value)} />
+            </div>
+            <div className="mt-2 flex gap-2">
+              <button className="px-3 py-2 bg-white/20 rounded" onClick={createWorkspaceUi}>Create workspace</button>
+              <button className="px-3 py-2 bg-white/20 rounded" onClick={()=>{ const orgStr = typeof window !== 'undefined' ? window.localStorage.getItem('currentOrgId') : null; const oid = orgStr ? Number(orgStr) : null; if (oid) listWorkspaces(oid).then(ws=>setWorkspaces(ws)) }}>Refresh</button>
+            </div>
+            <div className="mt-3 text-xs">
+              {workspaces.length===0 && (<div className="text-gray-400">No workspaces</div>)}
+              {workspaces.map(w => (
+                <button key={w.id} className={`block w-full text-left px-3 py-2 rounded ${selectedWorkspaceId===w.id?'bg-white/20':'bg-white/10'}`} onClick={()=>{ setSelectedWorkspaceId(w.id) }}>{w.name}</button>
+              ))}
+            </div>
+            <div className="mt-4 grid md:grid-cols-2 gap-2">
+              <input className="px-2 py-1 bg-black/20 border border-white/10 rounded" placeholder="Case name" value={newCaseName} onChange={e=>setNewCaseName(e.target.value)} />
+              <input className="px-2 py-1 bg-black/20 border border-white/10 rounded" placeholder="Case description" value={newCaseDesc} onChange={e=>setNewCaseDesc(e.target.value)} />
+            </div>
+            <div className="mt-2 flex gap-2">
+              <button className="px-3 py-2 bg-white/20 rounded" onClick={createCaseUi}>Create case</button>
+              <button className="px-3 py-2 bg-white/20 rounded" onClick={()=>{ const orgStr = typeof window !== 'undefined' ? window.localStorage.getItem('currentOrgId') : null; const oid = orgStr ? Number(orgStr) : null; if (oid) listCases(oid, selectedWorkspaceId || undefined).then(cs=>setCases(cs)) }}>Refresh</button>
+            </div>
+            <div className="mt-3 text-xs">
+              {cases.length===0 && (<div className="text-gray-400">No cases</div>)}
+              {cases.map(c => (
+                <button key={c.id} className={`block w-full text-left px-3 py-2 rounded ${selectedCaseId===c.id?'bg-white/20':'bg-white/10'}`} onClick={()=>{ setSelectedCaseId(c.id) }}>{c.name} • {c.status}</button>
+              ))}
+            </div>
+          </div>
+          <div className="bg-white/10 p-4 rounded border border-white/10">
+            <div className="font-semibold">Case Members</div>
+            <div className="mt-2 grid md:grid-cols-3 gap-2">
+              <input className="px-2 py-1 bg-black/20 border border-white/10 rounded" placeholder="User ID" value={newMemberUserId} onChange={e=>setNewMemberUserId(e.target.value)} />
+              <select className="px-2 py-1 bg-black/20 border border-white/10 rounded" value={newMemberRole} onChange={e=>setNewMemberRole(e.target.value)}>
+                <option value="owner">owner</option>
+                <option value="editor">editor</option>
+                <option value="viewer">viewer</option>
+              </select>
+              <button className="px-3 py-2 bg-white/20 rounded" onClick={addCaseMemberUi}>Add member</button>
+            </div>
+            <div className="mt-3 text-xs">
+              {caseMembersList.length===0 && (<div className="text-gray-400">No members</div>)}
+              {caseMembersList.map(m => (<div key={m.id} className="mt-1">{m.username||m.email||m.user_id} — {m.role}</div>))}
+            </div>
+          </div>
+        </div>
+        <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="bg-white/10 p-4 rounded border border-white/10">
+            <div className="font-semibold">Tags & Annotations</div>
+            <div className="mt-2 grid md:grid-cols-3 gap-2">
+              <input className="px-2 py-1 bg-black/20 border border-white/10 rounded" placeholder="Event ID" value={tagEventId} onChange={e=>setTagEventId(e.target.value)} />
+              <input className="px-2 py-1 bg-black/20 border border-white/10 rounded" placeholder="Tag" value={tagText} onChange={e=>setTagText(e.target.value)} />
+              <button className="px-3 py-2 bg-white/20 rounded" onClick={addTagUi}>Add tag</button>
+            </div>
+            <div className="mt-2 flex gap-2"><button className="px-3 py-2 bg-white/20 rounded" onClick={refreshTags}>Refresh tags</button></div>
+            <div className="mt-3 text-xs max-h-40 overflow-y-auto">
+              {eventTags.map(t => (<div key={t.id} className="mt-1">{t.created_at} — {t.tag}</div>))}
+            </div>
+            <div className="mt-4 grid md:grid-cols-3 gap-2">
+              <input className="px-2 py-1 bg-black/20 border border-white/10 rounded" placeholder="Event ID" value={annotationEventId} onChange={e=>setAnnotationEventId(e.target.value)} />
+              <input className="px-2 py-1 bg-black/20 border border-white/10 rounded" placeholder="Annotation" value={annotationText} onChange={e=>setAnnotationText(e.target.value)} />
+              <button className="px-3 py-2 bg-white/20 rounded" onClick={addAnnotationUi}>Add annotation</button>
+            </div>
+            <div className="mt-2 flex gap-2"><button className="px-3 py-2 bg-white/20 rounded" onClick={refreshAnnotations}>Refresh annotations</button></div>
+            <div className="mt-3 text-xs max-h-40 overflow-y-auto">
+              {eventAnnotations.map(a => (<div key={a.id} className="mt-1">{a.ts} — {a.text}</div>))}
+            </div>
+          </div>
+          <div className="bg-white/10 p-4 rounded border border-white/10">
+            <div className="font-semibold">Case Comments & Reports</div>
+            <div className="mt-2 grid md:grid-cols-3 gap-2">
+              <input className="px-2 py-1 bg-black/20 border border-white/10 rounded" placeholder="Comment" value={newCommentText} onChange={e=>setNewCommentText(e.target.value)} />
+              <button className="px-3 py-2 bg-white/20 rounded" onClick={addCommentUi}>Add comment</button>
+              <button className="px-3 py-2 bg-white/20 rounded" onClick={()=>{ if (selectedCaseId) listCaseComments(selectedCaseId).then(cs=>setCaseComments(cs.map(c => ({ id: c.id, text: c.text, ts: c.ts })))) }}>Refresh comments</button>
+            </div>
+            <div className="mt-3 text-xs max-h-40 overflow-y-auto">
+              {caseComments.map(c => (<div key={c.id} className="mt-1">{c.ts} — {c.text}</div>))}
+            </div>
+            <div className="mt-4 grid md:grid-cols-2 gap-2">
+              <input className="px-2 py-1 bg-black/20 border border-white/10 rounded" placeholder="Report title" value={reportTitle} onChange={e=>setReportTitle(e.target.value)} />
+              <textarea className="px-2 py-1 bg-black/20 border border-white/10 rounded" placeholder="Report content" value={reportContent} onChange={e=>setReportContent(e.target.value)} />
+            </div>
+            <div className="mt-2 flex gap-2">
+              <button className="px-3 py-2 bg-white/20 rounded" onClick={createReportUi}>Create report</button>
+              <button className="px-3 py-2 bg-white/20 rounded" onClick={()=>{ if (selectedCaseId) listCaseReports(selectedCaseId).then(rs=>setReports(rs.map(r => ({ id: r.id, title: r.title, created_at: r.created_at })))) }}>Refresh reports</button>
+            </div>
+            <div className="mt-3 text-xs">
+              {reports.length===0 && (<div className="text-gray-400">No reports</div>)}
+              {reports.map(r => (
+                <div key={r.id} className="mt-2 flex items-center justify-between">
+                  <div>#{r.id} • {r.created_at} • {r.title}</div>
+                  <div className="flex gap-2"><button className="px-2 py-1 bg-white/20 rounded" onClick={()=>exportReportUi(r.id)}>Export</button></div>
+                </div>
+              ))}
+              {exportInfo && (
+                <div className="mt-3">
+                  <div className="text-xs">Exported: {exportInfo.format}</div>
+                  {exportInfo.pdfBase64 && (<a className="text-xs underline" href={`data:application/pdf;base64,${exportInfo.pdfBase64}`} download={`report-${exportInfo.reportId||''}.pdf`}>Download PDF</a>)}
+                  {exportInfo.html && (<div className="mt-2 bg-black/20 p-2 rounded" dangerouslySetInnerHTML={{ __html: exportInfo.html }} />)}
+                </div>
+              )}
             </div>
           </div>
         </div>

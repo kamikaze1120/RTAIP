@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { getBackendBase, fetchBackendEvents, type RtaEvent, getSupabaseConfig, fetchSupabaseEvents, eventSeverity } from '../services/data';
+import { getBackendBase, fetchBackendEvents, type RtaEvent, getSupabaseConfig, fetchSupabaseEvents, eventSeverity, listEventTags, addEventTag, listEventAnnotations, addEventAnnotation } from '../services/data';
 import { getSupabaseClient } from '../utils/supabase';
 import Globe from '../components/Globe';
 import EventFeed from '../components/EventFeed';
@@ -62,6 +62,10 @@ export default function MapPage() {
   const [losHeights, setLosHeights] = useState<{ a: number; b: number }>({ a: 10, b: 10 });
   const [geofences, setGeofences] = useState<Array<{ id: string; name: string; lat: number; lon: number; radiusM: number }>>([]);
   const [alerts, setAlerts] = useState<Array<{ fenceId: string; eventId: string; when: string }>>([]);
+  const [tagText, setTagText] = useState('');
+  const [annotationText, setAnnotationText] = useState('');
+  const [eventTags, setEventTags] = useState<Array<{ id: number; tag: string; created_at: string }>>([]);
+  const [eventAnnotations, setEventAnnotations] = useState<Array<{ id: number; text: string; ts: string }>>([]);
   const streetMapRef = useRef<HTMLDivElement | null>(null);
   const olRef = useRef<Map | null>(null);
   const heatSourceRef = useRef<VectorSource | null>(null);
@@ -126,6 +130,13 @@ export default function MapPage() {
     })();
     return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => {
+    const eid = Number(mapFocus?.id || '0');
+    if (!eid || !isFinite(eid)) { setEventTags([]); setEventAnnotations([]); return; }
+    listEventTags(eid).then(ts => setEventTags(ts.map(t => ({ id: t.id, tag: t.tag, created_at: t.created_at }))));
+    listEventAnnotations(eid).then(as => setEventAnnotations(as.map(a => ({ id: a.id, text: a.text, ts: a.ts }))));
+  }, [mapFocus?.id]);
 
   useEffect(() => {
     if (showStreetMap && mapFocus && mapFocus.latitude != null && mapFocus.longitude != null) {
@@ -331,6 +342,33 @@ export default function MapPage() {
               <div className="max-h-40 overflow-y-auto mt-2 text-xs">
                 {alerts.slice(0,20).map((a,i)=>(<div key={i} className="mt-1">Fence {a.fenceId} match • Event {a.eventId} • {new Date(a.when).toLocaleString()}</div>))}
               </div>
+            </div>
+            <div className="bg-white/10 backdrop-blur-md rounded-lg shadow-lg p-4 mt-4">
+              <div className="text-lg font-semibold mb-2">Tags & Annotations</div>
+              {!mapFocus && (<div className="text-xs text-gray-400">Select an event to manage tags and annotations.</div>)}
+              {mapFocus && (
+                <>
+                  <div className="text-xs text-gray-300">Event ID: {mapFocus.id}</div>
+                  <div className="mt-2 grid md:grid-cols-3 gap-2">
+                    <input className="px-2 py-1 bg-black/20 border border-white/10 rounded" placeholder="Tag" value={tagText} onChange={e=>setTagText(e.target.value)} />
+                    <button className="px-3 py-2 bg-white/20 rounded" onClick={async ()=>{ const eid = Number(mapFocus.id || '0'); if (!eid || !isFinite(eid) || !tagText.trim()) return; const id = await addEventTag(eid, tagText.trim()); if (id) { setTagText(''); const ts = await listEventTags(eid); setEventTags(ts.map(t => ({ id: t.id, tag: t.tag, created_at: t.created_at }))); } }}>Add tag</button>
+                    <button className="px-3 py-2 bg-white/20 rounded" onClick={async ()=>{ const eid = Number(mapFocus.id || '0'); if (!eid || !isFinite(eid)) return; const ts = await listEventTags(eid); setEventTags(ts.map(t => ({ id: t.id, tag: t.tag, created_at: t.created_at }))); }}>Refresh tags</button>
+                  </div>
+                  <div className="mt-2 text-xs max-h-28 overflow-y-auto">
+                    {eventTags.map(t => (<div key={t.id} className="mt-1">{t.created_at} — {t.tag}</div>))}
+                    {eventTags.length===0 && (<div className="text-gray-400">No tags</div>)}
+                  </div>
+                  <div className="mt-3 grid md:grid-cols-3 gap-2">
+                    <input className="px-2 py-1 bg-black/20 border border-white/10 rounded" placeholder="Annotation" value={annotationText} onChange={e=>setAnnotationText(e.target.value)} />
+                    <button className="px-3 py-2 bg-white/20 rounded" onClick={async ()=>{ const eid = Number(mapFocus.id || '0'); if (!eid || !isFinite(eid) || !annotationText.trim()) return; const id = await addEventAnnotation(eid, annotationText.trim()); if (id) { setAnnotationText(''); const as = await listEventAnnotations(eid); setEventAnnotations(as.map(a => ({ id: a.id, text: a.text, ts: a.ts }))); } }}>Add annotation</button>
+                    <button className="px-3 py-2 bg-white/20 rounded" onClick={async ()=>{ const eid = Number(mapFocus.id || '0'); if (!eid || !isFinite(eid)) return; const as = await listEventAnnotations(eid); setEventAnnotations(as.map(a => ({ id: a.id, text: a.text, ts: a.ts }))); }}>Refresh annotations</button>
+                  </div>
+                  <div className="mt-2 text-xs max-h-28 overflow-y-auto">
+                    {eventAnnotations.map(a => (<div key={a.id} className="mt-1">{a.ts} — {a.text}</div>))}
+                    {eventAnnotations.length===0 && (<div className="text-gray-400">No annotations</div>)}
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
