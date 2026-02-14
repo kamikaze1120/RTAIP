@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from database import Session as DBSession, User, DataEvent, ensure_schema, Organization, OrgMembership, Invitation, AuditLog, ConsentLog, IpAllowlist, OrgSettings, PromptLog, AlertRule, AlertHistory, Workspace, Case, CaseMembership, EventTag, EventAnnotation, CaseComment, Report, PerfMetric
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from auth import create_access_token, get_password_hash, verify_password
 from datetime import timedelta
 import datetime
