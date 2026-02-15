@@ -112,7 +112,13 @@ def register_user(user: UserCreate, db: Session = Depends(get_db)):
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
-    return {"message": "User registered successfully"}
+    try:
+        al = AuditLog(user_id=db_user.id, event="user_registered", details={"email": user.email})
+        db.add(al)
+        db.commit()
+    except Exception:
+        pass
+    return {"message": "User registered successfully", "id": db_user.id}
 
 @app.post("/auth/login")
 def login_for_access_token(user: UserLogin, db: Session = Depends(get_db)):

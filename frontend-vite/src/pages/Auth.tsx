@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
-import { NewHeader } from '../components/NewHeader'
 import api from '../services/api'
 import { useNavigate } from 'react-router-dom'
+import { getBackendBase } from '../services/data'
 
 export default function AuthPage() {
   const navigate = useNavigate()
@@ -39,17 +39,26 @@ export default function AuthPage() {
     return () => { clearInterval(id) }
   }, [])
 
+  const computeBase = (): string => {
+    const b = getBackendBase();
+    if (b) return b;
+    try { if (typeof window !== 'undefined' && /vercel\.app$/.test(window.location.hostname)) return 'https://rtaip-backend.onrender.com'; } catch {}
+    return 'http://localhost:8000';
+  }
+
   const signUp = async () => {
     if (!email || !password || !confirm) { setMessage('Fill all fields'); return }
     if (password !== confirm) { setMessage('Passwords do not match'); return }
     if (!acceptPrivacy || !acceptTerms) { setMessage('Please accept Privacy and Terms'); return }
     setBusy(true)
     try {
-      const r = await api.post('/users/register', { username: email, email, password })
-      const uid = Number(r.data?.id || 0)
+      const base = computeBase();
+      const r = await fetch(`${base.replace(/\/$/, '')}/users/register`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: email, email, password }) });
+      const jd = await r.json();
+      const uid = Number(jd?.id || 0)
       if (uid) { try { window.localStorage.setItem('backendUserId', String(uid)) } catch {} }
       const ipj = await (await fetch('https://api.ipify.org?format=json')).json()
-      await api.post('/consent', { user_id: uid, accepted_privacy: true, accepted_terms: true, version: 'v1', ip: String(ipj?.ip || '') })
+      await fetch(`${base.replace(/\/$/, '')}/consent`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_id: uid, accepted_privacy: true, accepted_terms: true, version: 'v1', ip: String(ipj?.ip || '') }) })
       setMessage('Account created. You can sign in now.')
       setMode('login')
     } catch (e: unknown) {
@@ -63,8 +72,10 @@ export default function AuthPage() {
     if (!email || !password) { setMessage('Enter email and password'); return }
     setBusy(true)
     try {
-      const r = await api.post('/auth/login', { username: email, password })
-      const token = r.data?.access_token
+      const base = computeBase();
+      const r = await fetch(`${base.replace(/\/$/, '')}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: email, password }) });
+      const jd = await r.json();
+      const token = jd?.access_token
       if (token) {
         try { window.localStorage.setItem('access_token', token) } catch {}
         setMessage('Signed in')
@@ -103,7 +114,6 @@ export default function AuthPage() {
 
   return (
     <div className="flow-gradient text-white min-h-screen">
-      <NewHeader />
       <div className="p-4 lg:p-6">
         <h1 className="text-3xl font-bold">Access</h1>
         <div className="mt-4 max-w-md mx-auto bg-white/10 p-4 rounded-lg border border-white/10">
