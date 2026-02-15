@@ -1,4 +1,4 @@
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { cn } from '../lib/utils';
 import React from 'react';
 import { SearchInput } from './DesignSystem';
@@ -20,6 +20,7 @@ const navItems = [
 
 export function NewHeader() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [q, setQ] = React.useState('');
   const suggestions = React.useMemo(() => ['Dashboard', 'Intelligence', 'Threat Analysis', 'Logistics', 'Map', 'Timeline', 'Security', 'Auth', 'Admin', 'Legal', 'Command'], []);
   const [theme, setTheme] = React.useState<string>(() => (typeof window !== 'undefined' ? (window.localStorage.getItem('theme') || 'dark') : 'dark'));
@@ -27,6 +28,8 @@ export function NewHeader() {
     const root = document.documentElement; root.classList.remove('dark', 'light'); root.classList.add(theme);
     try { window.localStorage.setItem('theme', theme); } catch {}
   }, [theme]);
+  const authed = React.useMemo(() => { try { return !!window.localStorage.getItem('access_token'); } catch { return false; } }, [location.pathname]);
+  const logout = () => { try { window.localStorage.removeItem('access_token'); window.localStorage.removeItem('backendUserId'); } catch {}; navigate('/auth'); };
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-black/30 backdrop-blur-2xl shadow-lg">
       <div className="container mx-auto flex items-center justify-between px-6 py-4">
@@ -60,6 +63,7 @@ export function NewHeader() {
             Configure
           </Link>
           <button className="ml-2 px-3 py-1.5 rounded-md bg-white/10 border border-white/20 text-xs text-gray-200 transition-soft hover-bleed" onClick={()=>setTheme(t=>t==='dark'?'light':'dark')}>{theme==='dark'?'Dark':'Light'}</button>
+          {authed && (<button className="ml-2 px-3 py-1.5 rounded-md bg-white/10 border border-white/20 text-xs text-gray-200 transition-soft hover-bleed" onClick={logout}>Logout</button>)}
           <div className="ml-4 flex items-center gap-2 px-2 py-1 rounded-md bg-green-600/10 border border-green-500/20">
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
