@@ -24,6 +24,7 @@ export default function App() {
   const navigate = useNavigate();
   const location = useLocation();
   const [booting, setBooting] = useState(true);
+  const authed = !!(typeof window !== 'undefined' && window.localStorage.getItem('access_token'));
   useEffect(() => {
     // Persist env defaults to localStorage so backend stays connected without manual input
     try {
@@ -90,21 +91,19 @@ export default function App() {
   useEffect(() => {
     const id = setTimeout(() => {
       setBooting(false);
-      const consentTs = window.localStorage.getItem('consentAcceptedTs');
-      if (!consentTs) {
-        const path = location.pathname || '/';
-        const allow = path.startsWith('/legal');
-        if (!allow) { navigate('/auth'); return; }
-      }
-      if (location.pathname === '/') { navigate('/sources'); }
+      const token = window.localStorage.getItem('access_token');
+      const path = location.pathname || '/';
+      const allowUnauthed = path.startsWith('/auth') || path.startsWith('/legal');
+      if (!token && !allowUnauthed) { navigate('/auth'); return; }
+      if (token && location.pathname === '/') { navigate('/sources'); }
     }, 2000);
     return () => clearTimeout(id);
   }, [navigate, location.pathname]);
   return (
     <div className="relative min-h-screen text-white bg-animated">
       <div className="grid-overlay"></div>
-      {!booting && <NewHeader />}
-      {!booting && <MobileNav />} {/* Add mobile navigation */}
+      {!booting && authed && <NewHeader />}
+      {!booting && authed && <MobileNav />} {/* Add mobile navigation */}
       {!booting && !window.localStorage.getItem('cookieConsentTs') && (
         <div className="fixed bottom-0 left-0 right-0 z-50 bg-black/70 text-white">
           <div className="container mx-auto px-6 py-3 flex items-center justify-between">
