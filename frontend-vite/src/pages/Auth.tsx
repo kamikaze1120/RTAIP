@@ -2,10 +2,14 @@ import React, { useEffect, useState } from 'react'
 import api from '../services/api'
 import { useNavigate } from 'react-router-dom'
 import { getBackendBase } from '../services/data'
+import { getSupabaseClient } from '../utils/supabase'
+import type { SupabaseClient } from '@supabase/supabase-js'
 
 export default function AuthPage() {
   const navigate = useNavigate()
   const [mode, setMode] = useState<'login'|'register'>('login')
+  const [name, setName] = useState('')
+  const [phone, setPhone] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
@@ -16,6 +20,7 @@ export default function AuthPage() {
   const [busy, setBusy] = useState(false)
   const [policyMinutes, setPolicyMinutes] = useState(30)
   const [showAdvanced, setShowAdvanced] = useState(false)
+  const [sbClient, setSbClient] = useState<SupabaseClient | null>(null)
 
   const extractErrorMessage = (e: unknown, fallback: string) => {
     if (typeof e === 'object' && e) {
@@ -30,11 +35,11 @@ export default function AuthPage() {
     return fallback
   }
 
-  type RegisterResponse = { id?: number; message?: string; error?: string }
-  type LoginResponse = { access_token?: string; token_type?: string; error?: string }
+  
 
   useEffect(() => {
     api.get('/session/policy').then(r => setPolicyMinutes(Number(r.data?.minutes || 30))).catch(() => {})
+    getSupabaseClient().then(setSbClient)
   }, [])
 
   useEffect(() => {
@@ -55,39 +60,23 @@ export default function AuthPage() {
     return 'https://rtaip-backend.onrender.com';
   }
 
-  const fetchJsonWithRetry = async <T = unknown>(url: string, init: RequestInit, retries = 3, backoffMs = 800): Promise<T> => {
-    let lastErr: unknown = null;
-    for (let i = 0; i <= retries; i++) {
-      try {
-        const r = await fetch(url, { ...init, mode: 'cors', credentials: 'omit' });
-        if (!r.ok) {
-          const txt = await r.text().catch(()=> '');
-          throw new Error(`HTTP ${r.status} ${txt}`);
-        }
-        return await r.json() as T;
-      } catch (e) {
-        lastErr = e;
-        if (i === retries) break;
-        await new Promise(res => setTimeout(res, backoffMs * (i + 1)));
-      }
-    }
-    throw lastErr ?? new Error('Network error');
-  }
+  
 
   const signUp = async () => {
-    if (!email || !password || !confirm) { setMessage('Fill all fields'); return }
+    if (!name || !email || !password || !confirm) { setMessage('Fill all required fields'); return }
     if (password !== confirm) { setMessage('Passwords do not match'); return }
     if (!acceptPrivacy || !acceptTerms) { setMessage('Please accept Privacy and Terms'); return }
     setBusy(true)
     try {
-      const base = computeBase();
-      const jd = await fetchJsonWithRetry<RegisterResponse>(`${base.replace(/\/$/, '')}/users/register`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: email, email, password }) });
-      if (jd?.error && /already/i.test(jd.error)) { setMessage('Account exists. Please sign in.'); setMode('login'); return }
-      const uid = Number(jd?.id || 0)
-      if (uid) { try { window.localStorage.setItem('backendUserId', String(uid)) } catch {} }
-      const ipj = await (await fetch('https://api.ipify.org?format=json')).json()
-      await fetchJsonWithRetry(`${base.replace(/\/$/, '')}/consent`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_id: uid, accepted_privacy: true, accepted_terms: true, version: 'v1', ip: String(ipj?.ip || '') }) }, 2)
-      setMessage('Account created. You can sign in now.')
+      if (!sbClient) { setMessage('Supabase not configured (Settings → Backend & Supabase)'); return }
+      const res = await sbClient.auth.signUp({ email, password, options: { data: { full_name: name, phone } } })
+      if (res.error) { setMessage(res.error.message); return }
+      try {
+        const table = (typeof window !== 'undefined' ? window.localStorage.getItem('supabaseProfileTable') : null) || 'profiles'
+        const profile = { email, name, phone: phone || null, created_at: new Date().toISOString() }
+        await sbClient.from(table).insert(profile)
+      } catch {}
+      setMessage('Account created. Please verify email (if required) and sign in.')
       setMode('login')
     } catch (e: unknown) {
       setMessage(extractErrorMessage(e, 'Registration failed'))
@@ -98,20 +87,17 @@ export default function AuthPage() {
 
   const signIn = async () => {
     if (!email || !password) { setMessage('Enter email and password'); return }
+    if (!sbClient) { setMessage('Supabase not configured (Settings → Backend & Supabase)'); return }
     setBusy(true)
     try {
-      const base = computeBase();
-      const jd = await fetchJsonWithRetry<LoginResponse>(`${base.replace(/\/$/, '')}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: email, password }) });
-      const token = jd?.access_token
-      if (token) {
-        try { window.localStorage.setItem('access_token', token) } catch {}
-        setMessage('Signed in')
-        navigate('/')
-      } else {
-        setMessage('Login failed')
-      }
+      const res = await sbClient.auth.signInWithPassword({ email, password })
+      if (res.error) { setMessage(res.error.message); return }
+      const token = res.data?.session?.access_token
+      if (token) { try { window.localStorage.setItem('access_token', token) } catch {} }
+      setMessage('Signed in')
+      navigate('/')
     } catch (e: unknown) {
-      setMessage(extractErrorMessage(e, 'Login failed: backend unreachable'))
+      setMessage(extractErrorMessage(e, 'Login failed'))
     } finally {
       setBusy(false)
     }
@@ -157,7 +143,9 @@ export default function AuthPage() {
             </div>
           ) : (
             <div className="mt-3">
+              <input className="mt-2 w-full px-3 py-2 bg-black/20 border border-white/10 rounded" placeholder="Full name" value={name} onChange={e=>setName(e.target.value)} />
               <input className="mt-2 w-full px-3 py-2 bg-black/20 border border-white/10 rounded" placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)} />
+              <input className="mt-2 w-full px-3 py-2 bg-black/20 border border-white/10 rounded" placeholder="Phone (optional)" value={phone} onChange={e=>setPhone(e.target.value)} />
               <input className="mt-2 w-full px-3 py-2 bg-black/20 border border-white/10 rounded" placeholder="Password" type="password" value={password} onChange={e=>setPassword(e.target.value)} />
               <input className="mt-2 w-full px-3 py-2 bg-black/20 border border-white/10 rounded" placeholder="Confirm password" type="password" value={confirm} onChange={e=>setConfirm(e.target.value)} />
               <div className="mt-3 text-xs text-gray-300 flex items-center gap-2">
