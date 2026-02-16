@@ -6,11 +6,12 @@ function computeBaseURL(): string {
   if (configured) return configured;
   try {
     if (typeof window !== 'undefined') {
-      const h = window.location.hostname;
-      if (/vercel\.app$/.test(h)) return 'https://rtaip-backend.onrender.com';
+      const h = window.location.hostname || '';
+      if (h === 'localhost' || h === '127.0.0.1') return 'http://localhost:8000';
+      return 'https://rtaip-backend.onrender.com';
     }
   } catch {}
-  return 'http://localhost:8000';
+  return 'https://rtaip-backend.onrender.com';
 }
 
 const api = axios.create({ baseURL: computeBaseURL() });
