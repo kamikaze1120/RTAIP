@@ -21,6 +21,9 @@ export default function AuthPage() {
   const [policyMinutes, setPolicyMinutes] = useState(30)
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [sbClient, setSbClient] = useState<SupabaseClient | null>(null)
+  const [supUrl, setSupUrl] = useState<string>('')
+  const [supAnon, setSupAnon] = useState<string>('')
+  const [supTable, setSupTable] = useState<string>('profiles')
 
   const extractErrorMessage = (e: unknown, fallback: string) => {
     if (typeof e === 'object' && e) {
@@ -40,6 +43,14 @@ export default function AuthPage() {
   useEffect(() => {
     api.get('/session/policy').then(r => setPolicyMinutes(Number(r.data?.minutes || 30))).catch(() => {})
     getSupabaseClient().then(setSbClient)
+    try {
+      const lsUrl = typeof window !== 'undefined' ? window.localStorage.getItem('supabaseUrl') : null
+      const lsAnon = typeof window !== 'undefined' ? window.localStorage.getItem('supabaseAnon') : null
+      const lsTable = typeof window !== 'undefined' ? window.localStorage.getItem('supabaseTable') : null
+      if (lsUrl) setSupUrl(lsUrl)
+      if (lsAnon) setSupAnon(lsAnon)
+      if (lsTable) setSupTable(lsTable)
+    } catch {}
   }, [])
 
   useEffect(() => {
@@ -68,7 +79,7 @@ export default function AuthPage() {
     if (!acceptPrivacy || !acceptTerms) { setMessage('Please accept Privacy and Terms'); return }
     setBusy(true)
     try {
-      if (!sbClient) { setMessage('Supabase not configured (Settings → Backend & Supabase)'); return }
+      if (!sbClient) { setMessage('Supabase not configured. Enter URL and Anon key below in Advanced.'); return }
       const res = await sbClient.auth.signUp({ email, password, options: { data: { full_name: name, phone } } })
       if (res.error) { setMessage(res.error.message); return }
       try {
@@ -87,7 +98,7 @@ export default function AuthPage() {
 
   const signIn = async () => {
     if (!email || !password) { setMessage('Enter email and password'); return }
-    if (!sbClient) { setMessage('Supabase not configured (Settings → Backend & Supabase)'); return }
+    if (!sbClient) { setMessage('Supabase not configured. Enter URL and Anon key below in Advanced.'); return }
     setBusy(true)
     try {
       const res = await sbClient.auth.signInWithPassword({ email, password })
@@ -170,6 +181,30 @@ export default function AuthPage() {
                 try { const r = await fetch(`${base.replace(/\/$/, '')}/health`, { cache: 'no-store' }); setMessage(r.ok?`Health OK at ${base}`:`Health ${r.status}`) } catch (e) { setMessage(`Health check failed: ${String((e as Error).message||e)}`) }
               }}>Ping</button>
               <div className="text-xs text-gray-300">Session timeout: {policyMinutes}m</div>
+              <div className="mt-3 text-xs text-gray-300">Supabase (required for login)</div>
+              <input className="mt-1 w-full px-3 py-2 bg-black/20 border border-white/10 rounded" placeholder="Supabase URL (e.g., https://YOUR-PROJECT.supabase.co)" value={supUrl} onChange={e=>setSupUrl(e.target.value)} />
+              <input className="mt-2 w-full px-3 py-2 bg-black/20 border border-white/10 rounded" placeholder="Supabase Anon (publishable) Key" value={supAnon} onChange={e=>setSupAnon(e.target.value)} />
+              <input className="mt-2 w-full px-3 py-2 bg-black/20 border border-white/10 rounded" placeholder="Profile table (default: profiles)" value={supTable} onChange={e=>setSupTable(e.target.value)} />
+              <div className="mt-2 flex gap-2">
+                <button className="px-3 py-2 bg-white/10 rounded" onClick={async()=>{
+                  try {
+                    if (supUrl) window.localStorage.setItem('supabaseUrl', supUrl.trim())
+                    if (supAnon) window.localStorage.setItem('supabaseAnon', supAnon.trim())
+                    if (supTable) window.localStorage.setItem('supabaseTable', supTable.trim())
+                    const c = await getSupabaseClient();
+                    setSbClient(c);
+                    if (c) {
+                      const t = supTable?.trim() || 'profiles'
+                      try { await c.from(t).select('*').limit(1); setMessage(`Supabase saved. Table '${t}' ready.`) } catch { setMessage('Supabase saved.') }
+                    } else {
+                      setMessage('Saved, but client unavailable. Check URL/key.')
+                    }
+                  } catch (e) {
+                    setMessage(`Save failed: ${String((e as Error).message||e)}`)
+                  }
+                }}>Save Supabase</button>
+                <a className="px-3 py-2 bg-white/10 rounded text-xs underline" href="https://app.supabase.com/project/_/settings/api" target="_blank" rel="noreferrer">Open Supabase API settings</a>
+              </div>
               <input className="mt-2 w-full px-3 py-2 bg-black/20 border border-white/10 rounded" placeholder="Organization ID (optional)" value={orgId ?? ''} onChange={e=>setOrgId(Number(e.target.value)||null)} />
               <button className="mt-2 w-full px-3 py-2 bg-white/10 rounded" onClick={checkIp}>Check IP policy</button>
               <button className="mt-2 w-full px-3 py-2 bg-white/10 rounded" onClick={enrollMfa}>Enable MFA</button>
