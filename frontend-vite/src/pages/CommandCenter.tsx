@@ -170,7 +170,7 @@ export default function CommandCenter() {
     { id: 'tool-geofence', label: 'Geofence Tool (G)', run: () => setTools(s => ({ ...s, geofence: !s.geofence })) },
     { id: 'tool-measure', label: 'Measure Tool (M)', run: () => setTools(s => ({ ...s, measure: !s.measure })) },
     { id: 'snapshot', label: 'Snapshot (S)', run: snapshot },
-    { id: 'ai-explain', label: 'Explain Visible Cluster', hint: 'AI overlay', run: explainCluster },
+    { id: 'ai-explain', label: 'Explain Visible Cluster', hint: 'AI overlay', run: () => { void explainCluster(); } },
   ];
 
   useEffect(() => {

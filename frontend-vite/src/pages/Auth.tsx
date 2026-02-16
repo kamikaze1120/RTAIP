@@ -30,6 +30,9 @@ export default function AuthPage() {
     return fallback
   }
 
+  type RegisterResponse = { id?: number; message?: string; error?: string }
+  type LoginResponse = { access_token?: string; token_type?: string; error?: string }
+
   useEffect(() => {
     api.get('/session/policy').then(r => setPolicyMinutes(Number(r.data?.minutes || 30))).catch(() => {})
   }, [])
@@ -78,7 +81,8 @@ export default function AuthPage() {
     setBusy(true)
     try {
       const base = computeBase();
-      const jd = await fetchJsonWithRetry(`${base.replace(/\/$/, '')}/users/register`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: email, email, password }) });
+      const jd = await fetchJsonWithRetry<RegisterResponse>(`${base.replace(/\/$/, '')}/users/register`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: email, email, password }) });
+      if (jd?.error && /already/i.test(jd.error)) { setMessage('Account exists. Please sign in.'); setMode('login'); return }
       const uid = Number(jd?.id || 0)
       if (uid) { try { window.localStorage.setItem('backendUserId', String(uid)) } catch {} }
       const ipj = await (await fetch('https://api.ipify.org?format=json')).json()
@@ -97,7 +101,7 @@ export default function AuthPage() {
     setBusy(true)
     try {
       const base = computeBase();
-      const jd = await fetchJsonWithRetry(`${base.replace(/\/$/, '')}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: email, password }) });
+      const jd = await fetchJsonWithRetry<LoginResponse>(`${base.replace(/\/$/, '')}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: email, password }) });
       const token = jd?.access_token
       if (token) {
         try { window.localStorage.setItem('access_token', token) } catch {}
