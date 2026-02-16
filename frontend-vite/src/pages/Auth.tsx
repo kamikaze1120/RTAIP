@@ -52,6 +52,25 @@ export default function AuthPage() {
     return 'https://rtaip-backend.onrender.com';
   }
 
+  const fetchJsonWithRetry = async <T = unknown>(url: string, init: RequestInit, retries = 3, backoffMs = 800): Promise<T> => {
+    let lastErr: unknown = null;
+    for (let i = 0; i <= retries; i++) {
+      try {
+        const r = await fetch(url, { ...init, mode: 'cors', credentials: 'omit' });
+        if (!r.ok) {
+          const txt = await r.text().catch(()=> '');
+          throw new Error(`HTTP ${r.status} ${txt}`);
+        }
+        return await r.json() as T;
+      } catch (e) {
+        lastErr = e;
+        if (i === retries) break;
+        await new Promise(res => setTimeout(res, backoffMs * (i + 1)));
+      }
+    }
+    throw lastErr ?? new Error('Network error');
+  }
+
   const signUp = async () => {
     if (!email || !password || !confirm) { setMessage('Fill all fields'); return }
     if (password !== confirm) { setMessage('Passwords do not match'); return }
@@ -59,12 +78,11 @@ export default function AuthPage() {
     setBusy(true)
     try {
       const base = computeBase();
-      const r = await fetch(`${base.replace(/\/$/, '')}/users/register`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: email, email, password }) });
-      const jd = await r.json();
+      const jd = await fetchJsonWithRetry(`${base.replace(/\/$/, '')}/users/register`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: email, email, password }) });
       const uid = Number(jd?.id || 0)
       if (uid) { try { window.localStorage.setItem('backendUserId', String(uid)) } catch {} }
       const ipj = await (await fetch('https://api.ipify.org?format=json')).json()
-      await fetch(`${base.replace(/\/$/, '')}/consent`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_id: uid, accepted_privacy: true, accepted_terms: true, version: 'v1', ip: String(ipj?.ip || '') }) })
+      await fetchJsonWithRetry(`${base.replace(/\/$/, '')}/consent`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_id: uid, accepted_privacy: true, accepted_terms: true, version: 'v1', ip: String(ipj?.ip || '') }) }, 2)
       setMessage('Account created. You can sign in now.')
       setMode('login')
     } catch (e: unknown) {
@@ -79,8 +97,7 @@ export default function AuthPage() {
     setBusy(true)
     try {
       const base = computeBase();
-      const r = await fetch(`${base.replace(/\/$/, '')}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: email, password }) });
-      const jd = await r.json();
+      const jd = await fetchJsonWithRetry(`${base.replace(/\/$/, '')}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: email, password }) });
       const token = jd?.access_token
       if (token) {
         try { window.localStorage.setItem('access_token', token) } catch {}
@@ -90,7 +107,7 @@ export default function AuthPage() {
         setMessage('Login failed')
       }
     } catch (e: unknown) {
-      setMessage(extractErrorMessage(e, 'Login failed'))
+      setMessage(extractErrorMessage(e, 'Login failed: backend unreachable'))
     } finally {
       setBusy(false)
     }

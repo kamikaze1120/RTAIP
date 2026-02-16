@@ -25,6 +25,7 @@ export default function App() {
   const location = useLocation();
   const [booting, setBooting] = useState(true);
   const authed = !!(typeof window !== 'undefined' && window.localStorage.getItem('access_token'));
+  const onAuthRoute = location.pathname.startsWith('/auth');
   useEffect(() => {
     // Persist env defaults to localStorage so backend stays connected without manual input
     try {
@@ -102,8 +103,8 @@ export default function App() {
   return (
     <div className="relative min-h-screen text-white bg-animated">
       <div className="grid-overlay"></div>
-      {!booting && authed && <NewHeader />}
-      {!booting && authed && <MobileNav />} {/* Add mobile navigation */}
+      {!booting && authed && !onAuthRoute && <NewHeader />}
+      {!booting && authed && !onAuthRoute && <MobileNav />} {/* Add mobile navigation */}
       {!booting && !window.localStorage.getItem('cookieConsentTs') && (
         <div className="fixed bottom-0 left-0 right-0 z-50 bg-black/70 text-white">
           <div className="container mx-auto px-6 py-3 flex items-center justify-between">
