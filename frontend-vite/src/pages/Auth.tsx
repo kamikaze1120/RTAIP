@@ -42,8 +42,14 @@ export default function AuthPage() {
   const computeBase = (): string => {
     const b = getBackendBase();
     if (b) return b;
-    try { if (typeof window !== 'undefined' && /vercel\.app$/.test(window.location.hostname)) return 'https://rtaip-backend.onrender.com'; } catch {}
-    return 'http://localhost:8000';
+    try {
+      if (typeof window !== 'undefined') {
+        const h = window.location.hostname || '';
+        if (h === 'localhost' || h === '127.0.0.1') return 'http://localhost:8000';
+        return 'https://rtaip-backend.onrender.com';
+      }
+    } catch {}
+    return 'https://rtaip-backend.onrender.com';
   }
 
   const signUp = async () => {
@@ -149,6 +155,11 @@ export default function AuthPage() {
           <button className="text-xs text-gray-300 underline" onClick={()=>setShowAdvanced(v=>!v)}>{showAdvanced?'Hide advanced':'Advanced security'}</button>
           {showAdvanced && (
             <div className="mt-2 bg-white/5 p-3 rounded border border-white/10">
+              <div className="text-xs text-gray-400">Backend: {computeBase()}</div>
+              <button className="mt-2 px-2 py-1 text-xs bg-white/10 rounded" onClick={async()=>{
+                const base = computeBase();
+                try { const r = await fetch(`${base.replace(/\/$/, '')}/health`, { cache: 'no-store' }); setMessage(r.ok?`Health OK at ${base}`:`Health ${r.status}`) } catch (e) { setMessage(`Health check failed: ${String((e as Error).message||e)}`) }
+              }}>Ping</button>
               <div className="text-xs text-gray-300">Session timeout: {policyMinutes}m</div>
               <input className="mt-2 w-full px-3 py-2 bg-black/20 border border-white/10 rounded" placeholder="Organization ID (optional)" value={orgId ?? ''} onChange={e=>setOrgId(Number(e.target.value)||null)} />
               <button className="mt-2 w-full px-3 py-2 bg-white/10 rounded" onClick={checkIp}>Check IP policy</button>
