@@ -29,6 +29,7 @@ export function NewHeader() {
     try { window.localStorage.setItem('theme', theme); } catch {}
   }, [theme]);
   const authed = React.useMemo(() => { try { return !!window.localStorage.getItem('access_token'); } catch { return false; } }, [location.pathname]);
+  const isAdmin = React.useMemo(() => { try { return window.localStorage.getItem('isAdmin') === 'true'; } catch { return false; } }, [location.pathname]);
   const logout = () => { try { window.localStorage.removeItem('access_token'); window.localStorage.removeItem('backendUserId'); } catch {}; navigate('/auth'); };
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-black/30 backdrop-blur-2xl shadow-lg">
@@ -38,7 +39,7 @@ export function NewHeader() {
         </Link>
         <div className="ml-3 text-xs text-gray-300">Operated by Nexum Cloud</div>
         <nav className="flex items-center gap-6">
-          {navItems.map((item) => {
+          {navItems.filter(it => it.label !== 'Admin' || isAdmin).map((item) => {
             const isActive = location.pathname === item.path;
             return (
               <Link
