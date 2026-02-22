@@ -105,6 +105,13 @@ export default function AuthPage() {
       if (res.error) { setMessage(res.error.message); return }
       const token = res.data?.session?.access_token
       if (token) { try { window.localStorage.setItem('access_token', token) } catch {} }
+      try {
+        const userEmail = (res.data?.user?.email || email || '').toLowerCase()
+        const adminEmail = (window.localStorage.getItem('adminEmail') || userEmail).toLowerCase()
+        window.localStorage.setItem('adminEmail', adminEmail)
+        window.localStorage.setItem('userEmail', userEmail)
+        window.localStorage.setItem('isAdmin', String(userEmail === adminEmail))
+      } catch {}
       setMessage('Signed in')
       navigate('/')
     } catch (e: unknown) {

@@ -102,42 +102,45 @@ def save_event(source: str, ts: datetime, latitude, longitude, payload: dict | l
                 pass
             return 0
 
-async def ingest_nasa_fires():
-    """NGA Tearline - NASA FIRMS fire data"""
-    print("[INGEST] Starting NGA Tearline (NASA FIRMS) ingestion...")
-    url = "https://firms.modaps.eosdis.nasa.gov/api/area/csv/524a0a35e31c6318588be63b096c3b45/VIIRS_SNPP_NRT/world/1"
+async def ingest_noaa_alerts():
+    """NOAA National Weather Service active alerts (free)"""
+    print("[INGEST] Starting NOAA Alerts ingestion...")
+    url = "https://api.weather.gov/alerts/active"
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url) as response:
-                if response.status == 200:
-                    data = await response.text()
-                    count = 0
-                    with Session() as db_session:
-                        # Skip header
-                        for line in data.splitlines()[1:]:
-                            try:
-                                lat, lon, bright_ti4, scan, track, acq_date, acq_time, satellite, confidence, version, bright_ti5, frp, daynight = line.split(',')
-                                count += save_event(
-                                    "NGA Tearline",
-                                    datetime.strptime(f"{acq_date} {acq_time}", "%Y-%m-%d %H%M"),
-                                    float(lat),
-                                    float(lon),
-                                    {"confidence": confidence, "frp": float(frp)},
-                                    float(confidence) / 100.0,
-                                )
-                            except ValueError:
-                                continue  # Skip malformed lines
-                        db_session.commit()
-                    print(f"[INGEST] NGA Tearline: Successfully ingested {count} events")
-                else:
-                    print(f"[INGEST] NGA Tearline: HTTP {response.status} - will retry next cycle")
+        data = await fetch_data(url)
+        if data:
+            feats = data.get('features') or []
+            count = 0
+            with Session() as s:
+                for f in feats[:200]:
+                    props = f.get('properties') or {}
+                    geom = f.get('geometry') or {}
+                    coords = None
+                    try:
+                        if geom.get('type') == 'Point':
+                            coords = geom.get('coordinates')
+                        elif geom.get('type') == 'Polygon':
+                            ring = (geom.get('coordinates') or [[None]])[0]
+                            if isinstance(ring, list) and ring:
+                                coords = ring[0]
+                    except Exception:
+                        coords = None
+                    lat = None; lon = None
+                    if isinstance(coords, (list, tuple)) and len(coords) >= 2:
+                        lon = float(coords[0]); lat = float(coords[1])
+                    conf = 0.7 if (lat is not None and lon is not None) else 0.5
+                    count += save_event("NOAA Alerts", datetime.utcnow(), lat, lon, props, conf)
+                s.commit()
+            print(f"[INGEST] NOAA Alerts: Ingested {count} alerts")
+        else:
+            print("[INGEST] NOAA Alerts: No data")
     except Exception as e:
-        print(f"[INGEST] NGA Tearline: Failed - {e}")
+        print(f"[INGEST] NOAA Alerts: Failed - {e}")
 
 
 async def ingest_nasa_eonet():
-    """Janes - NASA EONET events"""
-    print("[INGEST] Starting Janes (NASA EONET) ingestion...")
+    """NASA EONET events"""
+    print("[INGEST] Starting NASA EONET ingestion...")
     url = "https://eonet.gsfc.nasa.gov/api/v3/events"
     try:
         data = await fetch_data(url)
@@ -166,13 +169,13 @@ async def ingest_nasa_eonet():
                             continue
                     except Exception:
                         pass
-                    count += save_event("Janes", ts, lat, lon, ev, conf)
+                    count += save_event("NASA EONET", ts, lat, lon, ev, conf)
                 session.commit()
-            print(f"[INGEST] Janes: Successfully ingested {count} events")
+            print(f"[INGEST] NASA EONET: Successfully ingested {count} events")
         else:
-            print("[INGEST] Janes: No data received from NASA EONET")
+            print("[INGEST] NASA EONET: No data received")
     except Exception as e:
-        print(f"[INGEST] Janes: Failed - {e}")
+        print(f"[INGEST] NASA EONET: Failed - {e}")
 
 async def ingest_gdacs_disasters():
     try:
@@ -261,7 +264,7 @@ def _confidence_for_adsb(state):
 
 async def ingest_adsb_aircraft():
     """Military Periscope - ADSB Aircraft data"""
-    print("[INGEST] Starting Military Periscope (ADSB Aircraft) ingestion...")
+    print("[INGEST] Starting ADS-B OpenSky ingestion...")
     url = "https://opensky-network.org/api/states/all"  # OpenSky API
     try:
         data = await fetch_data(url)
@@ -271,13 +274,13 @@ async def ingest_adsb_aircraft():
             with Session() as session:
                 for state in states[:10]:  # Limit for demo
                     conf = _confidence_for_adsb(state)
-                    count += save_event("Military Periscope", datetime.utcnow(), state[6], state[5], state, conf)
+                    count += save_event("ADS-B OpenSky", datetime.utcnow(), state[6], state[5], state, conf)
                 session.commit()
-            print(f"[INGEST] Military Periscope: Successfully ingested {count} events")
+            print(f"[INGEST] ADS-B OpenSky: Successfully ingested {count} events")
         else:
-            print("[INGEST] Military Periscope: No data received from OpenSky")
+            print("[INGEST] ADS-B OpenSky: No data received from OpenSky")
     except Exception as e:
-        print(f"[INGEST] Military Periscope: Failed - {e}")
+        print(f"[INGEST] ADS-B OpenSky: Failed - {e}")
 
 def _confidence_for_ais(item):
     try:
@@ -295,7 +298,7 @@ def _confidence_for_ais(item):
 
 async def ingest_ais_maritime():
     """PUB LOG - AIS Maritime data"""
-    print("[INGEST] Starting PUB LOG (AIS Maritime) ingestion...")
+    print("[INGEST] Starting AIS Maritime ingestion...")
     try:
         reader, writer = await asyncio.open_connection('153.44.253.27', 5631)
         count = 0
@@ -308,14 +311,14 @@ async def ingest_ais_maritime():
                 if data.get('class') == 'AIS' and 'lat' in data and 'lon' in data:
                     with Session() as session:
                         conf = _confidence_for_ais(data)
-                        count += save_event("PUB LOG", datetime.utcnow(), data.get('lat'), data.get('lon'), data, conf)
+                        count += save_event("AIS Maritime", datetime.utcnow(), data.get('lat'), data.get('lon'), data, conf)
             except (json.JSONDecodeError, UnicodeDecodeError):
                 continue # Ignore malformed lines
-        print(f"[INGEST] PUB LOG: Successfully ingested {count} events")
+        print(f"[INGEST] AIS Maritime: Successfully ingested {count} events")
     except ConnectionRefusedError:
-        print("[INGEST] PUB LOG: AIS stream connection refused.")
+        print("[INGEST] AIS Maritime: AIS stream connection refused.")
     except Exception as e:
-        print(f"[INGEST] PUB LOG: Failed - {e}")
+        print(f"[INGEST] AIS Maritime: Failed - {e}")
     finally:
         if 'writer' in locals() and writer:
             writer.close()
@@ -334,7 +337,7 @@ def _confidence_for_usgs(feature):
 
 async def ingest_usgs_seismic():
     """Global Terrorism DB - USGS Earthquake data"""
-    print("[INGEST] Starting Global Terrorism DB (USGS Seismic) ingestion...")
+    print("[INGEST] Starting USGS Earthquakes ingestion...")
     url = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson"
     try:
         data = await fetch_data(url)
@@ -345,134 +348,66 @@ async def ingest_usgs_seismic():
                 for feature in features:
                     coords = feature['geometry']['coordinates']
                     conf = _confidence_for_usgs(feature)
-                    event = DataEvent(
-                        source="Global Terrorism DB", 
-                        timestamp=datetime.utcnow(), 
-                        latitude=coords[1], 
-                        longitude=coords[0], 
-                        data=feature, 
-                        confidence=conf
-                    )
-                    session.add(event)
-                    count += 1
+                    count += save_event("USGS Earthquakes", datetime.utcnow(), coords[1], coords[0], feature, conf)
                 session.commit()
-            print(f"[INGEST] Global Terrorism DB: Successfully ingested {count} events")
+            print(f"[INGEST] USGS Earthquakes: Successfully ingested {count} events")
         else:
-            print("[INGEST] Global Terrorism DB: No data received from USGS")
+            print("[INGEST] USGS Earthquakes: No data received from USGS")
     except Exception as e:
-        print(f"[INGEST] Global Terrorism DB: Failed - {e}")
+        print(f"[INGEST] USGS Earthquakes: Failed - {e}")
 
-async def ingest_usace_hifld():
-    """USACE - HIFLD Public Health data"""
-    print("[INGEST] Starting USACE (HIFLD) ingestion...")
+async def ingest_radio_public():
+    """Public radio directory (Radio Browser) as a proxy for RF activity"""
+    print("[INGEST] Starting Radio Browser ingestion...")
+    url = "https://de1.api.radio-browser.info/json/stations/search"
+    params = {"name": "police", "order": "clickcount", "reverse": "true", "limit": 50}
     try:
-        # Try multiple USACE/HIFLD endpoints
-        endpoints = [
-            {
-                "url": "https://maps.nccs.nasa.gov/mapping/rest/services/hifld_open/public_health/FeatureServer/0/query",
-                "params": {
-                    "where": "1=1",
-                    "outFields": "name,type,state",
-                    "returnGeometry": "true",
-                    "outSR": "4326",
-                    "f": "json"
-                }
-            },
-            {
-                "url": "https://services.arcgis.com/P3ePLMYs2RVChkJx/ArcGIS/rest/services/HIFLD_Public_Health/FeatureServer/0/query",
-                "params": {
-                    "where": "1=1",
-                    "outFields": "*",
-                    "returnGeometry": "true",
-                    "outSR": "4326",
-                    "f": "json"
-                }
-            }
-        ]
-        
-        for endpoint in endpoints:
-            try:
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(endpoint["url"], params=endpoint["params"], timeout=30) as response:
-                        if response.status == 200:
-                            jd = await response.json()
-                            feats = jd.get("features") or []
-                            count = 0
-                            with Session() as s:
-                                for f in feats[:50]:  # Limit to 50 for performance
-                                    attr = f.get("attributes", {})
-                                    geom = f.get("geometry", {})
-                                    lon = geom.get("x")
-                                    lat = geom.get("y")
-                                    if lat is not None and lon is not None:
-                                        count += save_event("USACE", datetime.utcnow(), float(lat), float(lon), {"name": attr.get("name"), "type": attr.get("type"), "state": attr.get("state"), "address": attr.get("address"), "city": attr.get("city")}, 0.8)
-                                s.commit()
-                            print(f"[INGEST] USACE: Successfully ingested {count} events from {endpoint['url']}")
-                            return  # Success, exit function
-                        else:
-                            print(f"[INGEST] USACE: HTTP {response.status} from {endpoint['url']}")
-            except Exception as e:
-                print(f"[INGEST] USACE: Failed to fetch from {endpoint['url']}: {e}")
-                continue
-        
-        # If all endpoints fail, create some sample data for testing
-        print("[INGEST] USACE: All endpoints failed, creating sample data for testing...")
-        sample_data = [
-            {"name": "Fort Belvoir", "lat": 38.6847, "lon": -77.1409, "type": "Military Installation", "state": "VA"},
-            {"name": "Fort Hood", "lat": 31.1301, "lon": -97.7817, "type": "Military Installation", "state": "TX"},
-            {"name": "Fort Bragg", "lat": 35.1424, "lon": -78.9938, "type": "Military Installation", "state": "NC"},
-            {"name": "Fort Campbell", "lat": 36.6667, "lon": -87.4833, "type": "Military Installation", "state": "KY"},
-            {"name": "Fort Carson", "lat": 38.7403, "lon": -104.7833, "type": "Military Installation", "state": "CO"}
-        ]
-        
-        with Session() as s:
-            count = 0
-            for item in sample_data:
-                count += save_event("USACE", datetime.utcnow(), item["lat"], item["lon"], item, 0.9)
-            s.commit()
-        print(f"[INGEST] USACE: Successfully ingested {count} sample events for testing")
-        
-    except Exception as e:
-        print(f"[INGEST] USACE: Failed - {e}")
-
-async def ingest_dtic():
-    """DTIC - Defense Technical Information Center data"""
-    print("[INGEST] Starting DTIC ingestion...")
-    try:
-        # Using DTIC's public research collection API
-        url = "https://discover.dtic.mil/dtic-search/api/search/publication"
-        params = {
-            "q": "recent",
-            "rows": 50,
-            "sort": "date desc"
-        }
         async with aiohttp.ClientSession() as session:
-            async with session.get(url, params=params) as response:
-                if response.status != 200:
-                    print(f"[INGEST] DTIC: HTTP {response.status}")
+            async with session.get(url, params=params, timeout=15) as r:
+                if r.status != 200:
+                    print(f"[INGEST] Radio Browser: HTTP {r.status}")
                     return
-                data = await response.json()
-                docs = data.get("documents", [])
+                arr = await r.json()
                 count = 0
                 with Session() as s:
-                    for doc in docs:
-                        # Extract location if available, otherwise use Pentagon as default
-                        lat = 38.8719  # Pentagon coordinates
-                        lon = -77.0563
-                        
-                        # Try to extract coordinates from metadata
-                        metadata = doc.get("metadata", {})
-                        if "coordinates" in metadata:
-                            coords = metadata["coordinates"]
-                            if isinstance(coords, list) and len(coords) >= 2:
-                                lat = float(coords[1])
-                                lon = float(coords[0])
-                        
-                        count += save_event("DTIC", datetime.utcnow(), lat, lon, {"title": doc.get("title"), "author": doc.get("author"), "date": doc.get("publicationDate"), "abstract": doc.get("abstract"), "category": doc.get("category")}, 0.8)
+                    for st in arr:
+                        lat = _round_coord(st.get('latitude'))
+                        lon = _round_coord(st.get('longitude'))
+                        if lat is None or lon is None:
+                            continue
+                        payload = {"name": st.get('name'), "url": st.get('url'), "country": st.get('countrycode'), "bitrate": st.get('bitrate')}
+                        count += save_event("Public Radio", datetime.utcnow(), lat, lon, payload, 0.6)
                     s.commit()
-                print(f"[INGEST] DTIC: Successfully ingested {count} events")
+                print(f"[INGEST] Public Radio: Ingested {count} stations")
     except Exception as e:
-        print(f"[INGEST] DTIC: Failed - {e}")
+        print(f"[INGEST] Public Radio: Failed - {e}")
+
+async def ingest_reddit_keywords():
+    """Reddit keyword search (unauthenticated JSON)"""
+    print("[INGEST] Starting Reddit keyword ingestion...")
+    try:
+        import os
+        q = os.getenv('REDDIT_KEYWORDS', 'earthquake OR wildfire OR explosion OR protest')
+        url = "https://www.reddit.com/search.json"
+        params = {"q": q, "sort": "new", "limit": 50}
+        async with aiohttp.ClientSession(headers={"User-Agent": "rtaip/1.0"}) as session:
+            async with session.get(url, params=params, timeout=15) as r:
+                if r.status != 200:
+                    print(f"[INGEST] Reddit: HTTP {r.status}")
+                    return
+                jd = await r.json()
+                children = (((jd or {}).get('data') or {}).get('children') or [])
+                count = 0
+                with Session() as s:
+                    for ch in children:
+                        d = (ch or {}).get('data') or {}
+                        title = d.get('title')
+                        # no reliable geo; store as non-geolocated intel
+                        count += save_event("Reddit Intel", datetime.utcnow(), None, None, {"title": title, "sub": d.get('subreddit'), "url": f"https://reddit.com{d.get('permalink')}"}, 0.4)
+                    s.commit()
+                print(f"[INGEST] Reddit Intel: Ingested {count} posts")
+    except Exception as e:
+        print(f"[INGEST] Reddit Intel: Failed - {e}")
 
 async def ingest_global_terrorism():
     """Global Terrorism DB - START data"""
@@ -517,14 +452,13 @@ def run_ingestion():
     try:
         print("[INGEST] Starting hourly data ingestion cycle...")
         loop.run_until_complete(asyncio.gather(
-            ingest_nasa_fires(),           # NGA Tearline
-            ingest_adsb_aircraft(),        # Military Periscope
-            ingest_ais_maritime(),         # PUB LOG
-            ingest_nasa_eonet(),           # Janes
-            ingest_gdacs_disasters(),      # ODIN
-            ingest_usace_hifld(),          # USACE
-            ingest_dtic(),                 # DTIC - NEW!
-            ingest_global_terrorism()      # Global Terrorism DB - NEW!
+            ingest_nasa_eonet(),
+            ingest_noaa_alerts(),
+            ingest_adsb_aircraft(),
+            ingest_ais_maritime(),
+            ingest_usgs_seismic(),
+            ingest_radio_public(),
+            ingest_reddit_keywords(),
         ))
         print("[INGEST] Hourly ingestion cycle completed successfully")
         
@@ -535,7 +469,7 @@ def run_ingestion():
                 print(f"[INGEST] Total events in database: {total_events}")
                 
                 # Count by source
-                sources = ["ODIN", "DTIC", "USACE", "PUB LOG", "NGA Tearline", "Military Periscope", "Janes", "Global Terrorism DB"]
+                sources = ["NASA EONET", "NOAA Alerts", "ADS-B OpenSky", "AIS Maritime", "USGS Earthquakes", "Public Radio", "Reddit Intel"]
                 for source in sources:
                     count = session.query(DataEvent).filter(DataEvent.source == source).count()
                     print(f"[INGEST] {source}: {count} events")
@@ -568,14 +502,13 @@ def run_ingestion():
 
 # Connector registry
 CONNECTORS = {
-    "nasa_fires": ingest_nasa_fires,
+    "nasa_eonet": ingest_nasa_eonet,
+    "noaa_alerts": ingest_noaa_alerts,
     "adsb_aircraft": ingest_adsb_aircraft,
     "ais_maritime": ingest_ais_maritime,
-    "nasa_eonet": ingest_nasa_eonet,
-    "gdacs_disasters": ingest_gdacs_disasters,
-    "usace_hifld": ingest_usace_hifld,
-    "dtic": ingest_dtic,
-    "global_terrorism": ingest_global_terrorism,
+    "usgs_quakes": ingest_usgs_seismic,
+    "radio_public": ingest_radio_public,
+    "reddit_keywords": ingest_reddit_keywords,
 }
 ENABLED = set(CONNECTORS.keys())
 
