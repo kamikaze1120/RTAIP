@@ -1,4 +1,4 @@
-import { SupabaseClient } from '@supabase/supabase-js';
+import { SupabaseClient, createClient } from '@supabase/supabase-js';
 
 let client: SupabaseClient | null = null;
 
@@ -10,9 +10,7 @@ export async function getSupabaseClient(): Promise<SupabaseClient | null> {
   if (!url || !key) return null;
   if (client) return client;
   try {
-    const modName = '@supabase/supabase-js';
-    const m: { createClient: (url: string, key: string) => SupabaseClient } = await import(/* @vite-ignore */ modName);
-    client = m.createClient(url, key);
+    client = createClient(url, key);
     return client;
   } catch {
     return null;
