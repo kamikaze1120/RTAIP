@@ -4,18 +4,17 @@ import React from 'react';
 import { SearchInput } from './DesignSystem';
 
 const navItems = [
-  { label: 'Sources', path: '/sources' },
-  { label: 'Dashboard', path: '/dashboard' },
-  { label: 'Intelligence', path: '/intelligence' },
-  { label: 'Threat Analysis', path: '/threat-analysis' },
-  { label: 'Logistics', path: '/logistics' },
-  { label: 'Map', path: '/map' },
-  { label: 'Timeline', path: '/timeline' },
-  { label: 'Security', path: '/security' },
-  { label: 'Auth', path: '/auth' },
-  { label: 'Admin', path: '/admin' },
-  { label: 'Legal', path: '/legal' },
-  { label: 'Command', path: '/command' },
+  { label: 'Dashboard', path: '/dashboard', primary: true },
+  { label: 'Map', path: '/map', primary: true },
+  { label: 'Sources', path: '/sources', primary: true },
+  { label: 'Command', path: '/command', primary: true },
+  { label: 'Intelligence', path: '/intelligence', primary: false },
+  { label: 'Threat Analysis', path: '/threat-analysis', primary: false },
+  { label: 'Logistics', path: '/logistics', primary: false },
+  { label: 'Timeline', path: '/timeline', primary: false },
+  { label: 'Security', path: '/security', primary: false },
+  { label: 'Admin', path: '/admin', primary: false },
+  { label: 'Legal', path: '/legal', primary: false },
 ];
 
 export function NewHeader() {
@@ -31,6 +30,7 @@ export function NewHeader() {
   const authed = React.useMemo(() => { try { return !!window.localStorage.getItem('access_token'); } catch { return false; } }, [location.pathname]);
   const isAdmin = React.useMemo(() => { try { return window.localStorage.getItem('isAdmin') === 'true'; } catch { return false; } }, [location.pathname]);
   const logout = () => { try { window.localStorage.removeItem('access_token'); window.localStorage.removeItem('backendUserId'); } catch {}; navigate('/auth'); };
+  const [moreOpen, setMoreOpen] = React.useState(false);
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-black/30 backdrop-blur-2xl shadow-lg">
       <div className="container mx-auto flex items-center justify-between px-6 py-4">
@@ -39,7 +39,7 @@ export function NewHeader() {
         </Link>
         {/* Branding removed per request */}
         <nav className="flex items-center gap-6">
-          {navItems.filter(it => it.label !== 'Admin' || isAdmin).map((item) => {
+          {navItems.filter(it=>it.primary).map((item) => {
             const isActive = location.pathname === item.path;
             return (
               <Link
@@ -57,6 +57,16 @@ export function NewHeader() {
               </Link>
             );
           })}
+          <div className="relative">
+            <button className="text-sm text-gray-300 hover:text-white" onClick={()=>setMoreOpen(o=>!o)}>More</button>
+            {moreOpen && (
+              <div className="absolute right-0 mt-2 bg-black/80 border border-white/10 rounded shadow-xl min-w-[180px] p-2">
+                {navItems.filter(it=>!it.primary).filter(it => it.label !== 'Admin' || isAdmin).map(item => (
+                  <Link key={item.path} to={item.path} className="block px-3 py-1.5 text-sm text-gray-300 hover:bg-white/10 rounded" onClick={()=>setMoreOpen(false)}>{item.label}</Link>
+                ))}
+              </div>
+            )}
+          </div>
           <div className="w-[220px]">
             <SearchInput value={q} onChange={setQ} suggestions={suggestions} />
           </div>

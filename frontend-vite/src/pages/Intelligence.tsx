@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { searchDtic, searchOdin, searchUsace, searchPublog, searchNga, searchPeriscope, searchJanes, searchGtdb } from '../services/intelligence';
-import { NewHeader } from '../components/NewHeader';
 
 interface SearchResult {
   id: number;
@@ -65,7 +64,6 @@ const Intelligence = () => {
 
   return (
     <div className="flow-gradient text-white min-h-screen">
-      <NewHeader />
       <div className="container mx-auto px-6 py-24 space-y-8">
         <h1 className="text-4xl font-bold">Intelligence & Research</h1>
         
@@ -93,7 +91,7 @@ const Intelligence = () => {
                   <p>Loading...</p>
                 </div>
               ) : (
-                results.map(result => (
+                results.slice(0,200).map(result => (
                   <div 
                     key={result.id} 
                     className={`bg-black/20 p-4 rounded-lg cursor-pointer border-2 mb-4 ${selectedResult?.id === result.id ? 'border-blue-500' : 'border-transparent hover:border-gray-700'}`}
