@@ -5,7 +5,6 @@ import AlertList from '../components/AlertList';
 import { ShieldAlert, Activity, TrendingUp } from 'lucide-react';
 import { Globe as GlobeIcon } from 'lucide-react';
 import { fetchBackendEvents, getBackendBase, type RtaEvent, globalThreatScore, topClusters, typeProbabilities, fetchSupabaseEvents, getSupabaseConfig, eventSeverity, runConnectivityDiagnostics, getCachedEvents, setCachedEvents, getSystemMetrics, getPipelineStatus, getRecentErrors, getBillingUsage, getInfraRegion, exportBackup, importBackup } from '../services/data';
-import { NewHeader } from '../components/NewHeader';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, BarChart, Bar } from 'recharts';
 import AnalystPanel from '../components/AnalystPanel';
 import { DataTableVirtualized } from '../components/DesignSystem';
@@ -218,7 +217,6 @@ export default function Dashboard() {
 
   return (
     <div className="flow-gradient text-white min-h-screen">
-      <NewHeader />
       <main className="pt-20">
         <div className="container mx-auto p-4">
           <div className="mb-4 flex items-center gap-3 bg-white/10 backdrop-blur-md rounded-lg p-3 shadow-lg">

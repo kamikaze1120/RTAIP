@@ -3,7 +3,6 @@ import { getBackendBase, fetchBackendEvents, type RtaEvent, getSupabaseConfig, f
 import { getSupabaseClient } from '../utils/supabase';
 import Globe from '../components/Globe';
 import EventFeed from '../components/EventFeed';
-import { NewHeader } from '../components/NewHeader';
 import Map from 'ol/Map';
 import View from 'ol/View';
 import TileLayer from 'ol/layer/Tile';
@@ -180,7 +179,7 @@ export default function MapPage() {
     const s = src.toLowerCase();
     if (s.includes('periscope') || s.includes('adsb') || s.includes('opensky') || s.includes('air') || s.includes('flight')) return 'aviation';
     if (s.includes('pub log') || s.includes('ais') || s.includes('maritime') || s.includes('vessel') || s.includes('ship')) return 'maritime';
-    if (s.includes('tearline') || s.includes('eonet') || s.includes('gdacs') || s.includes('wildfire') || s.includes('storm') || s.includes('disaster')) return 'weather';
+    if (s.includes('tearline') || s.includes('eonet') || s.includes('gdacs') || s.includes('wildfire') || s.includes('storm') || s.includes('disaster') || s.includes('noaa') || s.includes('usgs')) return 'weather';
     if (s.includes('usace') || s.includes('dtic') || s.includes('odin') || s.includes('janes') || s.includes('government')) return 'government';
     if (s.includes('terror') || s.includes('gtd') || s.includes('start')) return 'news';
     return 'other';
@@ -190,10 +189,8 @@ export default function MapPage() {
     const cutoff = Date.now() - hoursWindow * 3600000;
     return events.filter(e => {
       const t = new Date(e.timestamp).getTime();
-      const src = String(e.source || '');
       if (isNaN(t) || t < cutoff) return false;
-      if (/usgs|noaa/i.test(src)) return false;
-      const cat = categoryForSource(src);
+      const cat = categoryForSource(String(e.source||''));
       if (cat in layersEnabled) return layersEnabled[cat];
       return true;
     });
@@ -267,7 +264,6 @@ export default function MapPage() {
 
   return (
     <div className="flow-gradient text-white min-h-screen animate-in fade-in duration-700">
-      <NewHeader />
       <div className="p-4 lg:p-6">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           
@@ -335,8 +331,7 @@ export default function MapPage() {
               events={events.filter(e => {
                 const t = new Date(e.timestamp).getTime();
                 const cutoff = Date.now() - hoursWindow * 3600000;
-                const src = String(e.source || '');
-                return !isNaN(t) && t >= cutoff && !/usgs|noaa/i.test(src);
+                return !isNaN(t) && t >= cutoff;
               })} 
               onSelect={(e) => { setMapFocus(f => f?.id === e.id ? null : e); }} 
               focus={mapFocus} 
