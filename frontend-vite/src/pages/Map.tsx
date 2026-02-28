@@ -300,9 +300,29 @@ export default function MapPage() {
               {/* Source Toggles */}
               <div className="mb-4">
                 <h3 className="text-md font-semibold mb-2">Sources</h3>
-                <div className="flex flex-col space-y-2 text-sm">
-
-
+                <div className="flex flex-col space-y-2 text-sm"></div>
+              </div>
+              <div className="mb-4">
+                <h3 className="text-md font-semibold mb-2">Public Cameras</h3>
+                <div className="text-xs text-gray-400 mb-1">Add public live feeds (YouTube embed URLs work)</div>
+                <input className="px-2 py-1 bg-black/20 border border-white/10 rounded w-full mt-1" placeholder="Name" value={camName} onChange={e=>setCamName(e.target.value)} />
+                <div className="flex gap-2 mt-2">
+                  <input className="px-2 py-1 bg-black/20 border border-white/10 rounded w-24" placeholder="Lat" value={typeof camLat==='number'?String(camLat):camLat} onChange={e=>setCamLat(Number(e.target.value))} />
+                  <input className="px-2 py-1 bg-black/20 border border-white/10 rounded w-24" placeholder="Lon" value={typeof camLon==='number'?String(camLon):camLon} onChange={e=>setCamLon(Number(e.target.value))} />
+                </div>
+                <input className="px-2 py-1 bg-black/20 border border-white/10 rounded w-full mt-2" placeholder="Embed URL (https://...)" value={camUrl} onChange={e=>setCamUrl(e.target.value)} />
+                <div className="flex gap-2 mt-2">
+                  <button className="px-2 py-1 bg-white/10 rounded" onClick={()=>{
+                    if (!camName || typeof camLat!=='number' || typeof camLon!=='number' || !camUrl) return;
+                    const next = [...cams, { name: camName, lat: camLat, lon: camLon, url: camUrl }];
+                    setCams(next); try { window.localStorage.setItem('publicCams', JSON.stringify(next)); } catch {}
+                    setCamName(''); setCamLat(''); setCamLon(''); setCamUrl('');
+                  }}>Add</button>
+                  <button className="px-2 py-1 bg-white/10 rounded" onClick={()=>{ setCams([]); try { window.localStorage.removeItem('publicCams'); } catch {} }}>Clear</button>
+                </div>
+                <div className="mt-2 max-h-28 overflow-y-auto text-xs">
+                  {cams.map((c,i)=>(<div key={i} className="mt-1 flex items-center justify-between"><span>{c.name}</span><div className="flex gap-2"><button className="px-2 py-1 bg-white/10 rounded" onClick={()=>{ setMapFocus({ id:`cam-${i}`, source:`Public Camera: ${c.name}`, timestamp:new Date().toISOString(), latitude:c.lat, longitude:c.lon, confidence:0.9, data:{ url: c.url } }); setShowCam({ name: c.name, url: c.url }); }}>Open</button><button className="px-2 py-1 bg-white/10 rounded" onClick={()=>{ const next = cams.filter((_,j)=>j!==i); setCams(next); try{ window.localStorage.setItem('publicCams', JSON.stringify(next)); } catch {} }}>Remove</button></div></div>))}
+                  {cams.length===0 && (<div className="text-gray-500">No cameras configured</div>)}
                 </div>
               </div>
 
@@ -380,7 +400,7 @@ export default function MapPage() {
                   <div className="h-10 w-10 rounded-full border-2 border-white/50 border-t-white animate-spin" />
                 </div>
               )}
-              <Globe events={filteredEvents} focus={mapFocus} onSelect={(e) => setMapFocus(f => f?.id === e.id ? null : e)} onHoverLatLon={(lat, lon) => setMouseLatLon({ lat, lon })} />
+              <Globe events={[...filteredEvents, ...cameraEvents]} focus={mapFocus} onSelect={(e) => { setMapFocus(f => f?.id === e.id ? null : e); const data = e.data as { url?: string } | undefined; const u = data?.url; if (u) setShowCam({ name: String(e.source||'Camera'), url: u }); }} onHoverLatLon={(lat, lon) => setMouseLatLon({ lat, lon })} />
 
               {showStreetMap && mapFocus && mapFocus.latitude != null && mapFocus.longitude != null && (
                 <div className="absolute inset-4 bg-black/80 border border-white/10 rounded-lg shadow-2xl">
@@ -400,6 +420,12 @@ export default function MapPage() {
                 </div>
               )}
               <MapLayers onLayerChange={onLayerChange} />
+              {showCam && (
+                <div className="absolute top-4 right-4 bg-black/80 border border-white/10 rounded shadow-2xl w-[360px] h-[220px]">
+                  <div className="flex items-center justify-between p-2 text-xs text-gray-300"><div>{showCam.name}</div><button className="px-2 py-1 bg-white/10 rounded" onClick={()=>setShowCam(null)}>Close</button></div>
+                  <iframe title="public-cam" src={showCam.url} className="w-full h-[180px]" allow="autoplay; encrypted-media" allowFullScreen />
+                </div>
+              )}
               {mouseLatLon && (
                 <div className="absolute bottom-4 right-4 text-xs bg-black/60 border border-white/10 px-2 py-1 rounded">Lat: {mouseLatLon.lat.toFixed(4)} • Lon: {mouseLatLon.lon.toFixed(4)}</div>
               )}
