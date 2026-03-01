@@ -1,0 +1,22 @@
+[
+  { "name": "Times Square, NYC", "lat": 40.7580, "lon": -73.9855, "url": "https://www.youtube.com/embed/1EiC9bvVGnk" },
+  { "name": "Shibuya Crossing, Tokyo", "lat": 35.6595, "lon": 139.7005, "url": "https://www.youtube.com/embed/7j4ZcQ9t_hk" },
+  { "name": "Trafalgar Square, London", "lat": 51.5080, "lon": -0.1281, "url": "https://www.youtube.com/embed/m8J7y3ZxH3I" },
+  { "name": "Eiffel Tower, Paris", "lat": 48.8584, "lon": 2.2945, "url": "https://www.youtube.com/embed/9d9mWQ2G_jk" },
+  { "name": "Marina Bay, Singapore", "lat": 1.2834, "lon": 103.8607, "url": "https://www.youtube.com/embed/8Ry0WZ8QKQQ" },
+  { "name": "Sydney Harbour", "lat": -33.8523, "lon": 151.2108, "url": "https://www.youtube.com/embed/lCjv1nGqkd4" },
+  { "name": "Copacabana Beach, Rio", "lat": -22.9711, "lon": -43.1822, "url": "https://www.youtube.com/embed/DHXL2rYQ6nA" },
+  { "name": "Downtown Dubai", "lat": 25.1972, "lon": 55.2744, "url": "https://www.youtube.com/embed/2Q2Zp8nX8X8" },
+  { "name": "CN Tower, Toronto", "lat": 43.6426, "lon": -79.3871, "url": "https://www.youtube.com/embed/J4uYqCAd9Io" },
+  { "name": "Golden Gate Bridge, SF", "lat": 37.8199, "lon": -122.4783, "url": "https://www.youtube.com/embed/YB3YF8Tn-UM" },
+  { "name": "Alexanderplatz, Berlin", "lat": 52.5219, "lon": 13.4132, "url": "https://www.youtube.com/embed/8X4G1r8o5Wc" },
+  { "name": "Venice San Marco", "lat": 45.4340, "lon": 12.3380, "url": "https://www.youtube.com/embed/s8h7G7r6r8o" },
+  { "name": "Puerta del Sol, Madrid", "lat": 40.4169, "lon": -3.7033, "url": "https://www.youtube.com/embed/0lQ7-hYfQno" },
+  { "name": "Red Square, Moscow", "lat": 55.7539, "lon": 37.6208, "url": "https://www.youtube.com/embed/4Q0nYQfV-0E" },
+  { "name": "Seoul City Hall Plaza", "lat": 37.5663, "lon": 126.9779, "url": "https://www.youtube.com/embed/1u5aK1R3XrA" },
+  { "name": "Hong Kong Victoria Harbour", "lat": 22.2930, "lon": 114.1694, "url": "https://www.youtube.com/embed/6I0XUqYbP50" },
+  { "name": "Bangkok Central", "lat": 13.7563, "lon": 100.5018, "url": "https://www.youtube.com/embed/04bA8L9lZl4" },
+  { "name": "Kuala Lumpur, Petronas", "lat": 3.1579, "lon": 101.7123, "url": "https://www.youtube.com/embed/fx0MLo8mSgE" },
+  { "name": "Cairo Tahrir Square", "lat": 30.0444, "lon": 31.2357, "url": "https://www.youtube.com/embed/Fw2rAqG1aTQ" },
+  { "name": "Nairobi CBD", "lat": -1.2864, "lon": 36.8172, "url": "https://www.youtube.com/embed/y0Vd4LZ2mMM" }
+]

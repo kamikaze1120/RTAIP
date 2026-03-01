@@ -51,12 +51,19 @@ const Logistics = () => {
         all = await fetchBackendEvents();
       }
       const oneYearAgo = Date.now() - 365 * 24 * 3600000;
-      const pubLog = all.filter(e => {
+      let pubLog = all.filter(e => {
         const t = new Date(e.timestamp).getTime();
         if (isNaN(t) || t < oneYearAgo) return false;
         const src = String(e.source || '').toLowerCase();
         return src.includes('pub log') || src.includes('log') || src.includes('maritime');
       });
+      if (pubLog.length === 0) {
+        const cutoff = Date.now() - 7 * 24 * 3600000;
+        pubLog = all.filter(e => {
+          const t = new Date(e.timestamp).getTime();
+          return !isNaN(t) && t >= cutoff && e.latitude != null && e.longitude != null;
+        }).slice(0, 50);
+      }
       const mapped: Asset[] = pubLog.map((e, idx) => {
         const d = (e.data || {}) as Record<string, unknown>;
         const idNum = Number(e.id);

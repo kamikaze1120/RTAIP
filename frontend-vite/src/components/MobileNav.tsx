@@ -17,6 +17,7 @@ const MobileNav = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  const isAdmin = (() => { try { return window.localStorage.getItem('isAdmin') === 'true' } catch { return false } })();
   const navItems = [
     { path: '/', icon: Home, label: 'Home' },
     { path: '/map', icon: Map, label: 'Map' },
@@ -24,7 +25,7 @@ const MobileNav = () => {
     { path: '/intelligence', icon: Globe, label: 'Intel' },
     { path: '/threat-analysis', icon: AlertTriangle, label: 'Threats' },
     { path: '/logistics', icon: Shield, label: 'Logistics' },
-    { path: '/settings', icon: Settings, label: 'Settings' },
+    ...(isAdmin ? [{ path: '/settings', icon: Settings, label: 'Settings' }] : []),
   ];
 
 

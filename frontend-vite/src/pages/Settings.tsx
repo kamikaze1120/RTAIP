@@ -3,6 +3,7 @@ import { runConnectivityDiagnostics, runSupabaseDiagnostics, getBackendBase, typ
 import { NewHeader } from '../components/NewHeader';
 
 export default function Settings() {
+  const isAdmin = (() => { try { return window.localStorage.getItem('isAdmin') === 'true'; } catch { return false; } })();
   const canonicalSources = [
     'ODIN',
     'DTIC', 
@@ -202,7 +203,7 @@ export default function Settings() {
               {renderInput("Default Impact Radius (km)", String(defaultImpactRadius), e => setDefaultImpactRadius(Number(e.target.value)), "", 'number', "Default radius for impact simulations.")}
             </>)}
 
-            {renderSection("Backend & Supabase", "Configure service endpoints for data flow.", <>
+            {isAdmin && renderSection("Backend & Supabase", "Configure service endpoints for data flow.", <>
               {renderInput("Backend Base URL", backendUrl, e => setBackendUrl(e.target.value), "https://rtaip-backend.onrender.com", 'text', "Render backend base used for health and events API.")}
               {renderInput("Supabase URL", supabaseUrl, e => setSupabaseUrl(e.target.value), "https://YOUR-PROJECT.supabase.co", 'text', "Supabase project URL used by the app.")}
               {renderInput("Supabase Anon Key", supabaseAnon, e => setSupabaseAnon(e.target.value), "paste anon or publishable key", 'password', "Browser key for read access.")}
@@ -212,7 +213,7 @@ export default function Settings() {
               </div>
             </>)}
 
-            {renderSection("Data Bootstrap", "Initialize database schema and insert sample events for validation.", <>
+            {isAdmin && renderSection("Data Bootstrap", "Initialize database schema and insert sample events for validation.", <>
               <div className="flex items-center gap-3">
                 <button onClick={migrateSchema} className="px-4 py-2 rounded-md bg-gradient-to-r from-blue-500 to-cyan-500 text-black font-semibold shadow-lg hover:opacity-90 transition-opacity">Migrate Schema</button>
                 <button onClick={insertSample} className="px-4 py-2 rounded-md bg-gradient-to-r from-green-500 to-emerald-500 text-black font-semibold shadow-lg hover:opacity-90 transition-opacity">Insert Sample Data</button>

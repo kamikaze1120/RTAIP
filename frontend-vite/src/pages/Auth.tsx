@@ -22,6 +22,7 @@ export default function AuthPage() {
   const [newPassConfirm, setNewPassConfirm] = useState('')
   const [policyMinutes, setPolicyMinutes] = useState(30)
   const [showAdvanced, setShowAdvanced] = useState(false)
+  const isAdmin = (() => { try { return window.localStorage.getItem('isAdmin') === 'true' } catch { return false } })()
   const [sbClient, setSbClient] = useState<SupabaseClient | null>(null)
   const [supUrl, setSupUrl] = useState<string>('')
   const [supAnon, setSupAnon] = useState<string>('')
@@ -223,8 +224,8 @@ export default function AuthPage() {
           )}
         </div>
         <div className="max-w-md mx-auto mt-3">
-          <button className="text-xs text-gray-300 underline" onClick={()=>setShowAdvanced(v=>!v)}>{showAdvanced?'Hide advanced':'Advanced security'}</button>
-          {showAdvanced && (
+          {isAdmin && (<button className="text-xs text-gray-300 underline" onClick={()=>setShowAdvanced(v=>!v)}>{showAdvanced?'Hide advanced':'Advanced security'}</button>)}
+          {isAdmin && showAdvanced && (
             <div className="mt-2 bg-white/5 p-3 rounded border border-white/10">
               <div className="text-xs text-gray-400">Backend: {computeBase()}</div>
               <button className="mt-2 px-2 py-1 text-xs bg-white/10 rounded" onClick={async()=>{

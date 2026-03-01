@@ -84,6 +84,56 @@ export default function MapPage() {
   const heatLayerRef = useRef<Heatmap | null>(null);
 
   useEffect(() => {
+    try {
+      if (cams.length === 0) {
+        const url = (typeof window !== 'undefined' ? window.localStorage.getItem('camManifestUrl') : null) || (import.meta.env.VITE_PUBLIC_CAM_MANIFEST as unknown as string | undefined) || '/cams.json';
+        const loadDefaults = async () => {
+          const defaults: Array<{ name: string; lat: number; lon: number; url: string }> = [
+            { name: 'Times Square, NYC', lat: 40.7580, lon: -73.9855, url: 'https://www.youtube.com/embed/1EiC9bvVGnk' },
+            { name: 'Shibuya Crossing, Tokyo', lat: 35.6595, lon: 139.7005, url: 'https://www.youtube.com/embed/7j4ZcQ9t_hk' },
+            { name: 'Trafalgar Sq, London', lat: 51.5080, lon: -0.1281, url: 'https://www.youtube.com/embed/m8J7y3ZxH3I' },
+            { name: 'Eiffel Tower, Paris', lat: 48.8584, lon: 2.2945, url: 'https://www.youtube.com/embed/9d9mWQ2G_jk' },
+            { name: 'Marina Bay, Singapore', lat: 1.2834, lon: 103.8607, url: 'https://www.youtube.com/embed/8Ry0WZ8QKQQ' },
+            { name: 'Sydney Harbour', lat: -33.8523, lon: 151.2108, url: 'https://www.youtube.com/embed/lCjv1nGqkd4' },
+            { name: 'Copacabana, Rio', lat: -22.9711, lon: -43.1822, url: 'https://www.youtube.com/embed/DHXL2rYQ6nA' },
+            { name: 'Downtown Dubai', lat: 25.1972, lon: 55.2744, url: 'https://www.youtube.com/embed/2Q2Zp8nX8X8' },
+            { name: 'CN Tower, Toronto', lat: 43.6426, lon: -79.3871, url: 'https://www.youtube.com/embed/J4uYqCAd9Io' },
+            { name: 'Golden Gate, SF', lat: 37.8199, lon: -122.4783, url: 'https://www.youtube.com/embed/YB3YF8Tn-UM' },
+            { name: 'Alexanderplatz, Berlin', lat: 52.5219, lon: 13.4132, url: 'https://www.youtube.com/embed/8X4G1r8o5Wc' },
+            { name: 'Piazza San Marco, Venice', lat: 45.4340, lon: 12.3380, url: 'https://www.youtube.com/embed/s8h7G7r6r8o' }
+          ];
+          setCams(defaults);
+          try { window.localStorage.setItem('publicCams', JSON.stringify(defaults)); } catch {}
+        };
+        if (url) {
+          (async () => {
+            try {
+              const r = await fetch(String(url), { cache: 'no-store' });
+              if (r.ok) {
+                const j = await r.json();
+                type CamManifestItem = { name?: string; title?: string; lat?: number; latitude?: number; lon?: number; longitude?: number; url?: string; embed?: string };
+                const arr: CamManifestItem[] = Array.isArray(j)
+                  ? (j as CamManifestItem[])
+                  : (typeof j === 'object' && j !== null && Array.isArray((j as { cameras?: unknown }).cameras))
+                    ? ((j as { cameras: CamManifestItem[] }).cameras)
+                    : [];
+                if (arr.length > 0) {
+                  const mapped = arr.map((c) => ({ name: String(c.name || c.title || 'Public Cam'), lat: Number(c.lat ?? c.latitude ?? NaN), lon: Number(c.lon ?? c.longitude ?? NaN), url: String(c.url ?? c.embed ?? '') })).filter(c => c.name && !isNaN(c.lat) && !isNaN(c.lon) && c.url);
+                  if (mapped.length > 0) {
+                    setCams(mapped);
+                    try { window.localStorage.setItem('publicCams', JSON.stringify(mapped)); } catch {}
+                    return;
+                  }
+                }
+              }
+            } catch {}
+            await loadDefaults();
+          })();
+        } else {
+          loadDefaults();
+        }
+      }
+    } catch {}
   }, []);
 
   const cameraEvents: RtaEvent[] = React.useMemo(() => {
@@ -340,6 +390,39 @@ export default function MapPage() {
                     setCamName(''); setCamLat(''); setCamLon(''); setCamUrl('');
                   }}>Add</button>
                   <button className="px-2 py-1 bg-white/10 rounded" onClick={()=>{ setCams([]); try { window.localStorage.removeItem('publicCams'); } catch {} }}>Clear</button>
+                  <button className="px-2 py-1 bg-white/10 rounded" onClick={async()=>{
+                    try { window.localStorage.removeItem('publicCams'); } catch {}
+                    const url = (typeof window !== 'undefined' ? window.localStorage.getItem('camManifestUrl') : null) || (import.meta.env.VITE_PUBLIC_CAM_MANIFEST as unknown as string | undefined);
+                    if (url) {
+                      try {
+                        const r = await fetch(String(url), { cache: 'no-store' });
+                        if (r.ok) {
+                          const j = await r.json();
+                          type CamManifestItem = { name?: string; title?: string; lat?: number; latitude?: number; lon?: number; longitude?: number; url?: string; embed?: string };
+                          const arr: CamManifestItem[] = Array.isArray(j)
+                            ? (j as CamManifestItem[])
+                            : (typeof j === 'object' && j !== null && Array.isArray((j as { cameras?: unknown }).cameras))
+                              ? ((j as { cameras: CamManifestItem[] }).cameras)
+                              : [];
+                          const mapped = arr.map((c) => ({ name: String(c.name || c.title || 'Public Cam'), lat: Number(c.lat ?? c.latitude ?? NaN), lon: Number(c.lon ?? c.longitude ?? NaN), url: String(c.url ?? c.embed ?? '') })).filter(c => c.name && !isNaN(c.lat) && !isNaN(c.lon) && c.url);
+                          if (mapped.length > 0) { setCams(mapped); try { window.localStorage.setItem('publicCams', JSON.stringify(mapped)); } catch {} return; }
+                        }
+                      } catch {}
+                    }
+                    const defaults: Array<{ name: string; lat: number; lon: number; url: string }> = [
+                      { name: 'Times Square, NYC', lat: 40.7580, lon: -73.9855, url: 'https://www.youtube.com/embed/1EiC9bvVGnk' },
+                      { name: 'Shibuya Crossing, Tokyo', lat: 35.6595, lon: 139.7005, url: 'https://www.youtube.com/embed/7j4ZcQ9t_hk' },
+                      { name: 'Trafalgar Sq, London', lat: 51.5080, lon: -0.1281, url: 'https://www.youtube.com/embed/m8J7y3ZxH3I' },
+                      { name: 'Eiffel Tower, Paris', lat: 48.8584, lon: 2.2945, url: 'https://www.youtube.com/embed/9d9mWQ2G_jk' },
+                      { name: 'Marina Bay, Singapore', lat: 1.2834, lon: 103.8607, url: 'https://www.youtube.com/embed/8Ry0WZ8QKQQ' },
+                      { name: 'Sydney Harbour', lat: -33.8523, lon: 151.2108, url: 'https://www.youtube.com/embed/lCjv1nGqkd4' },
+                      { name: 'Copacabana, Rio', lat: -22.9711, lon: -43.1822, url: 'https://www.youtube.com/embed/DHXL2rYQ6nA' },
+                      { name: 'Downtown Dubai', lat: 25.1972, lon: 55.2744, url: 'https://www.youtube.com/embed/2Q2Zp8nX8X8' },
+                      { name: 'CN Tower, Toronto', lat: 43.6426, lon: -79.3871, url: 'https://www.youtube.com/embed/J4uYqCAd9Io' },
+                      { name: 'Golden Gate, SF', lat: 37.8199, lon: -122.4783, url: 'https://www.youtube.com/embed/YB3YF8Tn-UM' }
+                    ];
+                    setCams(defaults); try { window.localStorage.setItem('publicCams', JSON.stringify(defaults)); } catch {}
+                  }}>Load World Cams</button>
                 </div>
                 <div className="mt-2 max-h-28 overflow-y-auto text-xs">
                   {cams.map((c,i)=>(<div key={i} className="mt-1 flex items-center justify-between"><span>{c.name}</span><div className="flex gap-2"><button className="px-2 py-1 bg-white/10 rounded" onClick={()=>{ setMapFocus({ id:`cam-${i}`, source:`Public Camera: ${c.name}`, timestamp:new Date().toISOString(), latitude:c.lat, longitude:c.lon, confidence:0.9, data:{ url: c.url } }); setShowCam({ name: c.name, url: c.url }); }}>Open</button><button className="px-2 py-1 bg-white/10 rounded" onClick={()=>{ const next = cams.filter((_,j)=>j!==i); setCams(next); try{ window.localStorage.setItem('publicCams', JSON.stringify(next)); } catch {} }}>Remove</button></div></div>))}

@@ -57,12 +57,19 @@ const ThreatAnalysis = () => {
         all = await fetchBackendEvents();
       }
       const oneYearAgo = Date.now() - 365 * 24 * 3600000;
-      const relevant = all.filter(e => {
+      let relevant = all.filter(e => {
         const t = new Date(e.timestamp).getTime();
         if (isNaN(t) || t < oneYearAgo) return false;
         const src = String(e.source || '').toLowerCase();
         return src.includes('gtd') || src.includes('odin') || src.includes('dtic') || src.includes('terror');
       });
+      if (relevant.length === 0) {
+        const cutoff = Date.now() - 30 * 24 * 3600000;
+        relevant = all.filter(e => {
+          const t = new Date(e.timestamp).getTime();
+          return !isNaN(t) && t >= cutoff && e.latitude != null && e.longitude != null;
+        }).sort((a,b)=>Math.round(eventSeverity(b)*100)-Math.round(eventSeverity(a)*100)).slice(0,50);
+      }
       const mapped: ThreatEvent[] = relevant.map((e, idx) => {
         const d = (e.data || {}) as Record<string, unknown>;
         const idNum = Number(e.id);
