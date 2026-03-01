@@ -104,7 +104,7 @@ export default function App() {
     <div className="relative min-h-screen text-white bg-animated">
       <div className="grid-overlay"></div>
       {!booting && authed && !onAuthRoute && <NewHeader />}
-      {!booting && authed && !onAuthRoute && <MobileNav />} {/* Add mobile navigation */}
+      {!booting && authed && !onAuthRoute && <MobileNav />}
       {!booting && !window.localStorage.getItem('cookieConsentTs') && (
         <div className="fixed bottom-0 left-0 right-0 z-50 bg-black/70 text-white">
           <div className="container mx-auto px-6 py-3 flex items-center justify-between">
@@ -130,23 +130,31 @@ export default function App() {
               </div>
             </div>
           ) : (
-          <div className="mobile-content"> {/* Add mobile content wrapper */}
-            <Routes>
-              <Route path="/sources" element={<Sources />} />
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/intelligence" element={<Intelligence />} />
-              <Route path="/threat-analysis" element={<ThreatAnalysis />} />
-              <Route path="/logistics" element={<Logistics />} />
-              <Route path="/map" element={<MapPage />} />
-              <Route path="/timeline" element={<Timeline />} />
-              <Route path="/security" element={<Security />} />
-              <Route path="/settings" element={<Settings />} />
-              <Route path="/auth" element={<AuthPage />} />
-              <Route path="/admin" element={<AdminPage />} />
-              <Route path="/legal" element={<LegalPage />} />
-              <Route path="/command" element={<CommandCenter />} />
-              <Route path="/" element={<Dashboard />} />
-            </Routes>
+          <div className="mobile-content">
+            {authed ? (
+              <Routes>
+                <Route path="/sources" element={<Sources />} />
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/intelligence" element={<Intelligence />} />
+                <Route path="/threat-analysis" element={<ThreatAnalysis />} />
+                <Route path="/logistics" element={<Logistics />} />
+                <Route path="/map" element={<MapPage />} />
+                <Route path="/timeline" element={<Timeline />} />
+                <Route path="/security" element={<Security />} />
+                <Route path="/settings" element={<Settings />} />
+                <Route path="/auth" element={<AuthPage />} />
+                <Route path="/admin" element={<AdminPage />} />
+                <Route path="/legal" element={<LegalPage />} />
+                <Route path="/command" element={<CommandCenter />} />
+                <Route path="/" element={<Dashboard />} />
+              </Routes>
+            ) : (
+              <Routes>
+                <Route path="/auth" element={<AuthPage />} />
+                <Route path="/legal" element={<LegalPage />} />
+                <Route path="*" element={<AuthPage />} />
+              </Routes>
+            )}
           </div>
           )}
         </div>
