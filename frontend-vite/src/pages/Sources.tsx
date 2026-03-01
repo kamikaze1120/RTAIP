@@ -62,16 +62,20 @@ export default function Sources() {
   const sourceCounts = useMemo(() => {
     const counts = new Map<string, number>();
     newSources.forEach(s => counts.set(s.label, 0));
+    const labelForSource = (src: string): string | null => {
+      const s = src.toLowerCase();
+      if (s.includes('eonet') || s.includes('nasa')) return 'NASA EONET';
+      if (s.includes('noaa') || s.includes('nws') || s.includes('weather')) return 'NOAA Alerts';
+      if (s.includes('adsb') || s.includes('opensky') || s.includes('flight') || s.includes('air')) return 'ADS-B OpenSky';
+      if (s.includes('ais') || s.includes('maritime') || s.includes('vessel') || s.includes('ship')) return 'AIS Maritime';
+      if (s.includes('usgs') || s.includes('earthquake') || s.includes('seismic')) return 'USGS Earthquakes';
+      if (s.includes('radio')) return 'Public Radio';
+      if (s.includes('reddit')) return 'Reddit Intel';
+      return null;
+    };
     events.forEach(e => {
-      if (e.source) {
-        const sourceName = e.source.toLowerCase();
-        for (const s of newSources) {
-          if (sourceName.includes(s.label.toLowerCase())) {
-            counts.set(s.label, (counts.get(s.label) || 0) + 1);
-            break;
-          }
-        }
-      }
+      const label = e.source ? labelForSource(String(e.source)) : null;
+      if (label) counts.set(label, (counts.get(label) || 0) + 1);
     });
     return counts;
   }, [events]);

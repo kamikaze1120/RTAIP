@@ -7,7 +7,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 export default function AuthPage() {
   const navigate = useNavigate()
-  const [mode, setMode] = useState<'login'|'register'>('login')
+  const [mode, setMode] = useState<'login'|'register'|'reset'>('login')
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const [email, setEmail] = useState('')
@@ -18,6 +18,8 @@ export default function AuthPage() {
   const [orgId, setOrgId] = useState<number | null>(null)
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState(false)
+  const [newPass, setNewPass] = useState('')
+  const [newPassConfirm, setNewPassConfirm] = useState('')
   const [policyMinutes, setPolicyMinutes] = useState(30)
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [sbClient, setSbClient] = useState<SupabaseClient | null>(null)
@@ -54,6 +56,13 @@ export default function AuthPage() {
   }, [])
 
   useEffect(() => {
+    try {
+      const hash = (typeof window !== 'undefined' ? window.location.hash : '') || ''
+      if (hash.includes('type=recovery')) {
+        setMode('reset')
+        setMessage('Enter a new password to complete reset')
+      }
+    } catch {}
     const id = setInterval(() => {}, 5000)
     return () => { clearInterval(id) }
   }, [])
@@ -122,7 +131,32 @@ export default function AuthPage() {
   }
 
   const reset = async () => {
-    setMessage('Password reset is not available yet')
+    if (mode === 'reset') {
+      if (!sbClient) { setMessage('Supabase not configured.'); return }
+      if (!newPass || !newPassConfirm) { setMessage('Enter new password twice') ; return }
+      if (newPass !== newPassConfirm) { setMessage('Passwords do not match'); return }
+      setBusy(true)
+      try {
+        const { error } = await sbClient.auth.updateUser({ password: newPass })
+        if (error) { setMessage(error.message); return }
+        setMessage('Password updated. Please sign in.')
+        setMode('login')
+      } catch (e: unknown) {
+        setMessage(extractErrorMessage(e, 'Reset failed'))
+      } finally { setBusy(false) }
+      return
+    }
+    if (!email) { setMessage('Enter your email to reset'); return }
+    if (!sbClient) { setMessage('Supabase not configured.'); return }
+    setBusy(true)
+    try {
+      const redirectTo = (typeof window !== 'undefined' ? window.location.origin + '/auth' : undefined)
+      const { error } = await sbClient.auth.resetPasswordForEmail(email, { redirectTo })
+      if (error) { setMessage(error.message); return }
+      setMessage('Password reset email sent')
+    } catch (e: unknown) {
+      setMessage(extractErrorMessage(e, 'Reset failed'))
+    } finally { setBusy(false) }
   }
 
   const enrollMfa = async () => { setMessage('MFA will be available after login') }
@@ -159,7 +193,7 @@ export default function AuthPage() {
               <button disabled={busy} className="mt-3 w-full px-3 py-2 bg-gradient-to-r from-cyan-500 to-violet-500 text-black rounded" onClick={signIn}>{busy?'Working…':'Sign in'}</button>
               <button className="mt-2 w-full px-3 py-2 bg-white/10 rounded" onClick={reset}>Reset password</button>
             </div>
-          ) : (
+          ) : mode==='register' ? (
             <div className="mt-3">
               <input className="mt-2 w-full px-3 py-2 bg-black/20 border border-white/10 rounded" placeholder="Full name" value={name} onChange={e=>setName(e.target.value)} />
               <input className="mt-2 w-full px-3 py-2 bg-black/20 border border-white/10 rounded" placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)} />
@@ -175,6 +209,16 @@ export default function AuthPage() {
                 <label htmlFor="t">Accept Terms of Use</label>
               </div>
               <button disabled={busy} className="mt-3 w-full px-3 py-2 bg-gradient-to-r from-cyan-500 to-violet-500 text-black rounded" onClick={signUp}>{busy?'Working…':'Sign up'}</button>
+            </div>
+          ) : (
+            <div className="mt-3">
+              <div className="text-xs text-gray-300">Reset password for {email || 'your account'}</div>
+              {!email && (
+                <input className="mt-2 w-full px-3 py-2 bg-black/20 border border-white/10 rounded" placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)} />
+              )}
+              <input className="mt-2 w-full px-3 py-2 bg-black/20 border border-white/10 rounded" placeholder="New password" type="password" value={newPass} onChange={e=>setNewPass(e.target.value)} />
+              <input className="mt-2 w-full px-3 py-2 bg-black/20 border border-white/10 rounded" placeholder="Confirm new password" type="password" value={newPassConfirm} onChange={e=>setNewPassConfirm(e.target.value)} />
+              <button disabled={busy} className="mt-3 w-full px-3 py-2 bg-gradient-to-r from-cyan-500 to-violet-500 text-black rounded" onClick={reset}>{busy?'Working…':'Set new password'}</button>
             </div>
           )}
         </div>

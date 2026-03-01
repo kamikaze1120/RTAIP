@@ -22,7 +22,7 @@ export default function Dashboard() {
   const [usage, setUsage] = useState<Record<string, number> | null>(null);
   const [region, setRegion] = useState<null | { region: string; primary: boolean }>(null);
   const [backupStatus, setBackupStatus] = useState<null | { tables?: string[]; bytes?: number; imported?: Record<string, number> }>(null);
-  const filteredEvents = useMemo(() => events.filter(e => !/usgs|noaa/i.test(String(e.source||''))), [events]);
+  const filteredEvents = useMemo(() => events, [events]);
   const fallbackMetrics = useMemo(() => {
     const total = filteredEvents.length;
     const anomalies = filteredEvents.filter(e => Math.round(eventSeverity(e)*100) >= 70).length;
