@@ -70,9 +70,11 @@ export function NewHeader() {
           <div className="w-[220px]">
             <SearchInput value={q} onChange={setQ} suggestions={suggestions} />
           </div>
-          <Link to="/settings" className="px-3 py-1.5 rounded-md bg-gradient-to-r from-cyan-500 to-violet-500 text-black font-semibold shadow-lg hover:opacity-90 transition-opacity">
-            Configure
-          </Link>
+          {isAdmin && (
+            <Link to="/settings" className="px-3 py-1.5 rounded-md bg-gradient-to-r from-cyan-500 to-violet-500 text-black font-semibold shadow-lg hover:opacity-90 transition-opacity">
+              Configure
+            </Link>
+          )}
           <button className="ml-2 px-3 py-1.5 rounded-md bg-white/10 border border-white/20 text-xs text-gray-200 transition-soft hover-bleed" onClick={()=>setTheme(t=>t==='dark'?'light':'dark')}>{theme==='dark'?'Dark':'Light'}</button>
           {authed && (<button className="ml-2 px-3 py-1.5 rounded-md bg-white/10 border border-white/20 text-xs text-gray-200 transition-soft hover-bleed" onClick={logout}>Logout</button>)}
           <div className="ml-4 flex items-center gap-2 px-2 py-1 rounded-md bg-green-600/10 border border-green-500/20">

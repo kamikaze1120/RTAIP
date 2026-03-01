@@ -20,6 +20,7 @@ const newSources: SourceStat[] = [
 export default function Sources() {
   const [stats, setStats] = useState<SourceStat[]>(newSources);
   const [events, setEvents] = useState<RtaEvent[]>([]);
+  const isAdmin = useMemo(() => { try { return window.localStorage.getItem('isAdmin') === 'true'; } catch { return false; } }, []);
   const enabledMap = useMemo(() => {
     try {
       const s = typeof window !== 'undefined' ? window.localStorage.getItem('sources') : null;
@@ -104,9 +105,11 @@ export default function Sources() {
         <div className="mt-8 bg-white/10 backdrop-blur-md rounded-lg p-6 shadow-lg">
           <h2 className="text-xl font-bold text-white mb-4">Integration Notes</h2>
           <div className="text-gray-300 text-sm">Run free data ingestors now:</div>
-          <div className="mt-2 flex gap-2">
-            <button className="px-3 py-2 bg-white/10 rounded" onClick={async()=>{ const b = getBackendBase(); if (!b) { alert('Backend URL not configured'); return; } try { await fetch(`${b.replace(/\/$/, '')}/connectors/run`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) }); alert('Ingestion started. Refresh in ~30s.'); } catch { alert('Failed to trigger ingestion'); } }}>Run All</button>
-          </div>
+          {isAdmin && (
+            <div className="mt-2 flex gap-2">
+              <button className="px-3 py-2 bg-white/10 rounded" onClick={async()=>{ const b = getBackendBase(); if (!b) { alert('Backend URL not configured'); return; } try { await fetch(`${b.replace(/\/$/, '')}/connectors/run`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) }); alert('Ingestion started. Refresh in ~30s.'); } catch { alert('Failed to trigger ingestion'); } }}>Run All</button>
+            </div>
+          )}
           <p className="text-gray-400 mt-4">
             Connectors use only free/public endpoints: NASA EONET, NOAA NWS alerts, OpenSky ADS-B, AIS stream, USGS earthquakes, public radio directory, and Reddit keyword signals.
           </p>
