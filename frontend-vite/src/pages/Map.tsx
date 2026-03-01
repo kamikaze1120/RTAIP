@@ -49,6 +49,19 @@ export default function MapPage() {
   
   const [hoursWindow, setHoursWindow] = useState(24);
   const [loading, setLoading] = useState(true);
+  const [cams, setCams] = useState<Array<{ name: string; lat: number; lon: number; url: string }>>(() => {
+    try {
+      const raw = window.localStorage.getItem('publicCams');
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [camName, setCamName] = useState('');
+  const [camLat, setCamLat] = useState<number | ''>('');
+  const [camLon, setCamLon] = useState<number | ''>('');
+  const [camUrl, setCamUrl] = useState('');
+  const [showCam, setShowCam] = useState<{ name: string; url: string } | null>(null);
   
   const [mapFocus, setMapFocus] = useState<RtaEvent | null>(null);
   const [showStreetMap, setShowStreetMap] = useState(false);
@@ -72,6 +85,18 @@ export default function MapPage() {
 
   useEffect(() => {
   }, []);
+
+  const cameraEvents: RtaEvent[] = React.useMemo(() => {
+    return cams.map((c, idx) => ({
+      id: `cam-${idx}`,
+      source: `Public Camera: ${c.name}`,
+      timestamp: new Date().toISOString(),
+      latitude: c.lat,
+      longitude: c.lon,
+      confidence: 0.9,
+      data: { url: c.url }
+    }));
+  }, [cams]);
 
   useEffect(() => {
     (async () => {

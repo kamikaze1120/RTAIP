@@ -341,8 +341,7 @@ export async function fetchBackendEvents(): Promise<RtaEvent[]> {
       confidence: typeof e.confidence === 'number' ? e.confidence : 0.5,
       data: (e.data as Record<string, unknown>) || {},
     }));
-    const filtered = mapped.filter(ev => !/usgs|noaa/i.test(String(ev.source || '')));
-    return filtered;
+    return mapped;
   } catch {
     return [];
   }
@@ -695,8 +694,7 @@ export async function fetchSupabaseEvents(): Promise<RtaEvent[]> {
     ev = await tryClient(alternate);
     if (ev.length === 0) ev = await restFetch(alternate);
   }
-  const filtered = ev.filter(e => !/usgs|noaa/i.test(String(e.source || '')));
-  return filtered;
+  return ev;
 }
 
 export async function callGemini(query: string, context?: string): Promise<string | null> {
