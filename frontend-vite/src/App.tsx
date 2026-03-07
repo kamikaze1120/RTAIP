@@ -1,4 +1,4 @@
-import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
+import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { NewHeader } from './components/NewHeader';
 import MobileNav from './components/MobileNav'; // Add mobile navigation
@@ -25,6 +25,7 @@ export default function App() {
   const location = useLocation();
   const [booting, setBooting] = useState(true);
   const authed = !!(typeof window !== 'undefined' && window.localStorage.getItem('access_token'));
+  const isAdmin = !!(typeof window !== 'undefined' && window.localStorage.getItem('isAdmin') === 'true');
   const onAuthRoute = location.pathname.startsWith('/auth');
   useEffect(() => {
     // Persist env defaults to localStorage so backend stays connected without manual input
@@ -141,9 +142,9 @@ export default function App() {
                 <Route path="/map" element={<MapPage />} />
                 <Route path="/timeline" element={<Timeline />} />
                 <Route path="/security" element={<Security />} />
-                <Route path="/settings" element={<Settings />} />
+                <Route path="/settings" element={isAdmin ? <Settings /> : <Navigate to="/dashboard" replace />} />
                 <Route path="/auth" element={<AuthPage />} />
-                <Route path="/admin" element={<AdminPage />} />
+                <Route path="/admin" element={isAdmin ? <AdminPage /> : <Navigate to="/dashboard" replace />} />
                 <Route path="/legal" element={<LegalPage />} />
                 <Route path="/command" element={<CommandCenter />} />
                 <Route path="/" element={<Dashboard />} />
