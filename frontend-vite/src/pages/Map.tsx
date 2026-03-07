@@ -15,6 +15,28 @@ import Point from 'ol/geom/Point';
 import { fromLonLat } from 'ol/proj';
 import MapLayers from '../components/MapLayers';
 
+function CamViewer({ name, url, onClose }: { name: string; url: string; onClose: () => void }) {
+  const [tick, setTick] = useState(0);
+  const isImage = /\.(jpg|jpeg|png|gif|bmp|webp)(\?|$)/i.test(url) || url.includes('/image');
+  useEffect(() => {
+    if (!isImage) return;
+    const ms = Math.max(30000, Number(window.localStorage.getItem('camRefreshMs') || '120000'));
+    const id = setInterval(() => setTick(t => t + 1), ms);
+    return () => clearInterval(id);
+  }, [isImage, url]);
+  const src = isImage ? `${url}${url.includes('?') ? '&' : '?'}t=${tick}` : url;
+  return (
+    <div className="absolute top-4 right-4 bg-black/80 border border-white/10 rounded shadow-2xl w-[360px] h-[220px]">
+      <div className="flex items-center justify-between p-2 text-xs text-gray-300"><div>{name}</div><button className="px-2 py-1 bg-white/10 rounded" onClick={onClose}>Close</button></div>
+      {isImage ? (
+        <img alt="public-cam" src={src} className="w-full h-[180px] object-cover" />
+      ) : (
+        <iframe title="public-cam" src={src} className="w-full h-[180px]" allow="autoplay; encrypted-media" allowFullScreen />
+      )}
+    </div>
+  );
+}
+
 function GeofenceControls({ onAdd, focus }: { onAdd: (f: { id: string; name: string; lat: number; lon: number; radiusM: number }) => void; focus: RtaEvent | null }) {
   const [name, setName] = useState('Fence 1');
   const [lat, setLat] = useState<number | ''>('');
@@ -375,13 +397,13 @@ export default function MapPage() {
               </div>
               <div className="mb-4">
                 <h3 className="text-md font-semibold mb-2">Public Cameras</h3>
-                <div className="text-xs text-gray-400 mb-1">Add public live feeds (YouTube embed URLs work)</div>
+                <div className="text-xs text-gray-400 mb-1">Add public camera feeds (image URLs preferred)</div>
                 <input className="px-2 py-1 bg-black/20 border border-white/10 rounded w-full mt-1" placeholder="Name" value={camName} onChange={e=>setCamName(e.target.value)} />
                 <div className="flex gap-2 mt-2">
                   <input className="px-2 py-1 bg-black/20 border border-white/10 rounded w-24" placeholder="Lat" value={typeof camLat==='number'?String(camLat):camLat} onChange={e=>setCamLat(Number(e.target.value))} />
                   <input className="px-2 py-1 bg-black/20 border border-white/10 rounded w-24" placeholder="Lon" value={typeof camLon==='number'?String(camLon):camLon} onChange={e=>setCamLon(Number(e.target.value))} />
                 </div>
-                <input className="px-2 py-1 bg-black/20 border border-white/10 rounded w-full mt-2" placeholder="Embed URL (https://...)" value={camUrl} onChange={e=>setCamUrl(e.target.value)} />
+                <input className="px-2 py-1 bg-black/20 border border-white/10 rounded w-full mt-2" placeholder="Feed URL (https://... jpg/png/mp4)" value={camUrl} onChange={e=>setCamUrl(e.target.value)} />
                 <div className="flex gap-2 mt-2">
                   <button className="px-2 py-1 bg-white/10 rounded" onClick={()=>{
                     if (!camName || typeof camLat!=='number' || typeof camLon!=='number' || !camUrl) return;
@@ -524,10 +546,7 @@ export default function MapPage() {
               )}
               <MapLayers onLayerChange={onLayerChange} />
               {showCam && (
-                <div className="absolute top-4 right-4 bg-black/80 border border-white/10 rounded shadow-2xl w-[360px] h-[220px]">
-                  <div className="flex items-center justify-between p-2 text-xs text-gray-300"><div>{showCam.name}</div><button className="px-2 py-1 bg-white/10 rounded" onClick={()=>setShowCam(null)}>Close</button></div>
-                  <iframe title="public-cam" src={showCam.url} className="w-full h-[180px]" allow="autoplay; encrypted-media" allowFullScreen />
-                </div>
+                <CamViewer name={showCam.name} url={showCam.url} onClose={() => setShowCam(null)} />
               )}
               {mouseLatLon && (
                 <div className="absolute bottom-4 right-4 text-xs bg-black/60 border border-white/10 px-2 py-1 rounded">Lat: {mouseLatLon.lat.toFixed(4)} • Lon: {mouseLatLon.lon.toFixed(4)}</div>
