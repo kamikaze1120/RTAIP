@@ -111,18 +111,11 @@ export default function MapPage() {
         const url = (typeof window !== 'undefined' ? window.localStorage.getItem('camManifestUrl') : null) || (import.meta.env.VITE_PUBLIC_CAM_MANIFEST as unknown as string | undefined) || '/cams.json';
         const loadDefaults = async () => {
           const defaults: Array<{ name: string; lat: number; lon: number; url: string }> = [
-            { name: 'Times Square, NYC', lat: 40.7580, lon: -73.9855, url: 'https://www.youtube.com/embed/1EiC9bvVGnk' },
-            { name: 'Shibuya Crossing, Tokyo', lat: 35.6595, lon: 139.7005, url: 'https://www.youtube.com/embed/7j4ZcQ9t_hk' },
-            { name: 'Trafalgar Sq, London', lat: 51.5080, lon: -0.1281, url: 'https://www.youtube.com/embed/m8J7y3ZxH3I' },
-            { name: 'Eiffel Tower, Paris', lat: 48.8584, lon: 2.2945, url: 'https://www.youtube.com/embed/9d9mWQ2G_jk' },
-            { name: 'Marina Bay, Singapore', lat: 1.2834, lon: 103.8607, url: 'https://www.youtube.com/embed/8Ry0WZ8QKQQ' },
-            { name: 'Sydney Harbour', lat: -33.8523, lon: 151.2108, url: 'https://www.youtube.com/embed/lCjv1nGqkd4' },
-            { name: 'Copacabana, Rio', lat: -22.9711, lon: -43.1822, url: 'https://www.youtube.com/embed/DHXL2rYQ6nA' },
-            { name: 'Downtown Dubai', lat: 25.1972, lon: 55.2744, url: 'https://www.youtube.com/embed/2Q2Zp8nX8X8' },
-            { name: 'CN Tower, Toronto', lat: 43.6426, lon: -79.3871, url: 'https://www.youtube.com/embed/J4uYqCAd9Io' },
-            { name: 'Golden Gate, SF', lat: 37.8199, lon: -122.4783, url: 'https://www.youtube.com/embed/YB3YF8Tn-UM' },
-            { name: 'Alexanderplatz, Berlin', lat: 52.5219, lon: 13.4132, url: 'https://www.youtube.com/embed/8X4G1r8o5Wc' },
-            { name: 'Piazza San Marco, Venice', lat: 45.4340, lon: 12.3380, url: 'https://www.youtube.com/embed/s8h7G7r6r8o' }
+            { name: 'NYC - Atlantic Ave @ Pennsylvania Ave', lat: 40.675787, lon: -73.896898, url: 'https://webcams.nyctmc.org/api/cameras/0bbea8bd-10f1-4126-b3c5-9e9432eab749/image' },
+            { name: 'NYC - FDR Dr @ 36 St', lat: 40.744441, lon: -73.971242, url: 'https://webcams.nyctmc.org/api/cameras/04ffc69c-92a7-4c02-aa18-2b16e7ba81f2/image' },
+            { name: 'London - Piccadilly Circus', lat: 51.5096, lon: -0.13484, url: 'https://s3-eu-west-1.amazonaws.com/jamcams.tfl.gov.uk/00001.07450.jpg' },
+            { name: 'Seattle - Elliott & Broad', lat: 47.61547, lon: -122.35417, url: 'http://www.seattle.gov/trafficcams/images/Elliott_Broad.jpg' },
+            { name: 'NYC - WBB Above Bedford Ave & S 5 St', lat: 40.710983, lon: -73.963168, url: 'https://webcams.nyctmc.org/api/cameras/8d2b3ae9-da68-4d37-8ae2-d3bc014f827b/image' }
           ];
           setCams(defaults);
           try { window.localStorage.setItem('publicCams', JSON.stringify(defaults)); } catch {}
@@ -432,16 +425,11 @@ export default function MapPage() {
                       } catch {}
                     }
                     const defaults: Array<{ name: string; lat: number; lon: number; url: string }> = [
-                      { name: 'Times Square, NYC', lat: 40.7580, lon: -73.9855, url: 'https://www.youtube.com/embed/1EiC9bvVGnk' },
-                      { name: 'Shibuya Crossing, Tokyo', lat: 35.6595, lon: 139.7005, url: 'https://www.youtube.com/embed/7j4ZcQ9t_hk' },
-                      { name: 'Trafalgar Sq, London', lat: 51.5080, lon: -0.1281, url: 'https://www.youtube.com/embed/m8J7y3ZxH3I' },
-                      { name: 'Eiffel Tower, Paris', lat: 48.8584, lon: 2.2945, url: 'https://www.youtube.com/embed/9d9mWQ2G_jk' },
-                      { name: 'Marina Bay, Singapore', lat: 1.2834, lon: 103.8607, url: 'https://www.youtube.com/embed/8Ry0WZ8QKQQ' },
-                      { name: 'Sydney Harbour', lat: -33.8523, lon: 151.2108, url: 'https://www.youtube.com/embed/lCjv1nGqkd4' },
-                      { name: 'Copacabana, Rio', lat: -22.9711, lon: -43.1822, url: 'https://www.youtube.com/embed/DHXL2rYQ6nA' },
-                      { name: 'Downtown Dubai', lat: 25.1972, lon: 55.2744, url: 'https://www.youtube.com/embed/2Q2Zp8nX8X8' },
-                      { name: 'CN Tower, Toronto', lat: 43.6426, lon: -79.3871, url: 'https://www.youtube.com/embed/J4uYqCAd9Io' },
-                      { name: 'Golden Gate, SF', lat: 37.8199, lon: -122.4783, url: 'https://www.youtube.com/embed/YB3YF8Tn-UM' }
+                      { name: 'NYC - Atlantic Ave @ Pennsylvania Ave', lat: 40.675787, lon: -73.896898, url: 'https://webcams.nyctmc.org/api/cameras/0bbea8bd-10f1-4126-b3c5-9e9432eab749/image' },
+                      { name: 'NYC - FDR Dr @ 36 St', lat: 40.744441, lon: -73.971242, url: 'https://webcams.nyctmc.org/api/cameras/04ffc69c-92a7-4c02-aa18-2b16e7ba81f2/image' },
+                      { name: 'London - Piccadilly Circus', lat: 51.5096, lon: -0.13484, url: 'https://s3-eu-west-1.amazonaws.com/jamcams.tfl.gov.uk/00001.07450.jpg' },
+                      { name: 'Seattle - Elliott & Broad', lat: 47.61547, lon: -122.35417, url: 'http://www.seattle.gov/trafficcams/images/Elliott_Broad.jpg' },
+                      { name: 'NYC - WBB Above Bedford Ave & S 5 St', lat: 40.710983, lon: -73.963168, url: 'https://webcams.nyctmc.org/api/cameras/8d2b3ae9-da68-4d37-8ae2-d3bc014f827b/image' }
                     ];
                     setCams(defaults); try { window.localStorage.setItem('publicCams', JSON.stringify(defaults)); } catch {}
                   }}>Load World Cams</button>
