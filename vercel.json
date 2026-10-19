@@ -1,17 +1,16 @@
 {
-  "builds": [
-    {
-      "src": "frontend-vite/package.json",
-      "use": "@vercel/static-build",
-      "config": { "distDir": "dist" }
-    }
-  ],
+  "buildCommand": "npm --prefix frontend-vite install && npm --prefix frontend-vite run build",
+  "outputDirectory": "frontend-vite/dist",
+  "framework": null,
   "build": {
     "env": {
       "VITE_BACKEND_URL": "https://rtaip-backend.onrender.com"
     }
   },
   "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
   ]
 }
