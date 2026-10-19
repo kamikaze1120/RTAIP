@@ -87,6 +87,21 @@ export default function MapPage() {
   
   const [mapFocus, setMapFocus] = useState<RtaEvent | null>(null);
   const [showStreetMap, setShowStreetMap] = useState(false);
+
+  // Deep-link focus from the Entity Graph: /map?focus=lat,lon
+  useEffect(() => {
+    try {
+      const sp = new URLSearchParams(window.location.search);
+      const f = sp.get("focus");
+      if (f) {
+        const parts = f.split(",").map(Number);
+        if (parts.length === 2 && isFinite(parts[0]) && isFinite(parts[1])) {
+          setMapFocus({ latitude: parts[0], longitude: parts[1] } as RtaEvent);
+          setShowStreetMap(true);
+        }
+      }
+    } catch { /* ignore */ }
+  }, []);
   const [basemap, setBasemap] = useState<'street' | 'satellite' | 'terrain'>('street');
   const [showHeatmap, setShowHeatmap] = useState(true);
   const [mouseLatLon, setMouseLatLon] = useState<{ lat: number; lon: number } | null>(null);
