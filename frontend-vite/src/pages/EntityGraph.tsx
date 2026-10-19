@@ -228,6 +228,7 @@ export default function EntityGraph() {
           <option value="domain">domain</option>
           <option value="ip">ip</option>
           <option value="email">email</option>
+          <option value="org">org</option>
         </select>
         <input value={seed} onChange={(e) => setSeed(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') onEnrich(); }}
           placeholder="example.com" spellCheck={false}
