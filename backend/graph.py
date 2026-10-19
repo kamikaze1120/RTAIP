@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import re
+import os
 from datetime import datetime
 from hashlib import sha256
 
@@ -235,13 +236,24 @@ async def run_transform(etype, value):
     if etype in ("domain", "subdomain"):
         n, l = await transform_crtsh(value)
         _merge(n, l)
-        hosts = [value] + [x["value"] for x in n if x.get("etype") in ("domain", "subdomain")]
-        rn, rl = await transform_resolve(hosts)
+        rn, rl = await transform_rdap(value)
         _merge(rn, rl)
+        hosts = [value] + [x["value"] for x in n if x.get("etype") in ("domain", "subdomain")]
+        rn2, rl2 = await transform_resolve(hosts)
+        _merge(rn2, rl2)
+        ips = [x["value"] for x in all_nodes.values() if x.get("etype") == "ip"]
+        gn, gl = await transform_ipgeo(ips)
+        _merge(gn, gl)
+        hn, hl = await transform_hibp(value)
+        _merge(hn, hl)
     elif etype == "ip":
-        e = save_entity("ip", value, confidence=0.8, attrs={"seed": True})
-        if e:
-            _merge([e], [])
+        seed = save_entity("ip", value, confidence=0.85, attrs={"seed": True})
+        if seed:
+            _merge([seed], [])
+        gn, gl = await transform_ipgeo([value])
+        _merge(gn, gl)
+        sn, sl = await transform_shodan(value)
+        _merge(sn, sl)
     else:
         e = save_entity(etype, value, confidence=0.7, attrs={"seed": True})
         if e:
@@ -295,3 +307,138 @@ def stats():
             "relationships": s.query(Relationship).count(),
             "by_type": by_type,
         }
+
+
+# --------------------------------------------------------------------------- #
+# Additional OSINT transforms                                                  #
+# --------------------------------------------------------------------------- #
+
+async def transform_rdap(domain):
+    # Registrar org + nameservers via RDAP (public, keyless)
+    domain = _norm(domain)
+    nodes, links = [], []
+    root = save_entity("domain", domain, confidence=0.85, attrs={"seed": True})
+    if not root:
+        return nodes, links
+    nodes.append(root)
+    async with aiohttp.ClientSession() as s:
+        data = await _get_json(s, "https://rdap.org/domain/" + domain)
+    if not data:
+        return nodes, links
+    for ent in (data.get("entities") or []):
+        if "registrar" in (ent.get("roles") or []):
+            name = ent.get("handle")
+            for v in ((ent.get("vcardArray") or [None, []])[1] or []):
+                if isinstance(v, list) and len(v) >= 4 and v[0] == "fn":
+                    name = v[3]
+            if name:
+                o = save_entity("org", str(name), confidence=0.7, attrs={"role": "registrar", "via": "rdap"})
+                if o:
+                    nodes.append(o)
+                    r = save_relationship(root["id"], o["id"], "registered_by", "rdap.org", 0.75)
+                    if r:
+                        links.append(r)
+    for ns in (data.get("nameservers") or []):
+        host = _norm(ns.get("ldhName") or "")
+        if host:
+            ne = save_entity("domain", host, confidence=0.6, attrs={"role": "nameserver", "via": "rdap"})
+            if ne:
+                nodes.append(ne)
+                r = save_relationship(root["id"], ne["id"], "uses_nameserver", "rdap.org", 0.7)
+                if r:
+                    links.append(r)
+    return nodes, links
+
+
+async def transform_ipgeo(ips, max_ips=25):
+    # IP geolocation + ASN via ip-api.com (public, keyless). Adds lat/lon to IP nodes.
+    nodes, links = [], []
+    ips = [i for i in dict.fromkeys(ips) if _IP_RE.match(i or "")][:max_ips]
+    if not ips:
+        return nodes, links
+
+    async def _geo(session, ip):
+        d = await _get_json(session, "http://ip-api.com/json/" + ip + "?fields=status,country,city,lat,lon,isp,org,as", timeout=10)
+        return ip, d
+
+    async with aiohttp.ClientSession() as s:
+        results = await asyncio.gather(*[_geo(s, ip) for ip in ips])
+    for ip, d in results:
+        if not d or d.get("status") != "success":
+            continue
+        lat = d.get("lat")
+        lon = d.get("lon")
+        ipe = save_entity("ip", ip, confidence=0.8, attrs={"lat": lat, "lon": lon, "city": d.get("city"), "country": d.get("country"), "isp": d.get("isp"), "via": "ip-api"})
+        if ipe:
+            nodes.append(ipe)
+        loc_label = ", ".join([x for x in [d.get("city"), d.get("country")] if x])
+        if loc_label and ipe:
+            loc = save_entity("location", loc_label, confidence=0.6, attrs={"lat": lat, "lon": lon})
+            if loc:
+                nodes.append(loc)
+                r = save_relationship(ipe["id"], loc["id"], "located_at", "ip-api", 0.7)
+                if r:
+                    links.append(r)
+        asn = d.get("as")
+        if asn and ipe:
+            ae = save_entity("asn", str(asn).split(" ")[0], label=str(asn), confidence=0.6, attrs={"org": d.get("org"), "via": "ip-api"})
+            if ae:
+                nodes.append(ae)
+                r = save_relationship(ipe["id"], ae["id"], "announced_by", "ip-api", 0.65)
+                if r:
+                    links.append(r)
+    return nodes, links
+
+
+async def transform_shodan(ip):
+    # Host services via Shodan (requires SHODAN_API_KEY; no-op without it)
+    nodes, links = [], []
+    key = os.getenv("SHODAN_API_KEY")
+    if not key or not _IP_RE.match(ip or ""):
+        return nodes, links
+    ipe = save_entity("ip", ip, confidence=0.8)
+    if ipe:
+        nodes.append(ipe)
+    async with aiohttp.ClientSession() as s:
+        d = await _get_json(s, "https://api.shodan.io/shodan/host/" + ip + "?key=" + key)
+    if not d:
+        return nodes, links
+    for h in (d.get("hostnames") or [])[:25]:
+        he = save_entity("domain", _norm(h), confidence=0.6, attrs={"via": "shodan"})
+        if he and ipe:
+            nodes.append(he)
+            r = save_relationship(he["id"], ipe["id"], "resolves_to", "shodan", 0.7)
+            if r:
+                links.append(r)
+    for port in (d.get("ports") or [])[:50]:
+        pe = save_entity("service", ip + ":" + str(port), label="port " + str(port), confidence=0.6, attrs={"port": port, "via": "shodan"})
+        if pe and ipe:
+            nodes.append(pe)
+            r = save_relationship(ipe["id"], pe["id"], "exposes", "shodan", 0.7)
+            if r:
+                links.append(r)
+    return nodes, links
+
+
+async def transform_hibp(value):
+    # Breaches associated with a DOMAIN (public endpoint). Domains only, never individual accounts.
+    nodes, links = [], []
+    v = _norm(value)
+    if "@" in v or "." not in v:
+        return nodes, links
+    root = save_entity("domain", v, confidence=0.8)
+    if root:
+        nodes.append(root)
+    async with aiohttp.ClientSession() as s:
+        data = await _get_json(s, "https://haveibeenpwned.com/api/v3/breaches?Domain=" + v)
+    for b in (data or [])[:50]:
+        name = b.get("Name") or b.get("Title")
+        if not name:
+            continue
+        be = save_entity("breach", str(name), label=b.get("Title") or str(name), confidence=0.7, attrs={"date": b.get("BreachDate"), "pwnCount": b.get("PwnCount"), "via": "hibp"})
+        if be and root:
+            nodes.append(be)
+            r = save_relationship(root["id"], be["id"], "breached_in", "hibp", 0.7)
+            if r:
+                links.append(r)
+    return nodes, links
