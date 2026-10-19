@@ -5,13 +5,10 @@ import MobileNav from './components/MobileNav'; // Add mobile navigation
 
 import MapPage from './pages/Map';
 import LegalPage from './pages/Legal';
-import CommandCenter from './pages/CommandCenter';
 import Dashboard from './pages/Dashboard';
 import Sources from './pages/Sources';
 import Timeline from './pages/Timeline';
 import Intelligence from './pages/Intelligence';
-import ThreatAnalysis from './pages/ThreatAnalysis';
-import Logistics from './pages/Logistics';
 import Security from './pages/Security';
 import Settings from './pages/Settings';
 import AuthPage from './pages/Auth';
@@ -138,8 +135,6 @@ export default function App() {
                 <Route path="/sources" element={<Sources />} />
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/intelligence" element={<Intelligence />} />
-                <Route path="/threat-analysis" element={<ThreatAnalysis />} />
-                <Route path="/logistics" element={<Logistics />} />
                 <Route path="/map" element={<MapPage />} />
                 <Route path="/timeline" element={<Timeline />} />
                 <Route path="/security" element={<Security />} />
@@ -147,7 +142,6 @@ export default function App() {
                 <Route path="/auth" element={<AuthPage />} />
                 <Route path="/admin" element={isAdmin ? <AdminPage /> : <Navigate to="/dashboard" replace />} />
                 <Route path="/legal" element={<LegalPage />} />
-                <Route path="/command" element={<CommandCenter />} />
                 <Route path="/graph" element={<EntityGraph />} />
                 <Route path="/" element={<Dashboard />} />
               </Routes>
