@@ -140,6 +140,22 @@ export default function EntityGraph() {
       const g = await fetchFull(400);
       if (g.nodes.length) mergeGraph(g);
       refreshStats();
+      try {
+        const sp = new URLSearchParams(window.location.search);
+        const sv = sp.get("seed");
+        const st = sp.get("type");
+        const fid = sp.get("focusId");
+        if (sv) {
+          setSeed(sv);
+          if (st) setSeedType(st);
+          const res = await enrich(sv, st || "domain");
+          mergeGraph(res);
+          await refreshStats();
+        } else if (fid && /^[0-9]+$/.test(fid)) {
+          const pg = await pivot(Number(fid));
+          if (pg.nodes.length) mergeGraph(pg);
+        }
+      } catch { /* ignore */ }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
