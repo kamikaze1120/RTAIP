@@ -11,8 +11,10 @@ import os
 import asyncio
 import threading
 from ingestion import save_event, list_connectors, set_enabled, run_selected
+from graph_api import router as graph_router
 
 app = FastAPI()
+app.include_router(graph_router)
 
 # Ingestion scheduling
 def run_ingestion():

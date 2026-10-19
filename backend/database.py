@@ -277,6 +277,34 @@ def _safe_init_schema():
 
 # NEW: exportable helper to ensure schema on demand (e.g., via /migrate endpoint)
 
+class Entity(Base):
+    __tablename__ = 'entities'
+    id = Column(Integer, primary_key=True)
+    etype = Column(String, index=True)
+    value = Column(String, index=True)
+    label = Column(String)
+    attrs = Column(JSON)
+    confidence = Column(Float, default=0.5)
+    first_seen = Column(DateTime, default=datetime.utcnow)
+    last_seen = Column(DateTime, default=datetime.utcnow)
+    org_id = Column(Integer, ForeignKey('organizations.id'), nullable=True)
+    case_id = Column(Integer, ForeignKey('cases.id'), nullable=True)
+    fingerprint = Column(String, unique=True, index=True)
+
+
+class Relationship(Base):
+    __tablename__ = 'relationships'
+    id = Column(Integer, primary_key=True)
+    src_id = Column(Integer, ForeignKey('entities.id'), index=True)
+    dst_id = Column(Integer, ForeignKey('entities.id'), index=True)
+    rtype = Column(String, index=True)
+    source = Column(String)
+    confidence = Column(Float, default=0.5)
+    observed_at = Column(DateTime, default=datetime.utcnow)
+    attrs = Column(JSON)
+    fingerprint = Column(String, unique=True, index=True)
+
+
 def ensure_schema():
     """
     Ensure database schema exists.
