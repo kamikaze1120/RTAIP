@@ -254,6 +254,12 @@ async def run_transform(etype, value):
         _merge(gn, gl)
         sn, sl = await transform_shodan(value)
         _merge(sn, sl)
+    elif etype in ("org", "company"):
+        seed = save_entity("org", value, confidence=0.6, attrs={"seed": True})
+        if seed:
+            _merge([seed], [])
+        on, ol = await transform_opencorporates(value)
+        _merge(on, ol)
     else:
         e = save_entity(etype, value, confidence=0.7, attrs={"seed": True})
         if e:
@@ -439,6 +445,39 @@ async def transform_hibp(value):
         if be and root:
             nodes.append(be)
             r = save_relationship(root["id"], be["id"], "breached_in", "hibp", 0.7)
+            if r:
+                links.append(r)
+    return nodes, links
+
+
+async def transform_opencorporates(name):
+    # Company/registry search via OpenCorporates (requires OPENCORPORATES_API_TOKEN; no-op without it)
+    nodes, links = [], []
+    name = (name or "").strip()
+    if not name:
+        return nodes, links
+    token = os.getenv("OPENCORPORATES_API_TOKEN")
+    if not token:
+        return nodes, links
+    root = save_entity("org", name, confidence=0.6, attrs={"seed": True})
+    if root:
+        nodes.append(root)
+    q = name.replace(" ", "+")
+    url = "https://api.opencorporates.com/v0.4/companies/search?q=" + q + "&api_token=" + token
+    async with aiohttp.ClientSession() as s:
+        data = await _get_json(s, url)
+    companies = (((data or {}).get("results") or {}).get("companies")) or []
+    for item in companies[:25]:
+        c = item.get("company") or {}
+        cname = c.get("name")
+        if not cname:
+            continue
+        juris = c.get("jurisdiction_code") or ""
+        label = cname + (" (" + juris + ")" if juris else "")
+        ce = save_entity("org", str(c.get("company_number") or cname), label=label, confidence=0.6, attrs={"jurisdiction": juris, "status": c.get("current_status"), "incorporation_date": c.get("incorporation_date"), "opencorporates_url": c.get("opencorporates_url"), "via": "opencorporates"})
+        if ce and root:
+            nodes.append(ce)
+            r = save_relationship(root["id"], ce["id"], "matches_company", "opencorporates", 0.6)
             if r:
                 links.append(r)
     return nodes, links
