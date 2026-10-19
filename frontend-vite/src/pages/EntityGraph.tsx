@@ -296,6 +296,9 @@ export default function EntityGraph() {
             </div>
             <div style={{ wordBreak: 'break-all', marginBottom: 8 }}>{selected.value}</div>
             <div style={{ color: '#64748b', marginBottom: 8 }}>confidence {Math.round((selected.confidence || 0) * 100)}%</div>
+            {selected.attrs && (selected.attrs as Record<string, unknown>).lat && (selected.attrs as Record<string, unknown>).lon ? (
+              <a href={`https://www.google.com/maps?q=${(selected.attrs as Record<string, unknown>).lat},${(selected.attrs as Record<string, unknown>).lon}`} target="_blank" rel="noreferrer" style={{ display: "block", textAlign: "center", marginBottom: 8, color: "#38bdf8", fontSize: 12 }}>View location on map ↗</a>
+            ) : null}
             <button onClick={() => onPivot(selected)} style={{ width: '100%', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 0', cursor: 'pointer', fontWeight: 600 }}>
               Expand neighbors
             </button>
