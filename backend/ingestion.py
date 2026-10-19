@@ -501,6 +501,70 @@ def run_ingestion():
         loop.close()
 
 # Connector registry
+async def ingest_gdelt():
+    # GDELT GEO 2.0 (public, keyless) -> geolocated world events
+    print("[INGEST] Starting GDELT geo ingestion...")
+    url = "https://api.gdeltproject.org/api/v2/geo/geo?query=(protest OR conflict OR disaster)&format=GeoJSON"
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=30) as r:
+                if r.status != 200:
+                    print("[INGEST] GDELT: status", r.status)
+                    return
+                text = await r.text()
+        data = json.loads(text)
+        feats = (data or {}).get("features") or []
+        count = 0
+        for f in feats[:300]:
+            geom = f.get("geometry") or {}
+            props = f.get("properties") or {}
+            lat = None
+            lon = None
+            coords = geom.get("coordinates") if geom.get("type") == "Point" else None
+            if isinstance(coords, (list, tuple)) and len(coords) >= 2:
+                lon = float(coords[0])
+                lat = float(coords[1])
+            count += save_event("GDELT", datetime.utcnow(), lat, lon, props, 0.5)
+        print("[INGEST] GDELT: Ingested", count, "events")
+    except Exception as e:
+        print("[INGEST] GDELT: Failed -", e)
+
+
+async def ingest_nasa_firms():
+    # NASA FIRMS active fire detections (requires NASA_FIRMS_MAP_KEY; no-op without it)
+    import os
+    key = os.getenv("NASA_FIRMS_MAP_KEY")
+    if not key:
+        print("[INGEST] NASA FIRMS: skipped (no NASA_FIRMS_MAP_KEY)")
+        return
+    url = "https://firms.modaps.eosdis.nasa.gov/api/area/csv/" + key + "/VIIRS_SNPP_NRT/world/1"
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=40) as r:
+                if r.status != 200:
+                    print("[INGEST] NASA FIRMS: status", r.status)
+                    return
+                text = await r.text()
+        lines = text.strip().splitlines()
+        if len(lines) < 2:
+            return
+        header = lines[0].split(",")
+        li = header.index("latitude") if "latitude" in header else 0
+        loi = header.index("longitude") if "longitude" in header else 1
+        count = 0
+        for row in lines[1:3001]:
+            cols = row.split(",")
+            try:
+                lat = float(cols[li])
+                lon = float(cols[loi])
+            except Exception:
+                continue
+            count += save_event("NASA FIRMS", datetime.utcnow(), lat, lon, dict(zip(header, cols)), 0.6)
+        print("[INGEST] NASA FIRMS: Ingested", count, "detections")
+    except Exception as e:
+        print("[INGEST] NASA FIRMS: Failed -", e)
+
+
 CONNECTORS = {
     "nasa_eonet": ingest_nasa_eonet,
     "noaa_alerts": ingest_noaa_alerts,
@@ -509,6 +573,8 @@ CONNECTORS = {
     "usgs_quakes": ingest_usgs_seismic,
     "radio_public": ingest_radio_public,
     "reddit_keywords": ingest_reddit_keywords,
+    "gdelt_events": ingest_gdelt,
+    "nasa_firms": ingest_nasa_firms,
 }
 ENABLED = set(CONNECTORS.keys())
 
