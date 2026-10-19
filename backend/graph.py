@@ -246,6 +246,10 @@ async def run_transform(etype, value):
         _merge(gn, gl)
         hn, hl = await transform_hibp(value)
         _merge(hn, hl)
+        dn, dl = await transform_dns_records(value)
+        _merge(dn, dl)
+        wn, wl = await transform_wayback(value)
+        _merge(wn, wl)
     elif etype == "ip":
         seed = save_entity("ip", value, confidence=0.85, attrs={"seed": True})
         if seed:
@@ -478,6 +482,69 @@ async def transform_opencorporates(name):
         if ce and root:
             nodes.append(ce)
             r = save_relationship(root["id"], ce["id"], "matches_company", "opencorporates", 0.6)
+            if r:
+                links.append(r)
+    return nodes, links
+
+
+async def transform_dns_records(domain):
+    # MX + NS records via Google DNS-over-HTTPS (public, keyless)
+    domain = _norm(domain)
+    nodes, links = [], []
+    root = save_entity("domain", domain, confidence=0.8)
+    if root:
+        nodes.append(root)
+
+    async def _q(session, typ):
+        d = await _get_json(session, "https://dns.google/resolve?name=" + domain + "&type=" + typ, timeout=12)
+        return [str(ans.get("data", "")) for ans in ((d or {}).get("Answer") or [])]
+
+    async with aiohttp.ClientSession() as s:
+        mx = await _q(s, "MX")
+        ns = await _q(s, "NS")
+    for rec in mx[:25]:
+        host = _norm(rec.split(" ")[-1].rstrip("."))
+        if host:
+            me = save_entity("domain", host, confidence=0.6, attrs={"role": "mx", "via": "dns"})
+            if me and root:
+                nodes.append(me)
+                r = save_relationship(root["id"], me["id"], "has_mx", "dns.google", 0.7)
+                if r:
+                    links.append(r)
+    for rec in ns[:25]:
+        host = _norm(rec.rstrip("."))
+        if host:
+            nse = save_entity("domain", host, confidence=0.6, attrs={"role": "ns", "via": "dns"})
+            if nse and root:
+                nodes.append(nse)
+                r = save_relationship(root["id"], nse["id"], "has_ns", "dns.google", 0.7)
+                if r:
+                    links.append(r)
+    return nodes, links
+
+
+async def transform_wayback(domain, limit=40):
+    # Archived URLs for a domain via the Wayback Machine CDX API (public, keyless)
+    domain = _norm(domain)
+    nodes, links = [], []
+    root = save_entity("domain", domain, confidence=0.8)
+    if root:
+        nodes.append(root)
+    url = ("http://web.archive.org/cdx/search/cdx?url=" + domain +
+           "*&output=json&fl=original&collapse=urlkey&limit=" + str(limit))
+    async with aiohttp.ClientSession() as s:
+        data = await _get_json(s, url, timeout=25)
+    rows = data or []
+    seen = set()
+    for row in rows[1:]:
+        orig = row[0] if isinstance(row, list) and row else None
+        if not orig or orig in seen:
+            continue
+        seen.add(orig)
+        ue = save_entity("url", orig[:400], confidence=0.5, attrs={"via": "wayback"})
+        if ue and root:
+            nodes.append(ue)
+            r = save_relationship(root["id"], ue["id"], "archived_url", "wayback", 0.6)
             if r:
                 links.append(r)
     return nodes, links
