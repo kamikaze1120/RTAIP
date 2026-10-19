@@ -8,6 +8,7 @@ const navItems = [
   { label: 'Map', path: '/map', primary: true },
   { label: 'Sources', path: '/sources', primary: true },
   { label: 'Command', path: '/command', primary: true },
+  { label: 'Graph', path: '/graph', primary: true },
   { label: 'Intelligence', path: '/intelligence', primary: false },
   { label: 'Threat Analysis', path: '/threat-analysis', primary: false },
   { label: 'Logistics', path: '/logistics', primary: false },

@@ -1,0 +1,23 @@
+name: "Feature request"
+description: Suggest an idea or capability for RTAIP
+title: "[feat]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / motivation
+      description: What are you trying to accomplish?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+  - type: checkboxes
+    id: ethics
+    attributes:
+      label: Responsible use
+      options:
+        - label: This uses only public or explicitly authorized data (see docs/ETHICS.md)
+          required: true

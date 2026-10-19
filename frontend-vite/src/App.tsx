@@ -16,6 +16,7 @@ import Security from './pages/Security';
 import Settings from './pages/Settings';
 import AuthPage from './pages/Auth';
 import AdminPage from './pages/Admin';
+import EntityGraph from './pages/EntityGraph';
  
 import { getBackendBase, checkSupabaseHealth, getSupabaseConfig, runConnectivityDiagnostics } from './services/data';
 
@@ -147,6 +148,7 @@ export default function App() {
                 <Route path="/admin" element={isAdmin ? <AdminPage /> : <Navigate to="/dashboard" replace />} />
                 <Route path="/legal" element={<LegalPage />} />
                 <Route path="/command" element={<CommandCenter />} />
+                <Route path="/graph" element={<EntityGraph />} />
                 <Route path="/" element={<Dashboard />} />
               </Routes>
             ) : (
