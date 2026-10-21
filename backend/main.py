@@ -4,7 +4,6 @@ from sqlalchemy.orm import Session
 from database import Session as DBSession, User, DataEvent, ensure_schema, Organization, OrgMembership, Invitation, AuditLog, ConsentLog, IpAllowlist, OrgSettings, PromptLog, AlertRule, AlertHistory, Workspace, Case, CaseMembership, EventTag, EventAnnotation, CaseComment, Report, PerfMetric
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
-from auth import create_access_token, get_password_hash, verify_password
 from datetime import timedelta
 import datetime
 import os
@@ -63,15 +62,6 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
-class UserCreate(BaseModel):
-    username: str
-    email: str
-    password: str
-
-class UserLogin(BaseModel):
-    username: str
-    password: str
-
 class OrgCreate(BaseModel):
     name: str
 
@@ -93,41 +83,6 @@ def get_db():
         yield db
     finally:
         db.close()
-
-@app.post("/users/register")
-def register_user(user: UserCreate, db: Session = Depends(get_db)):
-    db_user = db.query(User).filter(User.username == user.username).first()
-    if db_user:
-        return {"error": "Username already registered"}
-    hashed_password = get_password_hash(str(user.password))
-    db_user = User(username=user.username, email=user.email, hashed_password=hashed_password)
-    db.add(db_user)
-    db.commit()
-    db.refresh(db_user)
-    try:
-        al = AuditLog(user_id=db_user.id, event="user_registered", details={"email": user.email})
-        db.add(al)
-        db.commit()
-    except Exception:
-        pass
-    return {"message": "User registered successfully", "id": db_user.id}
-
-@app.post("/auth/login")
-def login_for_access_token(user: UserLogin, db: Session = Depends(get_db)):
-    db_user = db.query(User).filter(User.username == user.username).first()
-    if not db_user or not verify_password(user.password, db_user.hashed_password):
-        return {"error": "Incorrect username or password"}
-    access_token_expires = timedelta(minutes=30)
-    access_token = create_access_token(
-        data={"sub": user.username}, expires_delta=access_token_expires
-    )
-    try:
-        al = AuditLog(user_id=db_user.id, event="login", ip=None, session_id=None, details={"username": user.username})
-        db.add(al)
-        db.commit()
-    except Exception:
-        pass
-    return {"access_token": access_token, "token_type": "bearer"}
 
 import logging
 
@@ -1725,7 +1680,7 @@ def sync_user(payload: UserSync, db: Session = Depends(get_db)):
     if u:
         return {"id": u.id, "username": u.username, "email": u.email}
     name = payload.username or payload.email.split("@")[0]
-    u = User(username=name, email=payload.email, hashed_password=get_password_hash("external"))
+    u = User(username=name, email=payload.email, hashed_password="external")
     db.add(u)
     db.commit()
     db.refresh(u)
