@@ -1,8 +1,0 @@
-{
-  "installCommand": "npm install",
-  "buildCommand": "cd ../frontend-vite && npm install && npm run build && rm -rf ../frontend/dist && mkdir -p ../frontend/dist && cp -r dist/* ../frontend/dist/",
-  "outputDirectory": "dist",
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
-  ]
-}
