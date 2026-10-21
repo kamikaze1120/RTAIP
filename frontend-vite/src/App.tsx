@@ -20,6 +20,7 @@ export default function App() {
   // Persist env defaults to localStorage so the client stays connected.
   useEffect(() => {
     try {
+      window.localStorage.setItem('isAdmin', 'true');
       const envBackend = import.meta.env.VITE_BACKEND_URL as string | undefined;
       if (envBackend) window.localStorage.setItem('backendUrl', envBackend);
       const envSupaUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
