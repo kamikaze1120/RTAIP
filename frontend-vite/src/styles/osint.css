@@ -55,6 +55,13 @@
   background: rgba(52,211,153,.08); border: 1px solid rgba(52,211,153,.22); color: var(--o-good); font-size: 11px; }
 .osint-dot { width: 6px; height: 6px; border-radius: 999px; background: var(--o-good); animation: opulse 2s infinite; }
 @keyframes opulse { 0%{box-shadow:0 0 0 0 rgba(52,211,153,.45)} 70%{box-shadow:0 0 0 6px rgba(52,211,153,0)} 100%{box-shadow:0 0 0 0 rgba(52,211,153,0)} }
+/* Honest status-badge variants (header health pill) */
+.osint-live--warn { background: rgba(245,158,11,.1); border-color: rgba(245,158,11,.3); color: var(--o-warn); }
+.osint-live--warn .osint-dot { background: var(--o-warn); animation: none; }
+.osint-live--bad { background: rgba(248,113,113,.1); border-color: rgba(248,113,113,.3); color: var(--o-bad); }
+.osint-live--bad .osint-dot { background: var(--o-bad); animation: none; }
+.osint-live--muted { background: rgba(255,255,255,.04); border-color: var(--o-border-2); color: var(--o-faint); }
+.osint-live--muted .osint-dot { background: var(--o-faint); animation: none; }
 
 /* ---- Command bar (compact, tool-first — not a marketing hero) ---- */
 .osint-cmd { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border: 1px solid var(--o-border);
