@@ -1,5 +1,5 @@
 epic	title	area	size	phase
-E0 Stabilize	Redeploy Render from main and confirm /graph routes respond	infra	S	0
+E0 Stabilize	Deploy the backend from main on a host you control, point the frontend at it and confirm /graph routes respond	infra	S	0
 E0 Stabilize	Real /health with dependency checks and header badge wired to it	backend	S	0
 E0 Stabilize	Error, loading and retry states on Enrich, Dashboard and Graph	frontend	M	0
 E0 Stabilize	Remove forced isAdmin and gate Admin, Security and Settings routes	security	S	0
