@@ -1,0 +1,21 @@
+name: "New data source / feed"
+description: Propose a new situational-awareness feed (events on map/timeline).
+title: "[source] <feed name>"
+labels: ["type: feature", "area: backend", "area: data"]
+body:
+  - type: input
+    id: feed
+    attributes: { label: Feed name & URL }
+    validations: { required: true }
+  - type: dropdown
+    id: cadence
+    attributes: { label: Update cadence, options: [ realtime, minutes, hourly, daily ] }
+    validations: { required: true }
+  - type: textarea
+    id: provenance
+    attributes: { label: Provenance fields, description: "Which fields map to source, timestamp, lat/lon, confidence?" }
+    validations: { required: true }
+  - type: textarea
+    id: terms
+    attributes: { label: Terms of use & rate limits }
+    validations: { required: true }

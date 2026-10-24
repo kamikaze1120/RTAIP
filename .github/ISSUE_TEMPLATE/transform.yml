@@ -1,0 +1,25 @@
+name: "New OSINT transform"
+description: Propose a new entity-graph transform (pivot) over a public source.
+title: "[transform] <source> — <input> -> <output>"
+labels: ["type: feature", "area: backend"]
+body:
+  - type: input
+    id: source
+    attributes: { label: Source, description: "Public/authorized data source (e.g. crt.sh, RDAP)" }
+    validations: { required: true }
+  - type: input
+    id: io
+    attributes: { label: Input -> Output entity types, placeholder: "domain -> subdomain, cert" }
+    validations: { required: true }
+  - type: textarea
+    id: terms
+    attributes: { label: Terms of use & rate limits, description: "Link to ToS; documented rate limits; whether a user-supplied key is required." }
+    validations: { required: true }
+  - type: checkboxes
+    id: ethics
+    attributes:
+      label: Ethics
+      options:
+        - { label: "Public or explicitly authorized data only", required: true }
+        - { label: "No tracking/deanonymizing of private individuals", required: true }
+        - { label: "Outputs carry source, timestamp, confidence", required: true }

@@ -8,7 +8,7 @@ on:
 
 jobs:
   frontend:
-    name: Frontend build
+    name: Frontend (lint · type-check · build)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -21,18 +21,57 @@ jobs:
           cache: npm
           cache-dependency-path: frontend-vite/package-lock.json
       - run: npm ci
-      - run: npm run build
+      - name: Lint
+        run: npm run lint
+      - name: Type-check
+        run: npx tsc --noEmit --skipLibCheck
+      - name: Unit tests (Vitest, if configured)
+        run: |
+          if [ -f vitest.config.ts ] || node -e "process.exit(require('./package.json').scripts.test?0:1)"; then
+            npm test -- --run
+          else
+            echo "No Vitest suite yet (E10 Quality). Skipping."
+          fi
+      - name: Build
+        run: npm run build
 
   backend:
-    name: Backend compile
+    name: Backend (lint · compile · tests)
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: backend
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: rtaip_test
+        ports: [ "5432:5432" ]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/rtaip_test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+          cache: pip
       - run: pip install -r requirements.txt
-      - run: python -m compileall .
+      - run: pip install ruff pytest
+      - name: Lint (Ruff)
+        # Informational until main.py is split into routers (E2). Tighten to a
+        # hard failure once the monolith is broken up.
+        run: ruff check . --output-format=github
+        continue-on-error: true
+      - name: Compile
+        run: python -m compileall .
+      - name: Tests (pytest, if present)
+        run: |
+          if ls test_*.py tests/test_*.py **/test_*.py >/dev/null 2>&1; then
+            pytest -q
+          else
+            echo "No pytest suite yet (E10 Quality). Skipping."
+          fi
