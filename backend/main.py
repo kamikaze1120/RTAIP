@@ -343,7 +343,46 @@ def root():
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    """Honest health check: reports real dependency status so the UI badge
+    can reflect reality instead of always showing green (Phase 0)."""
+    from sqlalchemy import text
+    import database as _db
+
+    deps: Dict[str, Any] = {}
+    status = "ok"
+
+    # Database connectivity + graph schema reachability
+    try:
+        s = DBSession()
+        try:
+            s.execute(text("SELECT 1"))
+            deps["database"] = {"ok": True}
+            try:
+                ent = s.execute(text("SELECT count(*) FROM entities")).scalar()
+                rel = s.execute(text("SELECT count(*) FROM relationships")).scalar()
+                deps["graph"] = {"ok": True, "entities": int(ent or 0), "relationships": int(rel or 0)}
+            except Exception:
+                deps["graph"] = {"ok": False, "error": "graph_tables_missing"}
+                status = "degraded"
+        finally:
+            s.close()
+    except Exception as exc:  # pragma: no cover - connectivity failure
+        deps["database"] = {"ok": False, "error": exc.__class__.__name__}
+        status = "degraded"
+
+    # Data durability signal (SQLite on an ephemeral host is NOT durable)
+    kind = "postgres" if str(getattr(_db, "DATABASE_URL", "")).startswith("postgres") else "sqlite"
+    deps["db_kind"] = kind
+    deps["durable"] = kind == "postgres"
+    if kind != "postgres":
+        status = "degraded" if status == "ok" else status
+
+    return {
+        "status": status,
+        "service": "RTAIP",
+        "time": datetime.datetime.utcnow().isoformat() + "Z",
+        "dependencies": deps,
+    }
 
 # --- AI Analyst (RAG) ---
 class AIQuery(BaseModel):

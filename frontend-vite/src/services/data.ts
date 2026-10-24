@@ -667,11 +667,32 @@ export async function fetchSupabaseEvents(): Promise<RtaEvent[]> {
   const restFetch = async (tbl: string): Promise<RtaEvent[]> => {
     const oneYearAgo = new Date(Date.now() - 365 * 24 * 3600000).toISOString();
     const base = `${url.replace(/\/$/, '')}/rest/v1/${encodeURIComponent(tbl)}`;
-    const q = `select=*&or=(timestamp.gte.${encodeURIComponent(oneYearAgo)},created_at.gte.${encodeURIComponent(oneYearAgo)})&order=timestamp.desc.nullslast,created_at.desc.nullslast&limit=5000`;
-    const r = await fetchWithTimeout(`${base}?${q}`, { timeoutMs: 12000, headers: { apikey: anon, Authorization: `Bearer ${anon}`, Accept: 'application/json' } });
-    if (!r.ok) return [];
-    const rows: Record<string, unknown>[] = await r.json();
-    return toEvents(rows);
+    const headers = { apikey: anon, Authorization: `Bearer ${anon}`, Accept: 'application/json' };
+    // Not every table has both `timestamp` and `created_at` (e.g. data_events
+    // has no created_at). Referencing a missing column makes PostgREST return
+    // 400, which previously surfaced as a silent failure. Try the richest query
+    // first, then fall back to progressively simpler ones that only use columns
+    // guaranteed to exist.
+    const queries = [
+      `select=*&or=(timestamp.gte.${encodeURIComponent(oneYearAgo)},created_at.gte.${encodeURIComponent(oneYearAgo)})&order=timestamp.desc.nullslast,created_at.desc.nullslast&limit=5000`,
+      `select=*&timestamp=gte.${encodeURIComponent(oneYearAgo)}&order=timestamp.desc.nullslast&limit=5000`,
+      `select=*&order=timestamp.desc.nullslast&limit=5000`,
+      `select=*&limit=5000`,
+    ];
+    for (const q of queries) {
+      try {
+        const r = await fetchWithTimeout(`${base}?${q}`, { timeoutMs: 12000, headers });
+        if (r.ok) {
+          const rows: Record<string, unknown>[] = await r.json();
+          return toEvents(rows);
+        }
+        // 400 => column/order not valid for this table; try a simpler query.
+        if (r.status !== 400) return [];
+      } catch {
+        return [];
+      }
+    }
+    return [];
   };
 
   const client = await getSupabaseClient();

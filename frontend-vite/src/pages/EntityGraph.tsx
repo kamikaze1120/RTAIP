@@ -33,6 +33,7 @@ export default function EntityGraph() {
   const [seedType, setSeedType] = useState('domain');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [initializing, setInitializing] = useState(true);
   const [stats, setStats] = useState<{ entities: number; relationships: number; by_type: Record<string, number> } | null>(null);
   const [selected, setSelected] = useState<SimNode | null>(null);
   const [view, setView] = useState({ x: 0, y: 0, k: 1 });
@@ -135,30 +136,36 @@ export default function EntityGraph() {
     try { setStats(await graphStats()); } catch { /* ignore */ }
   }, []);
 
-  useEffect(() => {
-    (async () => {
+  const loadInitial = useCallback(async () => {
+    setInitializing(true);
+    setError(null);
+    try {
       const g = await fetchFull(400);
       if (g.nodes.length) mergeGraph(g);
-      refreshStats();
-      try {
-        const sp = new URLSearchParams(window.location.search);
-        const sv = sp.get("seed");
-        const st = sp.get("type");
-        const fid = sp.get("focusId");
-        if (sv) {
-          setSeed(sv);
-          if (st) setSeedType(st);
-          const res = await enrich(sv, st || "domain");
-          mergeGraph(res);
-          await refreshStats();
-        } else if (fid && /^[0-9]+$/.test(fid)) {
-          const pg = await pivot(Number(fid));
-          if (pg.nodes.length) mergeGraph(pg);
-        }
-      } catch { /* ignore */ }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+      await refreshStats();
+      const sp = new URLSearchParams(window.location.search);
+      const sv = sp.get("seed");
+      const st = sp.get("type");
+      const fid = sp.get("focusId");
+      if (sv) {
+        setSeed(sv);
+        if (st) setSeedType(st);
+        const res = await enrich(sv, st || "domain");
+        mergeGraph(res);
+        await refreshStats();
+      } else if (fid && /^[0-9]+$/.test(fid)) {
+        const pg = await pivot(Number(fid));
+        if (pg.nodes.length) mergeGraph(pg);
+      }
+    } catch (e: unknown) {
+      // Surface the failure instead of silently showing "0 entities".
+      setError(e instanceof Error ? e.message : 'Could not reach the graph backend. Check that the API is deployed.');
+    } finally {
+      setInitializing(false);
+    }
+  }, [mergeGraph, refreshStats]);
+
+  useEffect(() => { loadInitial(); }, [loadInitial]);
 
   const onEnrich = useCallback(async () => {
     const v = seed.trim();
@@ -257,7 +264,15 @@ export default function EntityGraph() {
           style={{ background: '#0f172a', color: '#94a3b8', border: '1px solid #334155', borderRadius: 6, padding: '7px 12px', cursor: 'pointer' }}>Reset view</button>
       </div>
 
-      {error && <div style={{ background: '#7f1d1d', color: '#fecaca', padding: '6px 14px', fontSize: 13 }}>{error}</div>}
+      {error && (
+        <div style={{ background: '#7f1d1d', color: '#fecaca', padding: '6px 14px', fontSize: 13, display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ flex: 1 }}>{error}</span>
+          <button onClick={() => (busy ? onEnrich() : loadInitial())}
+            style={{ background: 'rgba(255,255,255,.12)', color: '#fff', border: '1px solid rgba(255,255,255,.25)', borderRadius: 6, padding: '3px 12px', cursor: 'pointer', fontSize: 12 }}>
+            Retry
+          </button>
+        </div>
+      )}
 
       <div style={{ position: 'relative', flex: 1, overflow: 'hidden' }}>
         <svg ref={svgRef} width="100%" height="100%" onPointerDown={onPointerDownBg} onPointerMove={onPointerMove}
@@ -324,8 +339,19 @@ export default function EntityGraph() {
         {nodes.length === 0 && (
           <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#475569', textAlign: 'center', pointerEvents: 'none' }}>
             <div>
-              <div style={{ fontSize: 15, marginBottom: 6 }}>No entities yet</div>
-              <div style={{ fontSize: 12 }}>Enter a domain above and hit <b>Enrich</b> to build the graph from public sources.</div>
+              {initializing ? (
+                <div style={{ fontSize: 14 }}>Loading graph…</div>
+              ) : error ? (
+                <>
+                  <div style={{ fontSize: 15, marginBottom: 6, color: '#fca5a5' }}>Graph backend unavailable</div>
+                  <div style={{ fontSize: 12 }}>The enrichment API did not respond. Use <b>Retry</b> above once it is deployed.</div>
+                </>
+              ) : (
+                <>
+                  <div style={{ fontSize: 15, marginBottom: 6 }}>No entities yet</div>
+                  <div style={{ fontSize: 12 }}>Enter a domain above and hit <b>Enrich</b> to build the graph from public sources.</div>
+                </>
+              )}
             </div>
           </div>
         )}

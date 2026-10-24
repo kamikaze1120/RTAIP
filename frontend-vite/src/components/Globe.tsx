@@ -26,7 +26,7 @@ const Globe: React.FC<{ events: RtaEvent[], focus: RtaEvent | null, onSelect?: (
   useEffect(() => {
     const loader = new THREE.TextureLoader();
     loader.setCrossOrigin('anonymous');
-    loader.load('https://threejs.org/examples/textures/planets/earth_atmos_2048.jpg', (loadedTexture) => {
+    loader.load('https://cdn.jsdelivr.net/npm/three@0.160.0/examples/textures/planets/earth_atmos_2048.jpg', (loadedTexture) => {
       setTexture(loadedTexture);
     }, undefined, () => setTexture(null));
   }, []);
@@ -50,11 +50,11 @@ const Globe: React.FC<{ events: RtaEvent[], focus: RtaEvent | null, onSelect?: (
 
     const texLoader = new THREE.TextureLoader();
     texLoader.setCrossOrigin('anonymous');
-    texLoader.load('https://threejs.org/examples/textures/planets/earth_specular_2048.jpg', (spec) => {
+    texLoader.load('https://cdn.jsdelivr.net/npm/three@0.160.0/examples/textures/planets/earth_specular_2048.jpg', (spec) => {
       (material as THREE.MeshPhongMaterial).specularMap = spec;
       material.needsUpdate = true;
     });
-    texLoader.load('https://threejs.org/examples/textures/planets/earth_normal_2048.jpg', (bump) => {
+    texLoader.load('https://cdn.jsdelivr.net/npm/three@0.160.0/examples/textures/planets/earth_normal_2048.jpg', (bump) => {
       (material as THREE.MeshPhongMaterial).bumpMap = bump;
       (material as THREE.MeshPhongMaterial).bumpScale = 0.05;
       material.needsUpdate = true;
@@ -65,7 +65,7 @@ const Globe: React.FC<{ events: RtaEvent[], focus: RtaEvent | null, onSelect?: (
     const atmosphere = new THREE.Mesh(new THREE.SphereGeometry(5.2, 64, 64), new THREE.MeshBasicMaterial({ color: 0x2dd4bf, transparent: true, opacity: 0.06 }));
     scene.add(atmosphere);
 
-    texLoader.load('https://threejs.org/examples/textures/planets/earth_clouds_2048.png', (cloudTex) => {
+    texLoader.load('https://cdn.jsdelivr.net/npm/three@0.160.0/examples/textures/planets/earth_clouds_2048.png', (cloudTex) => {
       const clouds = new THREE.Mesh(new THREE.SphereGeometry(5.06, 64, 64), new THREE.MeshPhongMaterial({ map: cloudTex, transparent: true, opacity: 0.35 }));
       clouds.name = 'clouds-layer';
       scene.add(clouds);

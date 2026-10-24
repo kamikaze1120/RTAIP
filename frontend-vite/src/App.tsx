@@ -1,5 +1,5 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { useEffect } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { NewHeader } from './components/NewHeader';
 import MobileNav from './components/MobileNav';
 
@@ -16,11 +16,23 @@ import EntityGraph from './pages/EntityGraph';
 
 import { getBackendBase, checkSupabaseHealth, getSupabaseConfig, runConnectivityDiagnostics } from './services/data';
 
+// Phase 0 route guard. Admin/Security/Settings are privileged surfaces. Until
+// real authentication lands (Phase 1), access is denied by default and only
+// granted when an operator explicitly opted in on this device. We never
+// auto-grant admin to every visitor.
+function isAdmin(): boolean {
+  try { return window.localStorage.getItem('isAdmin') === 'true'; } catch { return false; }
+}
+function RequireAdmin({ children }: { children: ReactNode }) {
+  return isAdmin() ? <>{children}</> : <Navigate to="/" replace />;
+}
+
 export default function App() {
-  // Persist env defaults to localStorage so the client stays connected.
+  // Persist env-provided service endpoints to localStorage so the client stays
+  // connected. We deliberately do NOT write isAdmin here (that was a security
+  // hole: commit bbb2530 granted admin to every visitor).
   useEffect(() => {
     try {
-      window.localStorage.setItem('isAdmin', 'true');
       const envBackend = import.meta.env.VITE_BACKEND_URL as string | undefined;
       if (envBackend) window.localStorage.setItem('backendUrl', envBackend);
       const envSupaUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
@@ -62,10 +74,11 @@ export default function App() {
             <Route path="/timeline" element={<Timeline />} />
             <Route path="/sources" element={<Sources />} />
             <Route path="/intelligence" element={<Intelligence />} />
-            <Route path="/security" element={<Security />} />
-            <Route path="/settings" element={<Settings />} />
-            <Route path="/admin" element={<AdminPage />} />
             <Route path="/legal" element={<LegalPage />} />
+            {/* Privileged surfaces — gated until auth lands (Phase 1) */}
+            <Route path="/security" element={<RequireAdmin><Security /></RequireAdmin>} />
+            <Route path="/settings" element={<RequireAdmin><Settings /></RequireAdmin>} />
+            <Route path="/admin" element={<RequireAdmin><AdminPage /></RequireAdmin>} />
             <Route path="/" element={<Dashboard />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
