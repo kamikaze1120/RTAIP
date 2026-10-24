@@ -1,0 +1,16 @@
+name: "Security finding (non-sensitive)"
+description: Track a NON-sensitive hardening task. Report exploitable vulns privately via Security Advisories.
+title: "[security] <short description>"
+labels: ["type: bug", "area: security", "priority: p1"]
+body:
+  - type: markdown
+    attributes:
+      value: "Do NOT file exploitable vulnerabilities here. Use private advisories: Security tab -> Report a vulnerability."
+  - type: textarea
+    id: finding
+    attributes: { label: Finding, description: "What is weak/misconfigured and where." }
+    validations: { required: true }
+  - type: textarea
+    id: fix
+    attributes: { label: Proposed remediation }
+    validations: { required: true }

@@ -1,0 +1,28 @@
+name: Playwright smoke
+# Runs against the Vercel preview for a PR once it is deployed. Non-blocking by
+# default (it reports but does not gate) until the preview URL wiring is set in
+# repo settings via the DEPLOY_PREVIEW_URL variable or the Vercel deployment.
+on:
+  deployment_status:
+
+jobs:
+  smoke:
+    # Opt-in: set repo variable ENABLE_SMOKE=true once the Vercel preview is
+    # publicly reachable (Deployment Protection off). Until then this job is
+    # skipped so it never gates merges on an unreachable (401) preview.
+    if: vars.ENABLE_SMOKE == 'true' && github.event.deployment_status.state == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install Playwright
+        run: |
+          npm init -y >/dev/null 2>&1 || true
+          npm i -D @playwright/test@1.49.1 >/dev/null 2>&1
+          npx playwright install --with-deps chromium
+      - name: Run smoke test
+        env:
+          BASE_URL: ${{ github.event.deployment_status.target_url }}
+        run: npx playwright test tests/e2e/smoke.spec.ts --config tests/e2e/playwright.config.ts

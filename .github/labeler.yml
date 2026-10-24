@@ -1,0 +1,18 @@
+"area: frontend":
+  - changed-files:
+      - any-glob-to-any-file: [ "frontend-vite/**" ]
+"area: backend":
+  - changed-files:
+      - any-glob-to-any-file: [ "backend/**" ]
+"area: infra":
+  - changed-files:
+      - any-glob-to-any-file: [ ".github/**", "render.yaml", "vercel.json", "scripts/**" ]
+"area: data":
+  - changed-files:
+      - any-glob-to-any-file: [ "backend/database.py", "supabase/**", "**/migrations/**" ]
+"area: design":
+  - changed-files:
+      - any-glob-to-any-file: [ "frontend-vite/src/styles/**", "**/*.css" ]
+"area: docs":
+  - changed-files:
+      - any-glob-to-any-file: [ "**/*.md", "docs/**" ]
