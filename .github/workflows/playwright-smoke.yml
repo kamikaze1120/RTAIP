@@ -7,7 +7,10 @@ on:
 
 jobs:
   smoke:
-    if: github.event.deployment_status.state == 'success'
+    # Opt-in: set repo variable ENABLE_SMOKE=true once the Vercel preview is
+    # publicly reachable (Deployment Protection off). Until then this job is
+    # skipped so it never gates merges on an unreachable (401) preview.
+    if: vars.ENABLE_SMOKE == 'true' && github.event.deployment_status.state == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
