@@ -1,0 +1,42 @@
+epic	title	area	size	phase
+E0 Stabilize	Redeploy Render from main and confirm /graph routes respond	infra	S	0
+E0 Stabilize	Real /health with dependency checks and header badge wired to it	backend	S	0
+E0 Stabilize	Error, loading and retry states on Enrich, Dashboard and Graph	frontend	M	0
+E0 Stabilize	Remove forced isAdmin and gate Admin, Security and Settings routes	security	S	0
+E0 Stabilize	Remove mock Intelligence reports and FOUO badge	frontend	S	0
+E0 Stabilize	Fix Supabase data_events 400 and globe texture 404	frontend	S	0
+E1 Security and auth	Supabase Auth sign in with email and OAuth	security	M	1
+E1 Security and auth	JWT verification middleware and role model in FastAPI	backend	M	1
+E1 Security and auth	Row level security on every table with automated policy tests	data	L	1
+E1 Security and auth	Rate limiting, CORS lockdown, input validation and security headers	backend	M	1
+E1 Security and auth	Remove Puter.js and audit third party scripts	frontend	S	1
+E2 Platform	Postgres migration with Alembic	data	L	1
+E2 Platform	Split main.py into routers and schemas	backend	L	1
+E2 Platform	Staging environment with its own Supabase project	infra	M	1
+E2 Platform	Background worker with per feed schedules	backend	L	3
+E3 Transforms	Transform plugin interface with timeouts and caching	backend	M	2
+E3 Transforms	RDAP and WHOIS, ASN and BGP, IP geolocation transforms	backend	M	2
+E3 Transforms	Subdomain discovery, URL scan and tech fingerprint transforms	backend	L	2
+E3 Transforms	Exposure sources: breach, certificate and reputation checks via user keys	backend	L	2
+E3 Transforms	Organization transforms: OpenCorporates, OpenSanctions, GDELT mentions	backend	L	2
+E4 Graph UX	WebGL graph with expand, filter, path finding, pin and group	frontend	XL	2
+E4 Graph UX	Stream results into the graph as transforms resolve	frontend	M	2
+E4 Graph UX	Node detail panel with provenance and confidence	frontend	M	2
+E4 Graph UX	Exposure risk score and plain language summary	backend	M	2
+E5 Fusion	MapLibre and deck.gl map with clustering and time window	frontend	XL	3
+E5 Fusion	Timeline with event clustering and entity filter	frontend	L	3
+E6 Alerts	Watchlists for entities and geofences	backend	L	3
+E6 Alerts	Realtime push and alert delivery by email and webhook	backend	L	3
+E7 Cases and reports	Cases with annotations, tags and sharing	frontend	XL	4
+E7 Cases and reports	PDF and STIX export	backend	L	4
+E8 AI analyst	Retrieval with citations over case data	backend	L	4
+E8 AI analyst	Entity resolution with pgvector	data	L	4
+E9 Design system	Tokens, components, empty and error patterns and mobile layout	design	L	1
+E9 Design system	Dashboard redesign: live activity, top risks, recent cases	frontend	M	2
+E10 Quality	Vitest, pytest and Playwright smoke suite in CI	infra	L	1
+E10 Quality	CodeQL, Dependabot, gitleaks and release automation	infra	M	1
+E10 Quality	Sentry and uptime monitoring	infra	S	1
+E11 Launch	Stripe billing, plan limits and usage metering	backend	L	5
+E11 Launch	API keys and public API docs	backend	M	5
+E11 Launch	Landing page, pricing page and docs site	growth	M	5
+E11 Launch	Design partner program: 3 to 5 pilot users and weekly feedback loop	growth	M	2
