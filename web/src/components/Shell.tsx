@@ -1,17 +1,22 @@
 "use client";
 
 import clsx from "clsx";
-import { Activity, GitFork, Globe2, LayoutDashboard, Radio } from "lucide-react";
+import { Activity, Command, Eye, FolderKanban, GitFork, Globe2, LayoutDashboard, LogOut, Radio, User } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { useAuth } from "@/lib/auth";
 import { usePolling } from "@/lib/usePolling";
+import { AuthDialog } from "./AuthDialog";
+import { CommandPalette } from "./CommandPalette";
 import { Dot } from "./ui";
 
 const NAV = [
   { href: "/", label: "Overview", icon: LayoutDashboard },
   { href: "/investigate", label: "Investigate", icon: GitFork },
   { href: "/map", label: "Map", icon: Globe2 },
+  { href: "/cases", label: "Cases", icon: FolderKanban },
+  { href: "/watchlist", label: "Watchlist", icon: Eye },
   { href: "/sources", label: "Sources", icon: Radio },
 ];
 
@@ -40,8 +45,41 @@ function StatusBadge() {
   );
 }
 
+function AccountButton() {
+  const { user, loading, openSignIn, signOut } = useAuth();
+  if (loading) return <span className="h-8 w-24 animate-pulse rounded-lg bg-panel2" aria-hidden />;
+  if (!user) {
+    return (
+      <button type="button" onClick={openSignIn} className="inline-flex items-center gap-2 rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-bg hover:bg-accent/90">
+        <User size={13} /> Sign in
+      </button>
+    );
+  }
+  return (
+    <div className="flex items-center gap-1">
+      <span className="hidden max-w-[160px] truncate rounded-lg border border-line bg-panel px-2.5 py-1.5 text-xs text-dim lg:block" title={user.email ?? undefined}>{user.email}</span>
+      <button type="button" onClick={() => void signOut()} aria-label="Sign out" title="Sign out" className="rounded-lg border border-line bg-panel p-1.5 text-dim hover:text-ink">
+        <LogOut size={14} />
+      </button>
+    </div>
+  );
+}
+
 export function Shell({ children }: { children: ReactNode }) {
   const path = usePathname();
+  const [palette, setPalette] = useState(false);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setPalette((p) => !p);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   return (
     <div className="relative z-10 flex min-h-screen flex-col">
       <header className="sticky top-0 z-30 border-b border-line bg-bg/85 backdrop-blur">
@@ -69,23 +107,29 @@ export function Shell({ children }: { children: ReactNode }) {
               );
             })}
           </nav>
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-2">
+            <button type="button" onClick={() => setPalette(true)} className="hidden items-center gap-2 rounded-lg border border-line bg-panel px-2.5 py-1.5 text-xs text-dim hover:border-faint sm:flex" aria-label="Open command palette">
+              <Command size={12} /> Search <kbd className="rounded border border-line px-1 text-[10px]">Ctrl K</kbd>
+            </button>
             <StatusBadge />
+            <AccountButton />
           </div>
         </div>
       </header>
       <main className="flex-1">{children}</main>
-      <nav className="sticky bottom-0 z-30 grid grid-cols-4 border-t border-line bg-bg/95 backdrop-blur md:hidden" aria-label="Main mobile">
+      <nav className="sticky bottom-0 z-30 grid grid-cols-6 border-t border-line bg-bg/95 backdrop-blur md:hidden" aria-label="Main mobile">
         {NAV.map(({ href, label, icon: Icon }) => {
           const active = href === "/" ? path === "/" : path.startsWith(href);
           return (
-            <Link key={href} href={href} aria-current={active ? "page" : undefined} className={clsx("flex flex-col items-center gap-1 py-2.5 text-[11px]", active ? "text-accent" : "text-dim")}>
+            <Link key={href} href={href} aria-current={active ? "page" : undefined} className={clsx("flex flex-col items-center gap-1 py-2.5 text-[10px]", active ? "text-accent" : "text-dim")}>
               <Icon size={18} />
               {label}
             </Link>
           );
         })}
       </nav>
+      <CommandPalette open={palette} onClose={() => setPalette(false)} />
+      <AuthDialog />
     </div>
   );
 }

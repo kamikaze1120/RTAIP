@@ -1,10 +1,11 @@
 "use client";
 
-import { Activity, ArrowRight, Flame, Plane, Search, Waves } from "lucide-react";
+import { Activity, ArrowRight, Eye, Flame, FolderKanban, Plane, Search, Waves } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { Dot, Empty, ErrorNote, Panel, Skeleton } from "@/components/ui";
+import { useAuth } from "@/lib/auth";
 import { useSavedInvestigations } from "@/lib/saved";
 import type { GeoCollection } from "@/lib/layers/geo";
 import type { GeoEventProps, LayerId } from "@/lib/types";
@@ -42,6 +43,7 @@ export default function OverviewPage() {
   const router = useRouter();
   const [seed, setSeed] = useState("");
   const saved = useSavedInvestigations();
+  const { user, openSignIn } = useAuth();
   const quakes = usePolling<LayerPayload>("/api/layers/quakes", 60_000);
   const disasters = usePolling<LayerPayload>("/api/layers/disasters", 300_000);
   const alerts = usePolling<LayerPayload>("/api/layers/alerts", 300_000);
@@ -68,7 +70,7 @@ export default function OverviewPage() {
 
   return (
     <div className="mx-auto max-w-[1200px] space-y-6 px-4 py-8">
-      <div>
+      <div className="rounded-2xl border border-line bg-gradient-to-br from-accent/10 via-panel/60 to-transparent p-6">
         <h1 className="text-2xl font-semibold tracking-tight">Real time analysis and intelligence</h1>
         <p className="mt-1 max-w-2xl text-sm text-dim">Map what is connected to a domain, IP or email, and watch what is happening around the world, from public and authorized sources only.</p>
       </div>
@@ -133,21 +135,54 @@ export default function OverviewPage() {
         </Panel>
 
         <div className="space-y-6">
-          <Panel title="Recent investigations">
-            {saved.length === 0 ? (
-              <Empty title="Nothing saved yet" hint="Investigations you save appear here." />
+          <Panel title="Your workspace">
+            {user ? (
+              <div className="divide-y divide-line">
+                <Link href="/cases" className="flex items-center justify-between px-4 py-3 hover:bg-panel2/50">
+                  <span className="flex items-center gap-2 text-sm"><FolderKanban size={14} className="text-accent" /> Cases</span>
+                  <span className="text-xs text-dim">Notes, tags and reports</span>
+                </Link>
+                <Link href="/watchlist" className="flex items-center justify-between px-4 py-3 hover:bg-panel2/50">
+                  <span className="flex items-center gap-2 text-sm"><Eye size={14} className="text-accent" /> Watchlist</span>
+                  <span className="text-xs text-dim">Track exposure over time</span>
+                </Link>
+                {saved.length > 0 ? (
+                  <div className="px-4 py-3 text-xs text-dim">
+                    {saved.length} investigation{saved.length === 1 ? "" : "s"} saved only in this browser.{" "}
+                    <Link href="/investigate" className="text-accent hover:underline">Open one and save it to your cases</Link>
+                  </div>
+                ) : null}
+              </div>
             ) : (
-              <ul className="divide-y divide-line">
-                {saved.slice(0, 5).map((s) => (
-                  <li key={s.id}>
-                    <Link href={`/investigate?q=${encodeURIComponent(s.title)}`} className="flex items-center justify-between px-4 py-3 hover:bg-panel2/50">
-                      <span className="truncate font-mono text-sm">{s.title}</span>
-                      <span className="ml-3 shrink-0 text-xs text-faint">{s.entities.length} entities</span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
+              <div className="space-y-3 p-4">
+                <p className="text-sm text-dim">Enter your email to keep cases, notes and a watchlist in a private workspace. There is no password to create or remember.</p>
+                <button type="button" onClick={openSignIn} className="inline-flex items-center gap-2 rounded-lg bg-accent px-3.5 py-2 text-sm font-medium text-bg hover:bg-accent/90">
+                  Continue with email <ArrowRight size={14} />
+                </button>
+                {saved.length > 0 ? (
+                  <ul className="divide-y divide-line border-t border-line pt-1">
+                    {saved.slice(0, 4).map((s) => (
+                      <li key={s.id}>
+                        <Link href={`/investigate?q=${encodeURIComponent(s.title)}`} className="flex items-center justify-between py-2.5 hover:text-accent">
+                          <span className="truncate font-mono text-sm">{s.title}</span>
+                          <span className="ml-3 shrink-0 text-xs text-faint">{s.entities.length} entities</span>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
             )}
+          </Panel>
+          <Panel title="Quick start">
+            <div className="flex flex-wrap gap-2 p-4">
+              {["example.com", "cloudflare.com", "8.8.8.8", "github.com"].map((ex) => (
+                <Link key={ex} href={`/investigate?q=${encodeURIComponent(ex)}`} className="rounded-full border border-line px-3 py-1.5 font-mono text-xs text-dim hover:border-accent hover:text-ink">
+                  {ex}
+                </Link>
+              ))}
+            </div>
+            <p className="border-t border-line px-4 py-3 text-xs text-faint">Press Ctrl K anywhere to search or jump to a page.</p>
           </Panel>
           {quakes.error && quakes.data ? <ErrorNote message={`Earthquake feed is delayed: ${quakes.error}`} /> : null}
         </div>

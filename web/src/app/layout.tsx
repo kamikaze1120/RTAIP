@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
+import { AuthProvider } from "@/lib/auth";
 import { Shell } from "@/components/Shell";
 import "./globals.css";
 
@@ -14,7 +15,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <body>
-        <Shell>{children}</Shell>
+        <AuthProvider>
+          <Shell>{children}</Shell>
+        </AuthProvider>
       </body>
     </html>
   );

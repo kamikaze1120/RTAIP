@@ -1,10 +1,14 @@
 "use client";
 
 import clsx from "clsx";
-import { AlertTriangle, ArrowRight, Check, Copy, Download, Expand, Globe2, Loader2, Maximize2, Save, Search, Square, Trash2, X } from "lucide-react";
+import { AlertTriangle, ArrowRight, Check, Copy, Download, Expand, Eye, FileText, Globe2, Loader2, Maximize2, Save, Search, Sheet, Square, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useAuth } from "@/lib/auth";
+import { getCase, saveCase } from "@/lib/cases";
+import { download, entitiesCsv, markdownReport } from "@/lib/report";
+import { addWatch } from "@/lib/watchlist";
 import { saveInvestigation, useSavedInvestigations, writeSaved } from "@/lib/saved";
 import type { Entity, EntityType, Finding, SeedType } from "@/lib/types";
 import { ENTITY_STYLE, RISK_STYLE, SEVERITY_STYLE } from "@/lib/ui";
@@ -182,6 +186,8 @@ function NodePanel({
 export function InvestigateView() {
   const params = useSearchParams();
   const initial = params.get("q") ?? "";
+  const caseId = params.get("case");
+  const { user, openSignIn } = useAuth();
   const { state, score, level, summary, run, stop, reset, load } = useInvestigation();
   const [input, setInput] = useState(initial);
   const [selected, setSelected] = useState<string | null>(null);
@@ -199,6 +205,23 @@ export function InvestigateView() {
       void run("auto", initial);
     }
   }, [initial, run]);
+
+  useEffect(() => {
+    if (!caseId || !user) return;
+    let live = true;
+    getCase(caseId)
+      .then((c) => {
+        if (!live) return;
+        load({ seeds: c.graph.seeds, entities: c.graph.entities, edges: c.graph.edges, findings: c.findings });
+        setInput(c.seed);
+      })
+      .catch((e: Error) => live && flash(`Could not open the case: ${e.message}`));
+    return () => {
+      live = false;
+    };
+    // flash and load are stable for the lifetime of the view.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [caseId, user?.id]);
 
   const byId = useMemo(() => new Map(state.entities.map((e) => [e.id, e])), [state.entities]);
   const selectedEntity = selected ? byId.get(selected) ?? null : null;
@@ -237,12 +260,41 @@ export function InvestigateView() {
 
   const snapshot = () => ({ seeds: state.seeds, entities: state.entities, edges: state.edges, findings: state.findings });
 
-  const onSave = () => {
+  function flash(message: string) {
+    setNotice(message);
+    setTimeout(() => setNotice(null), 3500);
+  }
+
+  const onSave = async () => {
+    if (user) {
+      try {
+        await saveCase(snapshot(), { score, level, summary });
+        flash("Saved to your cases");
+      } catch (e) {
+        flash(`Could not save: ${e instanceof Error ? e.message : "unknown error"}`);
+      }
+      return;
+    }
     const next = saveInvestigation(snapshot());
-    if (next) setNotice("Saved in this browser");
-    else setNotice("Could not save. Browser storage is unavailable or full.");
-    setTimeout(() => setNotice(null), 2500);
+    flash(next ? "Saved in this browser. Sign in to keep it everywhere." : "Could not save. Browser storage is unavailable or full.");
   };
+
+  const onWatch = async () => {
+    if (!user) {
+      openSignIn();
+      return;
+    }
+    try {
+      await addWatch(state.seeds[0] ?? "");
+      flash("Added to your watchlist");
+    } catch (e) {
+      flash(e instanceof Error ? e.message : "Could not add to watchlist");
+    }
+  };
+
+  const slug = (state.seeds[0] ?? "investigation").replace(/[^a-z0-9.-]/gi, "_");
+  const onReport = () => download(`rtaip-report-${slug}.md`, markdownReport(snapshot(), { score, level, summary }), "text/markdown");
+  const onCsv = () => download(`rtaip-entities-${slug}.csv`, entitiesCsv(snapshot()), "text/csv");
 
   const onExport = () => {
     const blob = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), score, level, summary, ...snapshot() }, null, 2)], { type: "application/json" });
@@ -290,11 +342,20 @@ export function InvestigateView() {
         </div>
         <div className="relative ml-auto flex items-center gap-2">
           {notice ? <span className="text-xs text-good">{notice}</span> : null}
-          <button type="button" onClick={onSave} disabled={empty} className={buttonClass()} title="Save in this browser">
+          <button type="button" onClick={onWatch} disabled={empty} className={buttonClass()} title="Watch this asset">
+            <Eye size={14} /> Watch
+          </button>
+          <button type="button" onClick={onSave} disabled={empty} className={buttonClass()} title={user ? "Save to your cases" : "Save in this browser"}>
             <Save size={14} /> Save
           </button>
           <button type="button" onClick={() => setShowSaved((s) => !s)} className={buttonClass()} aria-expanded={showSaved}>
             Saved ({saved.length})
+          </button>
+          <button type="button" onClick={onReport} disabled={empty} className={buttonClass()} title="Download a Markdown report">
+            <FileText size={14} />
+          </button>
+          <button type="button" onClick={onCsv} disabled={empty} className={buttonClass()} title="Download entities as CSV">
+            <Sheet size={14} />
           </button>
           <button type="button" onClick={onExport} disabled={empty} className={buttonClass()} title="Download JSON">
             <Download size={14} />
