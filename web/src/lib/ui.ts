@@ -32,6 +32,14 @@ export const LAYER_STYLE: Record<LayerId, { color: string; label: string }> = {
   disasters: { color: "#f43f5e", label: "Natural events" },
   alerts: { color: "#a78bfa", label: "Weather alerts" },
   aircraft: { color: "#38bdf8", label: "Aircraft" },
+  military: { color: "#fb923c", label: "Military aircraft" },
+  ships: { color: "#2dd4bf", label: "Ships" },
+  cameras: { color: "#e2e8f0", label: "Cameras" },
+  fires: { color: "#ef4444", label: "Fires" },
+  aurora: { color: "#4ade80", label: "Aurora" },
+  cyber: { color: "#e879f9", label: "Cyber threats" },
+  zones: { color: "#fb7185", label: "Conflict zones" },
+  ports: { color: "#60a5fa", label: "Ports and chokepoints" },
 };
 
 export function timeAgo(iso: string | number | null | undefined, now = Date.now()): string {

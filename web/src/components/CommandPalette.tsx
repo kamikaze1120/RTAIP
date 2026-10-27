@@ -27,9 +27,8 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   const commands = useMemo<Command[]>(() => {
     const go = (href: string) => () => router.push(href);
     const list: Command[] = [
-      { id: "overview", label: "Go to Overview", run: go("/") },
+      { id: "overview", label: "Go to Command center", run: go("/") },
       { id: "investigate", label: "Go to Investigate", run: go("/investigate") },
-      { id: "map", label: "Go to Map", run: go("/map") },
       { id: "cases", label: "Go to Cases", run: go("/cases") },
       { id: "watchlist", label: "Go to Watchlist", run: go("/watchlist") },
       { id: "sources", label: "Go to Sources", run: go("/sources") },

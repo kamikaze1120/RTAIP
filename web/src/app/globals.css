@@ -98,3 +98,21 @@ body::before {
 .maplibregl-ctrl-attrib a {
   color: var(--color-dim) !important;
 }
+
+.ticker-track {
+  animation: ticker 240s linear infinite;
+}
+.ticker-track:hover {
+  animation-play-state: paused;
+}
+@keyframes ticker {
+  to {
+    transform: translateX(-50%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ticker-track {
+    animation: none;
+    overflow-x: auto;
+  }
+}

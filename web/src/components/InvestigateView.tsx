@@ -127,7 +127,7 @@ function NodePanel({
             </button>
           ) : null}
           {entity.geo ? (
-            <Link href={`/map?lat=${entity.geo.lat}&lon=${entity.geo.lon}&label=${encodeURIComponent(entity.label)}`} className={buttonClass()}>
+            <Link href={`/?lat=${entity.geo.lat}&lon=${entity.geo.lon}&label=${encodeURIComponent(entity.label)}`} className={buttonClass()}>
               <Globe2 size={14} /> Show on map
             </Link>
           ) : null}

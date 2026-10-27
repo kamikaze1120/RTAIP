@@ -90,7 +90,7 @@ interface AdsbAircraft {
 const FT_TO_M = 0.3048;
 const KT_TO_MS = 0.514444;
 
-export function normalizeAdsb(data: { ac?: AdsbAircraft[]; now?: number }, bbox: Bbox, source: string, nowMs = Date.now()): GeoCollection {
+export function normalizeAdsb(data: { ac?: AdsbAircraft[]; now?: number }, bbox: Bbox, source: string, nowMs = Date.now(), layer: "aircraft" | "military" = "aircraft"): GeoCollection {
   const features: GeoFeature[] = [];
   for (const a of data.ac ?? []) {
     const { lat, lon } = a;
@@ -108,7 +108,7 @@ export function normalizeAdsb(data: { ac?: AdsbAircraft[]; now?: number }, bbox:
       geometry: { type: "Point", coordinates: [lon, lat] },
       properties: {
         id: `adsb:${a.hex}`,
-        layer: "aircraft",
+        layer,
         title: name,
         severity: emergency ? 1 : 0.1,
         time: new Date(nowMs - (a.seen_pos ?? 0) * 1000).toISOString(),
@@ -120,9 +120,10 @@ export function normalizeAdsb(data: { ac?: AdsbAircraft[]; now?: number }, bbox:
         heading: a.track ?? null,
         squawk: a.squawk ?? null,
         emergency: Boolean(emergency),
+        military: layer === "military",
       },
     });
-    if (features.length >= MAX_AIRCRAFT) break;
+    if (features.length >= (layer === "military" ? 4000 : MAX_AIRCRAFT)) break;
   }
   return collection(features);
 }

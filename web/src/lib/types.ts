@@ -64,7 +64,7 @@ export type StreamEvent =
 
 export type RiskLevel = "low" | "guarded" | "elevated" | "high";
 
-export type LayerId = "quakes" | "disasters" | "alerts" | "aircraft";
+export type LayerId = "quakes" | "disasters" | "alerts" | "aircraft" | "military" | "ships" | "cameras" | "fires" | "aurora" | "cyber" | "zones" | "ports";
 
 export interface GeoEventProps {
   id: string;

@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { Activity, Command, Eye, FolderKanban, GitFork, Globe2, LayoutDashboard, LogOut, Radio, User } from "lucide-react";
+import { Activity, Command, Eye, FolderKanban, GitFork, Globe2, LogOut, Radio, User } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
@@ -12,9 +12,8 @@ import { CommandPalette } from "./CommandPalette";
 import { Dot } from "./ui";
 
 const NAV = [
-  { href: "/", label: "Overview", icon: LayoutDashboard },
+  { href: "/", label: "Command", icon: Globe2 },
   { href: "/investigate", label: "Investigate", icon: GitFork },
-  { href: "/map", label: "Map", icon: Globe2 },
   { href: "/cases", label: "Cases", icon: FolderKanban },
   { href: "/watchlist", label: "Watchlist", icon: Eye },
   { href: "/sources", label: "Sources", icon: Radio },
@@ -117,7 +116,7 @@ export function Shell({ children }: { children: ReactNode }) {
         </div>
       </header>
       <main className="flex-1">{children}</main>
-      <nav className="sticky bottom-0 z-30 grid grid-cols-6 border-t border-line bg-bg/95 backdrop-blur md:hidden" aria-label="Main mobile">
+      <nav className="sticky bottom-0 z-30 grid grid-cols-5 border-t border-line bg-bg/95 backdrop-blur md:hidden" aria-label="Main mobile">
         {NAV.map(({ href, label, icon: Icon }) => {
           const active = href === "/" ? path === "/" : path.startsWith(href);
           return (

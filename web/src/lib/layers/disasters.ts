@@ -76,6 +76,58 @@ export function normalizeDisasters(data: { events?: EonetEvent[] }): GeoCollecti
   return collection(features);
 }
 
+const URL_GDACS = "https://www.gdacs.org/gdacsapi/api/events/geteventlist/SEARCH?eventlist=EQ;TC;FL;VO;WF;DR&alertlevel=Orange;Red";
+
+interface GdacsFeature {
+  geometry?: { type?: string; coordinates?: number[] };
+  properties?: {
+    eventtype?: string;
+    eventid?: number;
+    episodeid?: number;
+    name?: string;
+    htmldescription?: string;
+    alertlevel?: string;
+    country?: string;
+    fromdate?: string;
+    url?: { report?: string };
+  };
+}
+
+const GDACS_TYPE: Record<string, string> = { EQ: "Earthquake", TC: "Tropical cyclone", FL: "Flood", VO: "Volcano", WF: "Wildfire", DR: "Drought" };
+
+export function normalizeGdacs(data: { features?: GdacsFeature[] }): GeoCollection {
+  const features: GeoFeature[] = [];
+  for (const f of data.features ?? []) {
+    const [lon, lat] = f.geometry?.coordinates ?? [];
+    const p = f.properties;
+    if (!p || f.geometry?.type !== "Point" || typeof lon !== "number" || typeof lat !== "number" || !validLonLat(lon, lat)) continue;
+    const level = (p.alertlevel ?? "").toLowerCase();
+    features.push({
+      type: "Feature",
+      id: `${p.eventtype}${p.eventid}`,
+      geometry: { type: "Point", coordinates: [lon, lat] },
+      properties: {
+        id: `gdacs:${p.eventtype}:${p.eventid}`,
+        layer: "disasters",
+        title: p.name ?? "Disaster alert",
+        severity: level === "red" ? 0.95 : level === "orange" ? 0.78 : 0.4,
+        time: p.fromdate ? new Date(p.fromdate).toISOString() : null,
+        source: "GDACS (UN and EU)",
+        url: p.url?.report,
+        detail: `${p.alertlevel ?? ""} alert${p.country ? `, ${p.country}` : ""}`.trim(),
+        category: GDACS_TYPE[p.eventtype ?? ""] ?? p.eventtype,
+      },
+    });
+  }
+  return collection(features);
+}
+
 export async function fetchDisasters(signal?: AbortSignal): Promise<GeoCollection> {
-  return normalizeDisasters(await fetchJson<{ events?: EonetEvent[] }>(URL_EVENTS, { signal, timeoutMs: 12_000 }));
+  const [eonet, gdacs] = await Promise.allSettled([
+    fetchJson<{ events?: EonetEvent[] }>(URL_EVENTS, { signal, timeoutMs: 12_000 }),
+    fetchJson<{ features?: GdacsFeature[] }>(URL_GDACS, { signal, timeoutMs: 15_000 }),
+  ]);
+  if (eonet.status === "rejected" && gdacs.status === "rejected") throw eonet.reason;
+  const features = [...(eonet.status === "fulfilled" ? normalizeDisasters(eonet.value).features : []), ...(gdacs.status === "fulfilled" ? normalizeGdacs(gdacs.value).features : [])];
+  return collection(features);
 }
