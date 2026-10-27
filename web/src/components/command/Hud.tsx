@@ -54,7 +54,7 @@ export function Hud({ mode, onMode, space, entityCount, alertCount, hits, onHit,
   const kpColor = kp === null ? "#56667a" : kp >= 7 ? "#f43f5e" : kp >= 5 ? "#f5a524" : kp >= 4 ? "#facc15" : "#34d399";
 
   return (
-    <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-start gap-2 p-2.5 sm:gap-3 sm:p-3">
+    <div className="anim-fade-down pointer-events-none absolute inset-x-0 top-0 z-20 flex items-start gap-2 p-2.5 sm:gap-3 sm:p-3">
       <div className="pointer-events-auto flex gap-1.5">
         <button type="button" onClick={onToggleRail} aria-label="Toggle layers" title="Layers (L)" className="grid h-10 w-10 place-items-center rounded-xl border border-line bg-panel/90 text-dim backdrop-blur hover:text-ink">
           <Layers size={16} />
@@ -104,7 +104,7 @@ export function Hud({ mode, onMode, space, entityCount, alertCount, hits, onHit,
         </div>
         <div className="h-7 w-px bg-line" />
         <div className="flex items-center gap-1.5 text-xs" title="Entities currently on the map">
-          <Satellite size={14} className="text-accent" />
+          <Satellite size={14} className="live-pulse text-accent" />
           <span className="tabular-nums text-ink">{entityCount.toLocaleString()}</span>
           <span className="text-dim">tracked</span>
         </div>

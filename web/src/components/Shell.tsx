@@ -84,7 +84,7 @@ export function Shell({ children }: { children: ReactNode }) {
       <header className="sticky top-0 z-30 border-b border-line bg-bg/85 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-[1600px] items-center gap-6 px-4">
           <Link href="/" className="flex items-center gap-2.5">
-            <span className="grid h-7 w-7 place-items-center rounded-lg bg-accent text-bg">
+            <span className="grid h-7 w-7 place-items-center rounded-lg bg-accent text-bg logo-glow">
               <Activity size={16} strokeWidth={2.6} />
             </span>
             <span className="text-sm font-semibold tracking-wide">RTAIP</span>

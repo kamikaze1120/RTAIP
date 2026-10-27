@@ -10,8 +10,8 @@ import type { LayerId } from "@/lib/types";
 
 const COLORS: Record<RailId, string> = {
   ...Object.fromEntries(Object.entries(LAYER_STYLE).map(([k, v]) => [k, v.color])),
-  satellites: "#a78bfa",
-  radar: "#38bdf8",
+  satellites: "#fbbf24",
+  radar: "#60a5fa",
   terminator: "#64748b",
 } as Record<RailId, string>;
 
@@ -28,8 +28,8 @@ export function LayerRail(props: {
 }) {
   return (
     <nav aria-label="Layers" className="pointer-events-auto flex max-h-full w-64 flex-col overflow-auto rounded-xl border border-line bg-panel/90 py-1 backdrop-blur">
-      {GROUP_ORDER.map((group) => (
-        <div key={group} className="border-b border-line/60 py-1 last:border-b-0">
+      {GROUP_ORDER.map((group, gi) => (
+        <div key={group} className="anim-fade-up border-b border-line/60 py-1 last:border-b-0" style={{ animationDelay: `${120 + gi * 70}ms` }}>
           <h3 className="px-3 pb-0.5 pt-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-faint">{group}</h3>
           {RAIL.filter((r) => r.group === group).map((r) => {
             const on = props.enabled.has(r.id);
@@ -46,7 +46,7 @@ export function LayerRail(props: {
             return (
               <div key={r.id}>
                 <button type="button" onClick={() => props.onToggle(r.id)} aria-pressed={on} title={st?.error ? `${r.hint}. ${st.error}` : r.hint} className={clsx("flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-sm transition-colors hover:bg-panel2/70", on ? "text-ink" : "text-dim")}>
-                  <span className="h-2.5 w-2.5 shrink-0 rounded-full border" style={{ background: on ? COLORS[r.id] : "transparent", borderColor: COLORS[r.id] }} />
+                  <span className="h-2.5 w-2.5 shrink-0 rounded-full border" style={{ background: on ? COLORS[r.id] : "transparent", borderColor: COLORS[r.id], boxShadow: on ? `0 0 9px ${COLORS[r.id]}` : "none", transition: "box-shadow .25s, background .25s" }} />
                   <span className="truncate">{r.label}</span>
                   <span className="ml-auto flex items-center text-[11px] text-dim">{right}</span>
                 </button>
@@ -55,7 +55,7 @@ export function LayerRail(props: {
                 {on && r.id === "satellites" ? (
                   <div className="flex flex-wrap gap-1 px-3 pb-2 pt-0.5">
                     {(Object.keys(SAT_GROUPS) as SatGroup[]).map((g) => (
-                      <button key={g} type="button" onClick={() => props.onSatGroup(g)} aria-pressed={props.satGroups.has(g)} className={clsx("rounded-full border px-2 py-0.5 text-[10px]", props.satGroups.has(g) ? "border-[#a78bfa] bg-[#a78bfa]/15 text-[#ddd6fe]" : "border-line text-faint hover:text-dim")}>
+                      <button key={g} type="button" onClick={() => props.onSatGroup(g)} aria-pressed={props.satGroups.has(g)} className={clsx("rounded-full border px-2 py-0.5 text-[10px]", props.satGroups.has(g) ? "border-[#fbbf24] bg-[#fbbf24]/15 text-[#fef3c7]" : "border-line text-faint hover:text-dim")}>
                         {SAT_GROUP_LABELS[g]}
                       </button>
                     ))}

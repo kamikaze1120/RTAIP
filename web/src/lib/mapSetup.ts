@@ -4,7 +4,7 @@ import { LAYER_STYLE } from "./ui";
 
 export const EMPTY = { type: "FeatureCollection", features: [] } as const;
 const FONT = ["Montserrat Medium"];
-const INK = "#060a10";
+const INK = "#070817";
 
 export const DATA_SOURCES = ["quakes", "disasters", "alerts", "aircraft", "military", "ships", "fires", "aurora", "cyber", "zones", "ports"] as const;
 
@@ -90,15 +90,15 @@ export function addLayers(map: MapLibreMap): void {
   moving("aircraft", "icon-plane", 0.42, ["case", emergency, "#f43f5e", col("aircraft")]);
   moving("military", "icon-plane", 0.5, ["case", emergency, "#f43f5e", col("military")]);
 
-  map.addLayer({ id: "sat-track", type: "line", source: "sat-track", paint: { "line-color": "#a78bfa", "line-width": 1.4, "line-opacity": 0.85, "line-dasharray": [2, 2] } });
-  map.addLayer({ id: "sats", type: "symbol", source: "sats", layout: { "icon-image": "icon-sat", "icon-size": 0.4, "icon-allow-overlap": true, "icon-ignore-placement": true }, paint: { "icon-color": "#c4b5fd", "icon-halo-color": INK, "icon-halo-width": 1 } });
-  label("sats", "sats-label", "#ddd6fe", 3.2, 10);
+  map.addLayer({ id: "sat-track", type: "line", source: "sat-track", paint: { "line-color": "#fbbf24", "line-width": 1.4, "line-opacity": 0.85, "line-dasharray": [2, 2] } });
+  map.addLayer({ id: "sats", type: "symbol", source: "sats", layout: { "icon-image": "icon-sat", "icon-size": 0.4, "icon-allow-overlap": true, "icon-ignore-placement": true }, paint: { "icon-color": "#fde68a", "icon-halo-color": INK, "icon-halo-width": 1 } });
+  label("sats", "sats-label", "#fef3c7", 3.2, 10);
 
-  map.addLayer({ id: "area-fill", type: "fill", source: "area", paint: { "fill-color": "#2dd4bf", "fill-opacity": 0.1 } });
-  map.addLayer({ id: "area-line", type: "line", source: "area", paint: { "line-color": "#2dd4bf", "line-width": 1.6, "line-dasharray": [3, 2] } });
-  map.addLayer({ id: "pin-halo", type: "circle", source: "pin", paint: { "circle-radius": 16, "circle-color": "#2dd4bf", "circle-opacity": 0.2 } });
-  map.addLayer({ id: "pin-dot", type: "circle", source: "pin", paint: { "circle-radius": 6, "circle-color": "#2dd4bf", "circle-stroke-color": "#fff", "circle-stroke-width": 2 } });
-  map.addLayer({ id: "selection", type: "circle", source: "selection", paint: { "circle-radius": 14, "circle-color": "rgba(0,0,0,0)", "circle-stroke-color": "#2dd4bf", "circle-stroke-width": 2 } });
+  map.addLayer({ id: "area-fill", type: "fill", source: "area", paint: { "fill-color": "#22d3ee", "fill-opacity": 0.1 } });
+  map.addLayer({ id: "area-line", type: "line", source: "area", paint: { "line-color": "#22d3ee", "line-width": 1.6, "line-dasharray": [3, 2] } });
+  map.addLayer({ id: "pin-halo", type: "circle", source: "pin", paint: { "circle-radius": 16, "circle-color": "#22d3ee", "circle-opacity": 0.2 } });
+  map.addLayer({ id: "pin-dot", type: "circle", source: "pin", paint: { "circle-radius": 6, "circle-color": "#22d3ee", "circle-stroke-color": "#fff", "circle-stroke-width": 2 } });
+  map.addLayer({ id: "selection", type: "circle", source: "selection", paint: { "circle-radius": 14, "circle-color": "rgba(0,0,0,0)", "circle-stroke-color": "#22d3ee", "circle-stroke-width": 2 } });
 }
 
 export function setVisible(map: MapLibreMap, ids: string[], on: boolean): void {

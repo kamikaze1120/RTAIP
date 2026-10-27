@@ -40,6 +40,7 @@ const SHORTCUTS: Array<[string, string]> = [
   ["C", "Toggle traffic cameras"],
   ["/", "Search"],
   ["Esc", "Clear selection or cancel drawing"],
+  ["R", "Pause or resume the slow globe rotation"],
   ["?", "This help"],
 ];
 
@@ -90,6 +91,7 @@ export default function CommandCenter({ pin }: { pin: Pin | null }) {
   const [help, setHelp] = useState(false);
   const [copied, setCopied] = useState(false);
   const [query, setQuery] = useState("");
+  const [autoRotate, setAutoRotate] = useState(true);
 
   const [drawing, setDrawing] = useState(false);
   const [area, setArea] = useState<Area | null>(null);
@@ -264,7 +266,7 @@ export default function CommandCenter({ pin }: { pin: Pin | null }) {
       addSources(map);
       addLayers(map);
       try {
-        map.setSky({ "sky-color": "#0b1d33", "horizon-color": "#1b4f7a", "fog-color": "#060a10", "sky-horizon-blend": 0.5, "horizon-fog-blend": 0.4, "fog-ground-blend": 0.1, "atmosphere-blend": ["interpolate", ["linear"], ["zoom"], 0, 1, 5, 1, 7, 0] });
+        map.setSky({ "sky-color": "#120a3a", "horizon-color": "#6d5ce8", "fog-color": "#070817", "sky-horizon-blend": 0.5, "horizon-fog-blend": 0.4, "fog-ground-blend": 0.1, "atmosphere-blend": ["interpolate", ["linear"], ["zoom"], 0, 1, 5, 1, 7, 0] });
       } catch {
         // Older styles may not support sky. The globe still renders.
       }
@@ -428,6 +430,45 @@ export default function CommandCenter({ pin }: { pin: Pin | null }) {
     map.flyTo({ center: [pin.lon, pin.lat], zoom: 6, duration: 1600 });
   }, [pin, ready]);
 
+  // Motion: slow idle rotation of the globe and pulsing highlight rings.
+  const motionRef = useRef({ rotate: true, busy: false });
+  useEffect(() => {
+    motionRef.current.rotate = autoRotate && mode !== "flat" && !selected && !drawing;
+  }, [autoRotate, mode, selected, drawing]);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    let idleUntil = Date.now() + 2500;
+    const poke = (): void => {
+      idleUntil = Date.now() + 9000;
+    };
+    const canvas = map.getCanvas();
+    for (const ev of ["mousedown", "touchstart", "wheel", "keydown"]) (ev === "keydown" ? window : canvas).addEventListener(ev, poke, { passive: true });
+    let last = performance.now();
+    const id = setInterval(() => {
+      const now = performance.now();
+      const dt = Math.min(0.2, (now - last) / 1000);
+      last = now;
+      const t = now / 1000;
+      if (document.hidden) return;
+      if (motionRef.current.rotate && Date.now() > idleUntil && map.getZoom() < 3.6 && !map.isMoving()) {
+        const c = map.getCenter();
+        map.jumpTo({ center: [c.lng + 4 * dt, c.lat] });
+      }
+      const pulse = (Math.sin(t * 3) + 1) / 2;
+      if (map.getLayer("selection")) {
+        map.setPaintProperty("selection", "circle-radius", 12 + pulse * 8);
+        map.setPaintProperty("selection", "circle-stroke-opacity", 1 - pulse * 0.6);
+      }
+      if (map.getLayer("zones-halo")) map.setPaintProperty("zones-halo", "circle-opacity", 0.1 + pulse * 0.16);
+    }, 66);
+    return () => {
+      clearInterval(id);
+      for (const ev of ["mousedown", "touchstart", "wheel", "keydown"]) (ev === "keydown" ? window : canvas).removeEventListener(ev, poke);
+    };
+  }, [ready]);
+
   // Actions -------------------------------------------------------------------
   const fly = useCallback((center: [number, number], zoom = 6) => {
     mapRef.current?.flyTo({ center, zoom: Math.max(mapRef.current.getZoom(), zoom), duration: 1300, essential: true });
@@ -513,13 +554,13 @@ export default function CommandCenter({ pin }: { pin: Pin | null }) {
       out.push({ id: f.properties.id, layer: f.properties.layer, title: f.properties.title, sub, severity: f.properties.severity, time: f.properties.time, center: centerOf(f) });
     };
     for (const f of visible.quakes) if (f.properties.severity >= 0.4) add(f, String(f.properties.detail ?? f.properties.source));
-    for (const f of visible.disasters) add(f, String(f.properties.detail ?? f.properties.source));
+    for (const f of visible.disasters) if (!f.properties.time || minute - Date.parse(f.properties.time) < 30 * 86_400_000) add(f, String(f.properties.detail ?? f.properties.source));
     for (const f of visible.zones) add(f, String(f.properties.detail ?? "Conflict zone"));
     for (const f of visible.aircraft) if (f.properties.emergency) add(f, String(f.properties.detail ?? ""));
     for (const f of visible.military) if (f.properties.emergency) add(f, String(f.properties.detail ?? ""));
     for (const f of visible.alerts) if (f.properties.severity >= 0.8) add(f, String(f.properties.detail ?? f.properties.source));
     return out.sort((a, b) => b.severity - a.severity || Date.parse(b.time ?? "") - Date.parse(a.time ?? "")).slice(0, 60);
-  }, [visible]);
+  }, [visible, minute]);
 
   // Search --------------------------------------------------------------------
   const [geo, setGeo] = useState<Array<{ name: string; admin1?: string; country?: string; latitude: number; longitude: number }>>([]);
@@ -590,6 +631,7 @@ export default function CommandCenter({ pin }: { pin: Pin | null }) {
       else if (k === "d") setDockOpen((v) => !v);
       else if (k === "e") startDraw();
       else if (k === "c") toggleLayer("cameras");
+      else if (k === "r") setAutoRotate((v) => !v);
       else if (k === "?") setHelp((v) => !v);
       else if (k === "/") {
         e.preventDefault();
@@ -619,6 +661,7 @@ export default function CommandCenter({ pin }: { pin: Pin | null }) {
 
   return (
     <div className="relative h-[calc(100dvh-3.5rem-3.25rem)] overflow-hidden bg-bg md:h-[calc(100dvh-3.5rem)]">
+      <div className="space-bg absolute inset-0" aria-hidden />
       <div ref={container} className="absolute inset-0" style={{ position: "absolute", inset: 0 }} aria-label="Interactive world map" />
 
       <Hud
@@ -646,7 +689,7 @@ export default function CommandCenter({ pin }: { pin: Pin | null }) {
       />
 
       {railOpen ? (
-        <div className="pointer-events-none absolute bottom-9 left-3 top-16 z-10 flex flex-col gap-2">
+        <div className="anim-slide-left pointer-events-none absolute bottom-9 left-3 top-16 z-10 flex flex-col gap-2">
           <div className="pointer-events-auto flex rounded-xl border border-line bg-panel/90 p-1 backdrop-blur sm:hidden" role="group" aria-label="Map mode">
             {MODES.map((m) => (
               <button key={m.id} type="button" onClick={() => setMode(m.id)} aria-pressed={mode === m.id} className={clsx("flex-1 rounded-lg px-1 py-1.5 text-[11px]", mode === m.id ? "bg-accent/15 text-accent" : "text-dim")}>
@@ -659,7 +702,7 @@ export default function CommandCenter({ pin }: { pin: Pin | null }) {
       ) : null}
 
       {dockOpen ? (
-        <div className="pointer-events-none absolute bottom-9 right-3 top-16 z-10 flex">
+        <div className="anim-slide-right pointer-events-none absolute bottom-9 right-3 top-16 z-10 flex">
           <Dock
             tab={tab}
             onTab={setTab}

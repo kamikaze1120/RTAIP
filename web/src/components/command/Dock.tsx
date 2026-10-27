@@ -61,7 +61,7 @@ function SelectionPanel({ feature, sat, selected, onClear, onFly }: { feature: G
     if (!sat) return <div className="px-4 py-10 text-center text-sm text-dim">Satellite not in the loaded set.</div>;
     return (
       <div className="space-y-3 p-4">
-        <Head color="#a78bfa" tag="Satellite" title={sat.name} onClear={onClear} />
+        <Head color="#fbbf24" tag="Satellite" title={sat.name} onClear={onClear} />
         <dl className="divide-y divide-line/60">
           <Row k="NORAD ID" v={String(sat.id)} />
           <Row k="Group" v={sat.group} />
