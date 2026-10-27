@@ -141,7 +141,7 @@ function IntelPanel({ items, news, onPick, selectedZones, onZone }: { items: Int
                 <span className="block truncate text-sm">{i.title}</span>
                 <span className="block truncate text-[11px] text-dim">{i.sub}</span>
               </span>
-              <span className="ml-auto shrink-0 text-[11px] text-faint">{timeAgo(i.time)}</span>
+              <span className="ml-auto shrink-0 text-[11px] text-faint">{i.time ? timeAgo(i.time) : ""}</span>
             </button>
           </li>
         ))}

@@ -81,7 +81,7 @@ export default function CommandCenter({ pin }: { pin: Pin | null }) {
   const [enabled, setEnabled] = useState<Set<string>>(() => new Set(init.layers ?? DEFAULT_ON));
   const [satGroups, setSatGroups] = useState<Set<SatGroup>>(() => new Set(init.sats ?? DEFAULT_SAT_GROUPS));
   const [mode, setMode] = useState<BaseMode>(init.mode ?? "globe");
-  const [view, setView] = useState<View>({ zoom: init.zoom ?? 1.7, bbox: null });
+  const [view, setView] = useState<View>({ zoom: init.zoom ?? 2.2, bbox: null });
   const [railOpen, setRailOpen] = useState(() => typeof window !== "undefined" && window.innerWidth >= 768);
   const [dockOpen, setDockOpen] = useState(() => typeof window !== "undefined" && window.innerWidth >= 1100);
   const [tab, setTab] = useState<DockTab>("intel");
@@ -246,7 +246,7 @@ export default function CommandCenter({ pin }: { pin: Pin | null }) {
   useEffect(() => {
     const el = container.current;
     if (!el) return;
-    const map = new MapLibreMap({ container: el, style: STYLE_URL, center: init.center ?? [10, 24], zoom: init.zoom ?? 1.7, minZoom: 1, maxPitch: 70, attributionControl: { compact: true }, canvasContextAttributes: { antialias: true } });
+    const map = new MapLibreMap({ container: el, style: STYLE_URL, center: init.center ?? [10, 24], zoom: init.zoom ?? 2.2, minZoom: 1, maxPitch: 70, attributionControl: { compact: true }, canvasContextAttributes: { antialias: true } });
     mapRef.current = map;
     map.addControl(new NavigationControl({ visualizePitch: true }), "bottom-right");
 
