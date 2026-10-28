@@ -1,7 +1,7 @@
 import { fetchJson, fetchText } from "../http";
 import { collection, validLonLat, type GeoCollection, type GeoFeature } from "./geo";
 
-export const CAMERA_REGIONS = ["london", "newyork", "california", "singapore", "newzealand", "finland", "hongkong", "seattle"] as const;
+export const CAMERA_REGIONS = ["london", "newyork", "california", "singapore", "newzealand", "finland", "hongkong", "seattle", "windy"] as const;
 export type CameraRegion = (typeof CAMERA_REGIONS)[number];
 
 export function isCameraRegion(v: string): v is CameraRegion {
@@ -215,6 +215,76 @@ export function normalizeSeattle(data: SeattleData): GeoCollection {
   return collection(out);
 }
 
+interface WindyWebcam {
+  webcamId?: number | string;
+  title?: string;
+  location?: { latitude?: number; longitude?: number; city?: string; country?: string };
+  images?: { current?: { preview?: string; thumbnail?: string } };
+}
+
+export function normalizeWindy(data: { webcams?: WindyWebcam[] }): GeoCollection {
+  const out: GeoFeature[] = [];
+  for (const w of data.webcams ?? []) {
+    const id = w.webcamId != null ? String(w.webcamId) : "";
+    if (!id) continue;
+    const image = w.images?.current?.preview ?? w.images?.current?.thumbnail ?? "";
+    const place = [w.location?.city, w.location?.country].filter(Boolean).join(", ");
+    const f = cam("windy", "Windy Webcams", id, w.title || place || `Webcam ${id}`, w.location?.latitude ?? NaN, w.location?.longitude ?? NaN, image, {
+      area: w.location?.country ?? null,
+      detail: place || "Windy Webcams",
+    });
+    if (f) out.push(f);
+  }
+  return collection(out);
+}
+
+/** Query centers that fill the gaps the keyless government feeds miss: South/Central Asia, the
+ *  Middle East, Africa and South America, plus a few global anchors. */
+const WINDY_CENTERS: Array<[number, number]> = [
+  [28.61, 77.21], // Delhi
+  [19.08, 72.88], // Mumbai
+  [24.86, 67.0], // Karachi
+  [23.81, 90.41], // Dhaka
+  [6.93, 79.84], // Colombo
+  [27.72, 85.32], // Kathmandu
+  [41.31, 69.24], // Tashkent
+  [43.24, 76.89], // Almaty
+  [25.2, 55.27], // Dubai
+  [24.71, 46.68], // Riyadh
+  [25.29, 51.53], // Doha
+  [41.01, 28.98], // Istanbul
+  [35.69, 51.39], // Tehran
+  [30.04, 31.24], // Cairo
+  [-1.29, 36.82], // Nairobi
+  [-23.55, -46.63], // Sao Paulo
+];
+
+/** Optional global coverage via Windy Webcams. Inert unless WINDY_WEBCAMS_API_KEY is set. */
+async function fetchWindy(signal?: AbortSignal): Promise<GeoCollection> {
+  const key = process.env.WINDY_WEBCAMS_API_KEY;
+  if (!key) return collection([]);
+  const seen = new Set<string>();
+  const out: GeoFeature[] = [];
+  for (const [lat, lon] of WINDY_CENTERS) {
+    try {
+      const data = await fetchJson<{ webcams?: WindyWebcam[] }>(`https://api.windy.com/webcams/api/v3/webcams?nearby=${lat},${lon},250&limit=50&include=images,location`, {
+        signal,
+        timeoutMs: 15_000,
+        headers: { "x-windy-api-key": key },
+      });
+      for (const f of normalizeWindy(data).features) {
+        const fid = String(f.id);
+        if (seen.has(fid)) continue;
+        seen.add(fid);
+        out.push(f);
+      }
+    } catch {
+      // A failing region should not hide the others.
+    }
+  }
+  return collection(out);
+}
+
 async function fetchCaltrans(signal?: AbortSignal): Promise<GeoCollection> {
   const districts = Array.from({ length: 12 }, (_, i) => i + 1);
   const features: GeoFeature[] = [];
@@ -254,5 +324,7 @@ export async function fetchCameras(region: CameraRegion, signal?: AbortSignal): 
       return normalizeHongKong(await fetchText("https://static.data.gov.hk/td/traffic-snapshot-images/code/Traffic_Camera_Locations_En.csv", { signal, timeoutMs: 20_000 }));
     case "seattle":
       return normalizeSeattle(await fetchJson("https://web.seattle.gov/Travelers/api/Map/Data?zoomId=13&type=2", { signal, timeoutMs: 20_000 }));
+    case "windy":
+      return fetchWindy(signal);
   }
 }

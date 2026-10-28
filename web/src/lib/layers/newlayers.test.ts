@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { normalizeAurora } from "./aurora";
-import { normalizeCaltrans, normalizeFinland, normalizeHongKong, normalizeNyc, normalizeNz, normalizeSeattle, normalizeSingapore, normalizeTfl } from "./cameras";
+import { normalizeCaltrans, normalizeFinland, normalizeHongKong, normalizeNyc, normalizeNz, normalizeSeattle, normalizeSingapore, normalizeTfl, normalizeWindy } from "./cameras";
 import { normalizeFeodo } from "./cyber";
 import { normalizeGdacs } from "./disasters";
 import { normalizeFires } from "./fires";
@@ -126,6 +126,18 @@ describe("cameras", () => {
     expect(out.features).toHaveLength(1);
     expect(out.features[0]?.properties.imageUrl).toBe("https://www.seattle.gov/trafficcams/images/Fauntleroy.jpg");
     expect(out.features[0]?.geometry).toEqual({ type: "Point", coordinates: [-122.3927, 47.5267] });
+  });
+  it("normalizes Windy webcams and skips those without an https image", () => {
+    const out = normalizeWindy({
+      webcams: [
+        { webcamId: 12345, title: "Marine Drive", location: { latitude: 18.94, longitude: 72.82, city: "Mumbai", country: "India" }, images: { current: { preview: "https://images.windy.com/webcams/12345/current/preview.jpg" } } },
+        { webcamId: 777, title: "No image", location: { latitude: 25.2, longitude: 55.27, city: "Dubai", country: "UAE" }, images: { current: { preview: "http://insecure/x.jpg" } } },
+      ],
+    });
+    expect(out.features).toHaveLength(1);
+    expect(out.features[0]?.id).toBe("windy:12345");
+    expect(out.features[0]?.properties.detail).toBe("Mumbai, India");
+    expect(out.features[0]?.geometry).toEqual({ type: "Point", coordinates: [72.82, 18.94] });
   });
 });
 

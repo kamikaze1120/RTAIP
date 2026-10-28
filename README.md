@@ -141,6 +141,12 @@ npm test           # vitest
 No API keys are required for the live map layers or the OSINT transforms.
 Supabase env vars are only needed for sign-in, cases and watchlists.
 
+**Optional global cameras:** the keyless feeds don't reach Central/South Asia,
+the Middle East, Africa or South America (no open government camera APIs exist
+there). Set a free `WINDY_WEBCAMS_API_KEY` (from
+[Windy Webcams](https://api.windy.com/webcams)) to add worldwide webcam coverage
+of those regions. Without the key the global source is simply inactive.
+
 ---
 
 ## 🗺️ Roadmap
