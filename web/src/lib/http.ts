@@ -47,8 +47,13 @@ export async function fetchJson<T>(url: string, opts: FetchOptions = {}): Promis
   return (await res.json()) as T;
 }
 
-/** Fetch a text/XML body with the same timeout, header and abort handling as fetchJson. */
+/** Fetch a text/XML/CSV body with the same timeout, header and abort handling as fetchJson.
+ *  Decodes by byte-order mark so UTF-16 feeds (e.g. some government CSVs) are read correctly. */
 export async function fetchText(url: string, opts: FetchOptions = {}): Promise<string> {
-  const res = await fetchRaw(url, "text/xml, application/xml, text/plain, */*", opts);
-  return res.text();
+  const res = await fetchRaw(url, "text/csv, text/xml, application/xml, text/plain, */*", opts);
+  const buf = new Uint8Array(await res.arrayBuffer());
+  let encoding = "utf-8";
+  if (buf[0] === 0xff && buf[1] === 0xfe) encoding = "utf-16le";
+  else if (buf[0] === 0xfe && buf[1] === 0xff) encoding = "utf-16be";
+  return new TextDecoder(encoding).decode(buf);
 }

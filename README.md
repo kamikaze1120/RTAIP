@@ -54,7 +54,7 @@ reference.
 | 🌍 | **Command center globe** — 3D globe / 2D map / satellite / night-lights, place search, draw-an-area, shareable view links, keyboard shortcuts | ✅ |
 | 📡 | **Live map layers** — 15+ keyless public feeds (see below), refreshed on their own schedules | ✅ |
 | 🛰️ | **In-browser satellites** — TLEs propagated client-side (stations, GPS, Galileo, BeiDou, Starlink, weather, science) with orbit tracks | ✅ |
-| 📷 | **Public traffic cameras** — London, New York, California, Singapore, New Zealand, Finland (1,000+ live cameras, clustered) | ✅ |
+| 📷 | **Public traffic cameras** — London, New York, Seattle, California, Singapore, Hong Kong, New Zealand, Finland (4,000+ live cameras across 8 networks, clustered) | ✅ |
 | 🔎 | **Investigation engine** — pivot a domain / IP / email: DNS, RDAP/WHOIS, Certificate Transparency, IP geolocation, streamed as transforms resolve | ✅ |
 | 🧾 | **Provenance** — every datapoint carries source, timestamp and confidence | ✅ |
 | 🚨 | **Geofence alerts** — draw a region, get notified on emergency squawks, quakes and events inside it | ✅ |
@@ -76,7 +76,7 @@ routes with per-source caching and rate limiting.
 | **Earth** | Earthquakes · Natural events · Fires · Weather alerts · Rain radar | USGS · NASA EONET/GDACS · NASA FIRMS · US NWS · RainViewer |
 | **Cyber** | Botnet C2 servers | abuse.ch Feodo Tracker |
 | **Geopolitics** | Conflict zones (curated, not a live measurement) | RTAIP editorial list |
-| **Cameras** | Traffic cameras — London · New York · California · Singapore · New Zealand · Finland | TfL · NYC DOT · Caltrans · LTA Singapore · NZTA (Waka Kotahi) · Fintraffic/Digitraffic |
+| **Cameras** | Traffic cameras — London · New York · Seattle · California · Singapore · Hong Kong · New Zealand · Finland | TfL · NYC DOT · Seattle DOT · Caltrans · LTA Singapore · HK Transport Dept · NZTA (Waka Kotahi) · Fintraffic/Digitraffic |
 
 ---
 

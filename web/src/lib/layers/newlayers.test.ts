@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { normalizeAurora } from "./aurora";
-import { normalizeCaltrans, normalizeFinland, normalizeNyc, normalizeNz, normalizeSingapore, normalizeTfl } from "./cameras";
+import { normalizeCaltrans, normalizeFinland, normalizeHongKong, normalizeNyc, normalizeNz, normalizeSeattle, normalizeSingapore, normalizeTfl } from "./cameras";
 import { normalizeFeodo } from "./cyber";
 import { normalizeGdacs } from "./disasters";
 import { normalizeFires } from "./fires";
@@ -107,6 +107,25 @@ describe("cameras", () => {
     expect(out.features[0]?.properties.imageUrl).toBe("https://trafficnz.info/camera/714.jpg");
     expect(out.features[0]?.properties.title).toBe("SH1 Tinwald");
     expect(out.features[0]?.geometry).toEqual({ type: "Point", coordinates: [171.721055, -43.919632] });
+  });
+  it("normalizes Hong Kong tab-separated camera locations", () => {
+    const csv = "key\tregion\tdistrict\tdescription\teasting\tnorthing\tlatitude\tlongitude\turl\nH429F\tHong Kong Island\tSouthern\tAberdeen Praya Road\t833549\t812187\t22.24845\t114.1505\thttps://tdcctv.data.one.gov.hk/H429F.JPG";
+    const out = normalizeHongKong(csv);
+    expect(out.features).toHaveLength(1);
+    expect(out.features[0]?.id).toBe("hongkong:H429F");
+    expect(out.features[0]?.properties.imageUrl).toBe("https://tdcctv.data.one.gov.hk/H429F.JPG");
+    expect(out.features[0]?.geometry).toEqual({ type: "Point", coordinates: [114.1505, 22.24845] });
+  });
+  it("normalizes Seattle cameras and builds the sdot image URL", () => {
+    const out = normalizeSeattle({
+      Features: [
+        { PointCoordinate: [47.5267, -122.3927], Cameras: [{ Id: "CMR-0112", Description: "Fauntleroy Way SW", ImageUrl: "Fauntleroy.jpg", Type: "sdot" }] },
+        { PointCoordinate: [47.6, -122.3], Cameras: [{ Id: "CMR-X", Description: "no image type", ImageUrl: "x.jpg", Type: "wsdot" }] },
+      ],
+    });
+    expect(out.features).toHaveLength(1);
+    expect(out.features[0]?.properties.imageUrl).toBe("https://www.seattle.gov/trafficcams/images/Fauntleroy.jpg");
+    expect(out.features[0]?.geometry).toEqual({ type: "Point", coordinates: [-122.3927, 47.5267] });
   });
 });
 

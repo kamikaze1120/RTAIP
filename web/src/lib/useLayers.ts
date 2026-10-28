@@ -54,10 +54,12 @@ export function useLayers(enabled: ReadonlySet<string>, view: View): { features:
   const singapore = usePolling<LayerPayload>(camsOn ? "/api/layers/cameras?src=singapore" : null, POLL_MS.cameras);
   const newzealand = usePolling<LayerPayload>(camsOn ? "/api/layers/cameras?src=newzealand" : null, POLL_MS.cameras);
   const finland = usePolling<LayerPayload>(camsOn ? "/api/layers/cameras?src=finland" : null, POLL_MS.cameras);
+  const hongkong = usePolling<LayerPayload>(camsOn ? "/api/layers/cameras?src=hongkong" : null, POLL_MS.cameras);
+  const seattle = usePolling<LayerPayload>(camsOn ? "/api/layers/cameras?src=seattle" : null, POLL_MS.cameras);
 
   const cameraFeatures = useMemo(
-    () => [london, newyork, california, singapore, newzealand, finland].flatMap((s) => s.data?.data.features ?? NONE),
-    [london.data, newyork.data, california.data, singapore.data, newzealand.data, finland.data], // eslint-disable-line react-hooks/exhaustive-deps
+    () => [london, newyork, california, singapore, newzealand, finland, hongkong, seattle].flatMap((s) => s.data?.data.features ?? NONE),
+    [london.data, newyork.data, california.data, singapore.data, newzealand.data, finland.data, hongkong.data, seattle.data], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   const features = useMemo(
@@ -87,7 +89,7 @@ export function useLayers(enabled: ReadonlySet<string>, view: View): { features:
     ...extra,
   });
 
-  const camStates = [london, newyork, california, singapore, newzealand, finland];
+  const camStates = [london, newyork, california, singapore, newzealand, finland, hongkong, seattle];
   const status: Record<LayerId, LayerStatus> = {
     quakes: st("quakes", quakes),
     disasters: st("disasters", disasters),

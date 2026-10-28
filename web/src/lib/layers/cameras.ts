@@ -1,7 +1,7 @@
 import { fetchJson, fetchText } from "../http";
 import { collection, validLonLat, type GeoCollection, type GeoFeature } from "./geo";
 
-export const CAMERA_REGIONS = ["london", "newyork", "california", "singapore", "newzealand", "finland"] as const;
+export const CAMERA_REGIONS = ["london", "newyork", "california", "singapore", "newzealand", "finland", "hongkong", "seattle"] as const;
 export type CameraRegion = (typeof CAMERA_REGIONS)[number];
 
 export function isCameraRegion(v: string): v is CameraRegion {
@@ -156,6 +156,65 @@ export function normalizeNz(xml: string): GeoCollection {
   return collection(out);
 }
 
+/** Split one CSV/TSV line, honoring simple double-quoted fields. */
+function splitRow(line: string, sep: string): string[] {
+  const out: string[] = [];
+  let cur = "";
+  let quoted = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') quoted = !quoted;
+    else if (ch === sep && !quoted) {
+      out.push(cur);
+      cur = "";
+    } else cur += ch;
+  }
+  out.push(cur);
+  return out.map((s) => s.trim());
+}
+
+export function normalizeHongKong(csv: string): GeoCollection {
+  const lines = csv.split(/\r?\n/).filter((l) => l.trim().length > 0);
+  if (lines.length < 2) return collection([]);
+  const sep = lines[0]!.includes("\t") ? "\t" : ",";
+  const header = splitRow(lines[0]!, sep).map((h) => h.toLowerCase());
+  const col = (row: string[], name: string): string => row[header.indexOf(name)] ?? "";
+  const out: GeoFeature[] = [];
+  for (const line of lines.slice(1)) {
+    const row = splitRow(line, sep);
+    const f = cam(
+      "hongkong",
+      "HK Transport Department",
+      col(row, "key"),
+      col(row, "description") || `Camera ${col(row, "key")}`,
+      Number(col(row, "latitude")),
+      Number(col(row, "longitude")),
+      col(row, "url"),
+      { district: col(row, "district") || null, area: col(row, "region") || null },
+    );
+    if (f) out.push(f);
+  }
+  return collection(out);
+}
+
+interface SeattleData {
+  Features?: Array<{ PointCoordinate?: [number, number]; Cameras?: Array<{ Id?: string; Description?: string; ImageUrl?: string; Type?: string }> }>;
+}
+
+export function normalizeSeattle(data: SeattleData): GeoCollection {
+  const out: GeoFeature[] = [];
+  for (const feature of data.Features ?? []) {
+    const [lat, lon] = feature.PointCoordinate ?? [NaN, NaN];
+    for (const c of feature.Cameras ?? []) {
+      if (!c.Id || !c.ImageUrl) continue;
+      const image = /^https?:\/\//.test(c.ImageUrl) ? c.ImageUrl : c.Type === "sdot" ? `https://www.seattle.gov/trafficcams/images/${c.ImageUrl}` : "";
+      const f = cam("seattle", c.Type === "wsdot" ? "WSDOT" : "Seattle DOT", c.Id, c.Description ?? `Camera ${c.Id}`, lat, lon, image);
+      if (f) out.push(f);
+    }
+  }
+  return collection(out);
+}
+
 async function fetchCaltrans(signal?: AbortSignal): Promise<GeoCollection> {
   const districts = Array.from({ length: 12 }, (_, i) => i + 1);
   const features: GeoFeature[] = [];
@@ -191,5 +250,9 @@ export async function fetchCameras(region: CameraRegion, signal?: AbortSignal): 
       return normalizeNz(await fetchText("https://trafficnz.info/service/traffic/rest/4/cameras/all", { signal, timeoutMs: 20_000 }));
     case "finland":
       return normalizeFinland(await fetchJson("https://tie.digitraffic.fi/api/weathercam/v1/stations", { signal, timeoutMs: 20_000 }));
+    case "hongkong":
+      return normalizeHongKong(await fetchText("https://static.data.gov.hk/td/traffic-snapshot-images/code/Traffic_Camera_Locations_En.csv", { signal, timeoutMs: 20_000 }));
+    case "seattle":
+      return normalizeSeattle(await fetchJson("https://web.seattle.gov/Travelers/api/Map/Data?zoomId=13&type=2", { signal, timeoutMs: 20_000 }));
   }
 }
