@@ -39,11 +39,12 @@ async function fromCertSpotter(apex: string, signal: AbortSignal): Promise<{ hos
 }
 
 async function run(entity: Entity, ctx: TransformContext): Promise<void> {
+  // Cert Spotter answers in well under a second; crt.sh can take 20s+, so try the fast one first.
   let result: { hosts: string[]; source: string; url: string };
   try {
-    result = await fromCrtSh(entity.value, ctx.signal);
-  } catch {
     result = await fromCertSpotter(entity.value, ctx.signal);
+  } catch {
+    result = await fromCrtSh(entity.value, ctx.signal);
   }
   const prov = { source: result.source, url: result.url, fetchedAt: new Date().toISOString() };
   const hosts = result.hosts.slice(0, MAX_SUBDOMAINS);
