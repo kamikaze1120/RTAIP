@@ -10,7 +10,7 @@ export type EntityType =
   | "location"
   | "cert";
 
-export type SeedType = "domain" | "ip" | "email";
+export type SeedType = "domain" | "ip" | "email" | "org";
 
 export interface Provenance {
   source: string;

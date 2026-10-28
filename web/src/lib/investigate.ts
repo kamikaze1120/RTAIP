@@ -13,7 +13,7 @@ export interface InvestigateOptions {
 }
 
 /** Discovered entity types that are followed automatically. */
-const FOLLOW = new Set(["ip", "domain", "subdomain", "nameserver", "mailserver", "email"]);
+const FOLLOW = new Set(["ip", "domain", "subdomain", "nameserver", "mailserver", "email", "org"]);
 
 export async function investigate(seed: ParsedSeed, emit: (e: StreamEvent) => void, opts: InvestigateOptions): Promise<void> {
   const { signal, maxRuns = 140, concurrency = 6 } = opts;

@@ -55,7 +55,8 @@ reference.
 | 📡 | **Live map layers** — 15+ keyless public feeds (see below), refreshed on their own schedules | ✅ |
 | 🛰️ | **In-browser satellites** — TLEs propagated client-side (stations, GPS, Galileo, BeiDou, Starlink, weather, science) with orbit tracks | ✅ |
 | 📷 | **Public traffic cameras** — London, New York, Seattle, California, Singapore, Hong Kong, New Zealand, Finland (4,000+ live cameras across 8 networks, clustered) | ✅ |
-| 🔎 | **Investigation engine** — pivot a domain / IP / email: DNS, RDAP/WHOIS, Certificate Transparency, IP geolocation, streamed as transforms resolve | ✅ |
+| 🔎 | **Investigation engine** — pivot a domain / IP / email / **company name**: DNS, RDAP/WHOIS, Certificate Transparency, IP geolocation, streamed as transforms resolve | ✅ |
+| 🛡️ | **Sanctions & news** — every organization is auto-screened against the **US OFAC SDN** list, with recent open-source **news mentions** (GDELT) attached | ✅ |
 | 🧾 | **Provenance** — every datapoint carries source, timestamp and confidence | ✅ |
 | 🚨 | **Geofence alerts** — draw a region, get notified on emergency squawks, quakes and events inside it | ✅ |
 | 🗂️ | **Cases & watchlists** — save entities, annotate, and track over time | ✅ |
@@ -86,7 +87,12 @@ Keyless, public, and run server-side with timeouts and caching:
 
 `dns` (DoH A/NS/MX resolution) · `rdap` / WHOIS (registration + ASN) ·
 `certs` (crt.sh Certificate Transparency → subdomains) ·
-`ipgeo` (IP geolocation & network)
+`ipgeo` (IP geolocation & network) ·
+`sanctions` (US OFAC SDN screening of organizations) ·
+`gdelt` (recent open-source news mentions)
+
+You can seed an investigation with a **company or organization name** too, not
+just a domain/IP/email — it is screened against OFAC and enriched with news.
 
 > Adding a layer or transform? Follow [CONTRIBUTING.md](CONTRIBUTING.md) —
 > document the source, its license/ToS and rate limits. Connectors that target

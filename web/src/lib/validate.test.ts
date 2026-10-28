@@ -36,6 +36,7 @@ describe("normalizeEmail and guessSeedType", () => {
     expect(guessSeedType("a@b.com")).toBe("email");
     expect(guessSeedType("8.8.8.8")).toBe("ip");
     expect(guessSeedType("example.com")).toBe("domain");
+    expect(guessSeedType("Acme Holdings Ltd")).toBe("org");
     expect(guessSeedType("???")).toBeNull();
   });
 });
@@ -48,5 +49,9 @@ describe("parseSeed", () => {
   it("auto detects", () => {
     const r = parseSeed("auto", "https://Example.com/x");
     expect(r).toEqual({ ok: true, seed: { type: "domain", value: "example.com" } });
+  });
+  it("accepts a company name as an org seed", () => {
+    const r = parseSeed("auto", "  Gazprom  Neft  ");
+    expect(r).toEqual({ ok: true, seed: { type: "org", value: "Gazprom Neft" } });
   });
 });

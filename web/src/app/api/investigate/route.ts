@@ -8,7 +8,7 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 const Body = z.object({
-  type: z.enum(["auto", "domain", "ip", "email"]).default("auto"),
+  type: z.enum(["auto", "domain", "ip", "email", "org"]).default("auto"),
   value: z.string().min(1).max(320),
 });
 

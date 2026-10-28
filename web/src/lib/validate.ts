@@ -73,12 +73,24 @@ export function normalizeEmail(input: string): string | null {
   return `${v.split("@")[0]}@${domain}`;
 }
 
+/** An organization or company name: free text that is not a domain, IP or email. */
+export function normalizeOrg(input: string): string | null {
+  const v = (input ?? "").replace(/\s+/g, " ").trim();
+  if (v.length < 2 || v.length > 120) return null;
+  if (!/[a-z]/i.test(v)) return null; // must contain a letter
+  if (v.includes("@")) return null;
+  if (normalizeDomain(v)) return null; // a bare domain is a domain, not an org
+  if (isIPv4(v) || isIPv6(v)) return null;
+  return v;
+}
+
 export function guessSeedType(value: string): SeedType | null {
   const v = (value ?? "").trim();
   if (!v) return null;
   if (v.includes("@")) return normalizeEmail(v) ? "email" : null;
   if (isIPv4(v) || isIPv6(v)) return "ip";
-  return normalizeDomain(v) ? "domain" : null;
+  if (normalizeDomain(v)) return "domain";
+  return normalizeOrg(v) ? "org" : null;
 }
 
 export interface ParsedSeed {
@@ -98,6 +110,10 @@ export function parseSeed(type: string | undefined, value: string): { ok: true; 
     if (!isIPv4(ip) && !isIPv6(ip)) return { ok: false, error: "That does not look like an IP address." };
     if (!isPublicIp(ip)) return { ok: false, error: "Private, local and reserved IP addresses are not investigated." };
     return { ok: true, seed: { type: "ip", value: ip } };
+  }
+  if (t === "org") {
+    const o = normalizeOrg(value);
+    return o ? { ok: true, seed: { type: "org", value: o } } : { ok: false, error: "Enter a company or organization name." };
   }
   const e = normalizeEmail(value);
   return e ? { ok: true, seed: { type: "email", value: e } } : { ok: false, error: "That does not look like an email address." };

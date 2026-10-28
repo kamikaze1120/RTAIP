@@ -317,8 +317,8 @@ export function InvestigateView() {
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Domain, IP address or email"
-            aria-label="Investigate a domain, IP address or email"
+            placeholder="Domain, IP, email or company name"
+            aria-label="Investigate a domain, IP address, email or company name"
             autoComplete="off"
             spellCheck={false}
             className="w-full rounded-lg border border-line bg-panel py-2.5 pl-9 pr-3 font-mono text-sm outline-none placeholder:font-sans placeholder:text-faint focus:border-accent"
