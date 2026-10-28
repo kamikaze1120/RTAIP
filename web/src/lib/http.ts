@@ -17,7 +17,7 @@ export interface FetchOptions {
   signal?: AbortSignal;
 }
 
-export async function fetchJson<T>(url: string, opts: FetchOptions = {}): Promise<T> {
+async function fetchRaw(url: string, accept: string, opts: FetchOptions): Promise<Response> {
   const { timeoutMs = 10_000, headers = {}, signal } = opts;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(new Error("timeout")), timeoutMs);
@@ -25,13 +25,13 @@ export async function fetchJson<T>(url: string, opts: FetchOptions = {}): Promis
   signal?.addEventListener("abort", onAbort, { once: true });
   try {
     const res = await fetch(url, {
-      headers: { accept: "application/json", "user-agent": USER_AGENT, ...headers },
+      headers: { accept, "user-agent": USER_AGENT, ...headers },
       signal: controller.signal,
       redirect: "follow",
       cache: "no-store",
     });
     if (!res.ok) throw new HttpError(`HTTP ${res.status}`, res.status, url);
-    return (await res.json()) as T;
+    return res;
   } catch (err) {
     if (err instanceof HttpError) throw err;
     if (controller.signal.aborted) throw new HttpError(String((controller.signal.reason as Error)?.message ?? "aborted"), 0, url);
@@ -40,4 +40,15 @@ export async function fetchJson<T>(url: string, opts: FetchOptions = {}): Promis
     clearTimeout(timer);
     signal?.removeEventListener("abort", onAbort);
   }
+}
+
+export async function fetchJson<T>(url: string, opts: FetchOptions = {}): Promise<T> {
+  const res = await fetchRaw(url, "application/json", opts);
+  return (await res.json()) as T;
+}
+
+/** Fetch a text/XML body with the same timeout, header and abort handling as fetchJson. */
+export async function fetchText(url: string, opts: FetchOptions = {}): Promise<string> {
+  const res = await fetchRaw(url, "text/xml, application/xml, text/plain, */*", opts);
+  return res.text();
 }

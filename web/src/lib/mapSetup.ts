@@ -94,11 +94,11 @@ export function addLayers(map: MapLibreMap): void {
   map.addLayer({ id: "sats", type: "symbol", source: "sats", layout: { "icon-image": "icon-sat", "icon-size": 0.4, "icon-allow-overlap": true, "icon-ignore-placement": true }, paint: { "icon-color": "#fde68a", "icon-halo-color": INK, "icon-halo-width": 1 } });
   label("sats", "sats-label", "#fef3c7", 3.2, 10);
 
-  map.addLayer({ id: "area-fill", type: "fill", source: "area", paint: { "fill-color": "#22d3ee", "fill-opacity": 0.1 } });
-  map.addLayer({ id: "area-line", type: "line", source: "area", paint: { "line-color": "#22d3ee", "line-width": 1.6, "line-dasharray": [3, 2] } });
-  map.addLayer({ id: "pin-halo", type: "circle", source: "pin", paint: { "circle-radius": 16, "circle-color": "#22d3ee", "circle-opacity": 0.2 } });
-  map.addLayer({ id: "pin-dot", type: "circle", source: "pin", paint: { "circle-radius": 6, "circle-color": "#22d3ee", "circle-stroke-color": "#fff", "circle-stroke-width": 2 } });
-  map.addLayer({ id: "selection", type: "circle", source: "selection", paint: { "circle-radius": 14, "circle-color": "rgba(0,0,0,0)", "circle-stroke-color": "#22d3ee", "circle-stroke-width": 2 } });
+  map.addLayer({ id: "area-fill", type: "fill", source: "area", paint: { "fill-color": "#ffce3a", "fill-opacity": 0.1 } });
+  map.addLayer({ id: "area-line", type: "line", source: "area", paint: { "line-color": "#ffce3a", "line-width": 1.6, "line-dasharray": [3, 2] } });
+  map.addLayer({ id: "pin-halo", type: "circle", source: "pin", paint: { "circle-radius": 16, "circle-color": "#ffce3a", "circle-opacity": 0.2 } });
+  map.addLayer({ id: "pin-dot", type: "circle", source: "pin", paint: { "circle-radius": 6, "circle-color": "#ffce3a", "circle-stroke-color": "#fff", "circle-stroke-width": 2 } });
+  map.addLayer({ id: "selection", type: "circle", source: "selection", paint: { "circle-radius": 14, "circle-color": "rgba(0,0,0,0)", "circle-stroke-color": "#ffce3a", "circle-stroke-width": 2 } });
 }
 
 export function setVisible(map: MapLibreMap, ids: string[], on: boolean): void {

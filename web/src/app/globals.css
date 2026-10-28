@@ -1,18 +1,18 @@
 @import "tailwindcss";
 
 @theme {
-  --color-bg: #070817;
-  --color-panel: #0e1030;
-  --color-panel2: #151a42;
-  --color-line: #262d62;
-  --color-ink: #eef0ff;
-  --color-dim: #9aa3d4;
-  --color-faint: #6770a8;
-  --color-accent: #22d3ee;
-  --color-accent2: #a78bfa;
+  --color-bg: #0c0910;
+  --color-panel: #17111a;
+  --color-panel2: #201722;
+  --color-line: #3a2a33;
+  --color-ink: #fbf3ec;
+  --color-dim: #c3ab9f;
+  --color-faint: #8a7168;
+  --color-accent: #ffce3a;
+  --color-accent2: #ff3b47;
   --color-good: #34d399;
   --color-warn: #fbbf24;
-  --color-bad: #fb4f7a;
+  --color-bad: #ff4d6a;
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
 }
@@ -39,15 +39,15 @@ body::before {
   inset: -20%;
   pointer-events: none;
   background:
-    radial-gradient(900px 520px at 15% 0%, rgba(167, 139, 250, 0.16), transparent 60%),
-    radial-gradient(800px 480px at 88% 6%, rgba(34, 211, 238, 0.12), transparent 60%),
-    radial-gradient(700px 500px at 50% 110%, rgba(236, 72, 153, 0.08), transparent 60%);
+    radial-gradient(900px 520px at 15% 0%, rgba(255, 206, 58, 0.16), transparent 60%),
+    radial-gradient(800px 480px at 88% 6%, rgba(255, 59, 71, 0.13), transparent 60%),
+    radial-gradient(700px 500px at 50% 110%, rgba(255, 90, 60, 0.09), transparent 60%);
   animation: aurora-drift 26s ease-in-out infinite alternate;
   z-index: 0;
 }
 
 ::selection {
-  background: rgba(34, 211, 238, 0.3);
+  background: rgba(255, 206, 58, 0.32);
 }
 
 *:focus-visible {
@@ -61,7 +61,7 @@ body::before {
   height: 10px;
 }
 ::-webkit-scrollbar-thumb {
-  background: #323a7a;
+  background: #4a2f33;
   border-radius: 8px;
   border: 2px solid var(--color-bg);
 }
@@ -94,7 +94,7 @@ body::before {
   filter: invert(0.85);
 }
 .maplibregl-ctrl-attrib {
-  background: rgba(7, 8, 23, 0.7) !important;
+  background: rgba(12, 9, 16, 0.7) !important;
   color: var(--color-dim) !important;
 }
 .maplibregl-ctrl-attrib a {
@@ -151,8 +151,8 @@ body::before {
   to { background-position: 200% 50%; }
 }
 @keyframes logo-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(34, 211, 238, 0.5), 0 0 18px rgba(167, 139, 250, 0.35); }
-  50% { box-shadow: 0 0 0 7px rgba(34, 211, 238, 0), 0 0 26px rgba(34, 211, 238, 0.5); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 206, 58, 0.5), 0 0 18px rgba(255, 59, 71, 0.35); }
+  50% { box-shadow: 0 0 0 7px rgba(255, 206, 58, 0), 0 0 26px rgba(255, 206, 58, 0.5); }
 }
 .anim-fade-up { animation: fade-up 0.55s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
 .anim-fade-down { animation: fade-down 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
@@ -160,34 +160,34 @@ body::before {
 .anim-slide-right { animation: slide-right 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
 
 .bg-accent {
-  background-image: linear-gradient(120deg, var(--color-accent), #6ee7f9 35%, var(--color-accent2) 70%, var(--color-accent));
+  background-image: linear-gradient(120deg, var(--color-accent), #ffe08a 35%, var(--color-accent2) 70%, var(--color-accent));
   background-size: 220% 100%;
   animation: sheen 6s linear infinite;
   transition: filter 0.2s, transform 0.2s, box-shadow 0.2s;
 }
 .bg-accent:hover {
   filter: brightness(1.12);
-  box-shadow: 0 6px 22px rgba(34, 211, 238, 0.35);
+  box-shadow: 0 6px 22px rgba(255, 206, 58, 0.35);
 }
 .logo-glow {
   animation: logo-pulse 3.2s ease-in-out infinite, sheen 6s linear infinite;
 }
 .backdrop-blur {
-  box-shadow: 0 0 0 1px rgba(167, 139, 250, 0.06), 0 10px 34px rgba(3, 4, 18, 0.55);
+  box-shadow: 0 0 0 1px rgba(255, 59, 71, 0.06), 0 10px 34px rgba(5, 3, 8, 0.55);
   transition: border-color 0.25s, box-shadow 0.25s;
 }
 .backdrop-blur:hover {
-  border-color: rgba(167, 139, 250, 0.45);
-  box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.18), 0 12px 40px rgba(34, 211, 238, 0.1);
+  border-color: rgba(255, 59, 71, 0.45);
+  box-shadow: 0 0 0 1px rgba(255, 206, 58, 0.18), 0 12px 40px rgba(255, 206, 58, 0.1);
 }
 header.sticky {
-  border-image: linear-gradient(90deg, transparent, rgba(34, 211, 238, 0.5), rgba(167, 139, 250, 0.5), transparent) 1;
+  border-image: linear-gradient(90deg, transparent, rgba(255, 206, 58, 0.5), rgba(255, 59, 71, 0.5), transparent) 1;
 }
 .space-bg {
   background:
-    radial-gradient(1000px 700px at 50% 55%, rgba(99, 102, 241, 0.16), transparent 65%),
-    radial-gradient(600px 400px at 85% 15%, rgba(34, 211, 238, 0.1), transparent 70%),
-    #05061a;
+    radial-gradient(1000px 700px at 50% 55%, rgba(255, 140, 40, 0.16), transparent 65%),
+    radial-gradient(600px 400px at 85% 15%, rgba(255, 59, 71, 0.12), transparent 70%),
+    #0c0910;
 }
 .space-bg::before,
 .space-bg::after {
@@ -200,16 +200,16 @@ header.sticky {
 .space-bg::before {
   background-image:
     radial-gradient(1.2px 1.2px at 40px 60px, #fff, transparent),
-    radial-gradient(1px 1px at 130px 20px, #c4b5fd, transparent),
+    radial-gradient(1px 1px at 130px 20px, #ffe3a8, transparent),
     radial-gradient(1.4px 1.4px at 210px 150px, #fff, transparent),
-    radial-gradient(1px 1px at 90px 190px, #a5f3fc, transparent),
+    radial-gradient(1px 1px at 90px 190px, #ffd0a0, transparent),
     radial-gradient(1px 1px at 260px 90px, #fff, transparent);
   background-size: 300px 220px;
 }
 .space-bg::after {
   background-image:
     radial-gradient(1px 1px at 20px 120px, #fff, transparent),
-    radial-gradient(1.3px 1.3px at 170px 80px, #ddd6fe, transparent),
+    radial-gradient(1.3px 1.3px at 170px 80px, #ffb0a0, transparent),
     radial-gradient(1px 1px at 240px 200px, #fff, transparent);
   background-size: 370px 260px;
   animation-delay: -2.5s;
@@ -220,8 +220,8 @@ header.sticky {
 }
 
 @keyframes live-pulse {
-  0%, 100% { filter: drop-shadow(0 0 0 rgba(34, 211, 238, 0)); transform: scale(1); }
-  50% { filter: drop-shadow(0 0 6px rgba(34, 211, 238, 0.9)); transform: scale(1.18); }
+  0%, 100% { filter: drop-shadow(0 0 0 rgba(255, 206, 58, 0)); transform: scale(1); }
+  50% { filter: drop-shadow(0 0 6px rgba(255, 206, 58, 0.9)); transform: scale(1.18); }
 }
 .live-pulse { animation: live-pulse 2.4s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) { .live-pulse { animation: none; } }

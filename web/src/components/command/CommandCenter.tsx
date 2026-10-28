@@ -266,7 +266,7 @@ export default function CommandCenter({ pin }: { pin: Pin | null }) {
       addSources(map);
       addLayers(map);
       try {
-        map.setSky({ "sky-color": "#120a3a", "horizon-color": "#6d5ce8", "fog-color": "#070817", "sky-horizon-blend": 0.5, "horizon-fog-blend": 0.4, "fog-ground-blend": 0.1, "atmosphere-blend": ["interpolate", ["linear"], ["zoom"], 0, 1, 5, 1, 7, 0] });
+        map.setSky({ "sky-color": "#1a0e10", "horizon-color": "#c9842e", "fog-color": "#0c0910", "sky-horizon-blend": 0.5, "horizon-fog-blend": 0.4, "fog-ground-blend": 0.1, "atmosphere-blend": ["interpolate", ["linear"], ["zoom"], 0, 1, 5, 1, 7, 0] });
       } catch {
         // Older styles may not support sky. The globe still renders.
       }

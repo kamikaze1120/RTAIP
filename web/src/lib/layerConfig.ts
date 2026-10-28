@@ -26,7 +26,7 @@ export const RAIL: RailItem[] = [
   { id: "radar", group: "Earth", label: "Rain radar", hint: "RainViewer", defaultOn: false },
   { id: "cyber", group: "Cyber", label: "Botnet C2 servers", hint: "abuse.ch Feodo Tracker", defaultOn: false },
   { id: "zones", group: "Geopolitics", label: "Conflict zones", hint: "Curated list, not a live measurement", defaultOn: true },
-  { id: "cameras", group: "Cameras", label: "Traffic cameras", hint: "London, New York, California, Singapore", defaultOn: false },
+  { id: "cameras", group: "Cameras", label: "Traffic cameras", hint: "London, New York, California, Singapore, New Zealand, Finland", defaultOn: false },
 ];
 
 export const GROUP_ORDER = ["Air", "Sea", "Space", "Earth", "Cyber", "Geopolitics", "Cameras"] as const;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { normalizeAurora } from "./aurora";
-import { normalizeCaltrans, normalizeNyc, normalizeSingapore, normalizeTfl } from "./cameras";
+import { normalizeCaltrans, normalizeFinland, normalizeNyc, normalizeNz, normalizeSingapore, normalizeTfl } from "./cameras";
 import { normalizeFeodo } from "./cyber";
 import { normalizeGdacs } from "./disasters";
 import { normalizeFires } from "./fires";
@@ -82,6 +82,31 @@ describe("cameras", () => {
     const sg = normalizeSingapore({ items: [{ cameras: [{ camera_id: "2701", image: "https://images.data.gov.sg/x.jpg", location: { latitude: 1.44, longitude: 103.77 }, timestamp: "2026-10-27T22:15:48+08:00" }] }] });
     expect(sg.features).toHaveLength(1);
     expect(sg.features[0]?.properties.time).toBe("2026-10-27T22:15:48+08:00");
+  });
+  it("normalizes Finland weather cameras and uses the first collected preset", () => {
+    const out = normalizeFinland({
+      features: [
+        { geometry: { coordinates: [23.99, 60.05, 0] }, properties: { id: "C01503", name: "kt51_Inkoo", presets: [{ id: "C0150301", inCollection: true }, { id: "C0150302", inCollection: true }] } },
+        { geometry: { coordinates: [25, 61] }, properties: { id: "C02", name: "no_presets", presets: [] } },
+      ],
+    });
+    expect(out.features).toHaveLength(1);
+    expect(out.features[0]?.properties.title).toBe("kt51 Inkoo");
+    expect(out.features[0]?.properties.imageUrl).toBe("https://weathercam.digitraffic.fi/C0150301.jpg");
+    expect(out.features[0]?.geometry).toEqual({ type: "Point", coordinates: [23.99, 60.05] });
+  });
+  it("parses New Zealand camera XML and skips offline cameras", () => {
+    const xml =
+      "<response>" +
+      "<camera><description>SH1 Tinwald</description><direction>Southbound</direction><highway>SH1</highway><id>714</id><imageUrl>/camera/714.jpg</imageUrl><journey><id>86</id><name>SH1</name><startLatitude>-41.9</startLatitude></journey><latitude>-43.919632</latitude><longitude>171.721055</longitude><name>SH1 Tinwald</name><offline>false</offline><underMaintenance>false</underMaintenance></camera>" +
+      "<camera><description>Offline cam</description><id>999</id><imageUrl>/camera/999.jpg</imageUrl><latitude>-40</latitude><longitude>175</longitude><offline>true</offline></camera>" +
+      "</response>";
+    const out = normalizeNz(xml);
+    expect(out.features).toHaveLength(1);
+    expect(out.features[0]?.id).toBe("newzealand:714");
+    expect(out.features[0]?.properties.imageUrl).toBe("https://trafficnz.info/camera/714.jpg");
+    expect(out.features[0]?.properties.title).toBe("SH1 Tinwald");
+    expect(out.features[0]?.geometry).toEqual({ type: "Point", coordinates: [171.721055, -43.919632] });
   });
 });
 

@@ -1,7 +1,7 @@
-import { fetchJson } from "../http";
+import { fetchJson, fetchText } from "../http";
 import { collection, validLonLat, type GeoCollection, type GeoFeature } from "./geo";
 
-export const CAMERA_REGIONS = ["london", "newyork", "california", "singapore"] as const;
+export const CAMERA_REGIONS = ["london", "newyork", "california", "singapore", "newzealand", "finland"] as const;
 export type CameraRegion = (typeof CAMERA_REGIONS)[number];
 
 export function isCameraRegion(v: string): v is CameraRegion {
@@ -109,6 +109,53 @@ export function normalizeSingapore(data: { items?: SgItem[] }): GeoCollection {
   return collection(out);
 }
 
+interface FinlandStation {
+  geometry?: { coordinates?: number[] };
+  properties?: { id?: string; name?: string; presets?: Array<{ id?: string; inCollection?: boolean }> };
+}
+
+export function normalizeFinland(data: { features?: FinlandStation[] }): GeoCollection {
+  const out: GeoFeature[] = [];
+  for (const s of data.features ?? []) {
+    const presets = s.properties?.presets ?? [];
+    const preset = presets.find((p) => p.inCollection && p.id) ?? presets.find((p) => p.id);
+    const coords = s.geometry?.coordinates;
+    const id = s.properties?.id;
+    if (!preset?.id || !id || !coords || coords.length < 2) continue;
+    const [lon, lat] = coords as [number, number];
+    const title = (s.properties?.name ?? id).replace(/_/g, " ");
+    const f = cam("finland", "Fintraffic / Digitraffic", id, title, lat, lon, `https://weathercam.digitraffic.fi/${preset.id}.jpg`);
+    if (f) out.push(f);
+  }
+  return collection(out);
+}
+
+/** Pull the first occurrence of a simple, non-nested XML element's text. */
+function xmlField(block: string, tag: string): string | null {
+  const m = block.match(new RegExp(`<${tag}>([^<]*)</${tag}>`));
+  return m?.[1]?.trim() ?? null;
+}
+
+export function normalizeNz(xml: string): GeoCollection {
+  const out: GeoFeature[] = [];
+  for (const raw of xml.split("<camera>").slice(1)) {
+    const block = raw.split("</camera>")[0] ?? "";
+    if (xmlField(block, "offline") === "true" || xmlField(block, "underMaintenance") === "true") continue;
+    const id = xmlField(block, "id");
+    const image = xmlField(block, "imageUrl");
+    if (!id || !image) continue;
+    const lat = Number(xmlField(block, "latitude"));
+    const lon = Number(xmlField(block, "longitude"));
+    const title = xmlField(block, "description") ?? `Camera ${id}`;
+    const f = cam("newzealand", "NZ Transport Agency (Waka Kotahi)", id, title, lat, lon, `https://trafficnz.info${image}`, {
+      direction: xmlField(block, "direction"),
+      highway: xmlField(block, "highway"),
+    });
+    if (f) out.push(f);
+  }
+  return collection(out);
+}
+
 async function fetchCaltrans(signal?: AbortSignal): Promise<GeoCollection> {
   const districts = Array.from({ length: 12 }, (_, i) => i + 1);
   const features: GeoFeature[] = [];
@@ -140,5 +187,9 @@ export async function fetchCameras(region: CameraRegion, signal?: AbortSignal): 
       return normalizeSingapore(await fetchJson("https://api.data.gov.sg/v1/transport/traffic-images", { signal, timeoutMs: 15_000 }));
     case "california":
       return fetchCaltrans(signal);
+    case "newzealand":
+      return normalizeNz(await fetchText("https://trafficnz.info/service/traffic/rest/4/cameras/all", { signal, timeoutMs: 20_000 }));
+    case "finland":
+      return normalizeFinland(await fetchJson("https://tie.digitraffic.fi/api/weathercam/v1/stations", { signal, timeoutMs: 20_000 }));
   }
 }
