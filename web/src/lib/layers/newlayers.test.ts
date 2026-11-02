@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { normalizeAurora } from "./aurora";
-import { normalizeCaltrans, normalizeFinland, normalizeHongKong, normalizeNyc, normalizeNz, normalizeSeattle, normalizeSingapore, normalizeTfl, normalizeWindy } from "./cameras";
+import { normalizeCaltrans, normalizeFinland, normalizeHongKong, normalizeNyc, normalizeNz, normalizeSeattle, normalizeSingapore, normalizeTfl, normalizeVdot, normalizeWindy } from "./cameras";
 import { normalizeFeodo } from "./cyber";
 import { normalizeGdacs } from "./disasters";
 import { normalizeFires } from "./fires";
@@ -138,6 +138,22 @@ describe("cameras", () => {
     expect(out.features[0]?.id).toBe("windy:12345");
     expect(out.features[0]?.properties.detail).toBe("Mumbai, India");
     expect(out.features[0]?.geometry).toEqual({ type: "Point", coordinates: [72.82, 18.94] });
+  });
+  it("normalizes Virginia VDOT cameras and skips inactive or broken streams", () => {
+    const out = normalizeVdot({
+      features: [
+        { geometry: { coordinates: [-77.14676, 38.868556] }, properties: { id: "vdot-1", description: "RT 50 AT PATRICK HENRY DR.", image_url: "https://snapshot.vdotcameras.com/thumbs/abc.flv.png", jurisdiction: "Arlington County", route: "RT 50", https_url: "https://media-sfs1.vdotcameras.com/rtplive/abc/playlist.m3u8", active: true, problem_stream: false } },
+        { geometry: { coordinates: [-78, 37] }, properties: { id: "vdot-2", description: "Down", image_url: "https://snapshot.vdotcameras.com/thumbs/def.flv.png", problem_stream: true } },
+        { geometry: { coordinates: [-79, 38] }, properties: { id: "vdot-3", description: "Inactive", image_url: "https://snapshot.vdotcameras.com/thumbs/ghi.flv.png", active: false } },
+        { geometry: { coordinates: [-80, 38] }, properties: { id: "vdot-4", description: "No image", image_url: "" } },
+      ],
+    });
+    expect(out.features).toHaveLength(1);
+    expect(out.features[0]?.id).toBe("virginia:vdot-1");
+    expect(out.features[0]?.properties.imageUrl).toBe("https://snapshot.vdotcameras.com/thumbs/abc.flv.png");
+    expect(out.features[0]?.properties.area).toBe("Arlington County");
+    expect(out.features[0]?.properties.videoUrl).toBe("https://media-sfs1.vdotcameras.com/rtplive/abc/playlist.m3u8");
+    expect(out.features[0]?.geometry).toEqual({ type: "Point", coordinates: [-77.14676, 38.868556] });
   });
 });
 

@@ -51,6 +51,7 @@ export function useLayers(enabled: ReadonlySet<string>, view: View): { features:
   const london = usePolling<LayerPayload>(camsOn ? "/api/layers/cameras?src=london" : null, POLL_MS.cameras);
   const newyork = usePolling<LayerPayload>(camsOn ? "/api/layers/cameras?src=newyork" : null, POLL_MS.cameras);
   const california = usePolling<LayerPayload>(camsOn ? "/api/layers/cameras?src=california" : null, POLL_MS.cameras);
+  const virginia = usePolling<LayerPayload>(camsOn ? "/api/layers/cameras?src=virginia" : null, POLL_MS.cameras);
   const singapore = usePolling<LayerPayload>(camsOn ? "/api/layers/cameras?src=singapore" : null, POLL_MS.cameras);
   const newzealand = usePolling<LayerPayload>(camsOn ? "/api/layers/cameras?src=newzealand" : null, POLL_MS.cameras);
   const finland = usePolling<LayerPayload>(camsOn ? "/api/layers/cameras?src=finland" : null, POLL_MS.cameras);
@@ -59,8 +60,8 @@ export function useLayers(enabled: ReadonlySet<string>, view: View): { features:
   const windy = usePolling<LayerPayload>(camsOn ? "/api/layers/cameras?src=windy" : null, POLL_MS.cameras);
 
   const cameraFeatures = useMemo(
-    () => [london, newyork, california, singapore, newzealand, finland, hongkong, seattle, windy].flatMap((s) => s.data?.data.features ?? NONE),
-    [london.data, newyork.data, california.data, singapore.data, newzealand.data, finland.data, hongkong.data, seattle.data, windy.data], // eslint-disable-line react-hooks/exhaustive-deps
+    () => [london, newyork, california, virginia, singapore, newzealand, finland, hongkong, seattle, windy].flatMap((s) => s.data?.data.features ?? NONE),
+    [london.data, newyork.data, california.data, virginia.data, singapore.data, newzealand.data, finland.data, hongkong.data, seattle.data, windy.data], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   const features = useMemo(
@@ -90,7 +91,7 @@ export function useLayers(enabled: ReadonlySet<string>, view: View): { features:
     ...extra,
   });
 
-  const camStates = [london, newyork, california, singapore, newzealand, finland, hongkong, seattle, windy];
+  const camStates = [london, newyork, california, virginia, singapore, newzealand, finland, hongkong, seattle, windy];
   const status: Record<LayerId, LayerStatus> = {
     quakes: st("quakes", quakes),
     disasters: st("disasters", disasters),

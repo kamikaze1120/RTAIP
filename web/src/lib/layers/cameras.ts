@@ -1,7 +1,7 @@
 import { fetchJson, fetchText } from "../http";
 import { collection, validLonLat, type GeoCollection, type GeoFeature } from "./geo";
 
-export const CAMERA_REGIONS = ["london", "newyork", "california", "singapore", "newzealand", "finland", "hongkong", "seattle", "windy"] as const;
+export const CAMERA_REGIONS = ["london", "newyork", "california", "virginia", "singapore", "newzealand", "finland", "hongkong", "seattle", "windy"] as const;
 export type CameraRegion = (typeof CAMERA_REGIONS)[number];
 
 export function isCameraRegion(v: string): v is CameraRegion {
@@ -150,6 +150,42 @@ export function normalizeNz(xml: string): GeoCollection {
     const f = cam("newzealand", "NZ Transport Agency (Waka Kotahi)", id, title, lat, lon, `https://trafficnz.info${image}`, {
       direction: xmlField(block, "direction"),
       highway: xmlField(block, "highway"),
+    });
+    if (f) out.push(f);
+  }
+  return collection(out);
+}
+
+interface VdotFeature {
+  geometry?: { coordinates?: number[] };
+  properties?: {
+    id?: string;
+    description?: string;
+    image_url?: string;
+    jurisdiction?: string;
+    direction?: string;
+    route?: string;
+    https_url?: string;
+    ios_url?: string;
+    active?: boolean;
+    problem_stream?: boolean;
+  };
+}
+
+export function normalizeVdot(data: { features?: VdotFeature[] }): GeoCollection {
+  const out: GeoFeature[] = [];
+  for (const feat of data.features ?? []) {
+    const p = feat.properties ?? {};
+    if (p.active === false || p.problem_stream === true) continue;
+    const coords = feat.geometry?.coordinates;
+    const id = p.id;
+    if (!id || !coords || coords.length < 2) continue;
+    const [lon, lat] = coords as [number, number];
+    const f = cam("virginia", "Virginia DOT (VDOT)", id, p.description || `Camera ${id}`, lat, lon, p.image_url ?? "", {
+      area: p.jurisdiction ?? null,
+      direction: p.direction || null,
+      route: p.route || null,
+      videoUrl: p.https_url ?? p.ios_url ?? null,
     });
     if (f) out.push(f);
   }
@@ -316,6 +352,8 @@ export async function fetchCameras(region: CameraRegion, signal?: AbortSignal): 
       return normalizeSingapore(await fetchJson("https://api.data.gov.sg/v1/transport/traffic-images", { signal, timeoutMs: 15_000 }));
     case "california":
       return fetchCaltrans(signal);
+    case "virginia":
+      return normalizeVdot(await fetchJson<{ features?: VdotFeature[] }>("https://511.vdot.virginia.gov/services/511/map/layers/map/cams", { signal, timeoutMs: 25_000 }));
     case "newzealand":
       return normalizeNz(await fetchText("https://trafficnz.info/service/traffic/rest/4/cameras/all", { signal, timeoutMs: 20_000 }));
     case "finland":
