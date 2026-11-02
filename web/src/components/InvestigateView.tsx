@@ -1,13 +1,14 @@
 "use client";
 
 import clsx from "clsx";
-import { AlertTriangle, ArrowRight, Check, Copy, Download, Expand, Eye, FileText, Globe2, Loader2, Maximize2, Save, Search, Sheet, Square, Trash2, X } from "lucide-react";
+import { AlertTriangle, ArrowRight, Boxes, Check, Copy, Download, Expand, Eye, FileText, Globe2, Loader2, Maximize2, Save, Search, Sheet, Square, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { getCase, saveCase } from "@/lib/cases";
 import { download, entitiesCsv, markdownReport } from "@/lib/report";
+import { toStixBundle } from "@/lib/stix";
 import { addWatch } from "@/lib/watchlist";
 import { saveInvestigation, useSavedInvestigations, writeSaved } from "@/lib/saved";
 import type { Entity, EntityType, Finding, SeedType } from "@/lib/types";
@@ -306,6 +307,8 @@ export function InvestigateView() {
     URL.revokeObjectURL(url);
   };
 
+  const onStix = () => download(`rtaip-stix-${slug}.json`, JSON.stringify(toStixBundle(snapshot()), null, 2), "application/json");
+
   const failedSteps = state.progress.filter((p) => p.status === "error");
   const empty = state.entities.length === 0;
 
@@ -359,6 +362,9 @@ export function InvestigateView() {
           </button>
           <button type="button" onClick={onExport} disabled={empty} className={buttonClass()} title="Download JSON">
             <Download size={14} />
+          </button>
+          <button type="button" onClick={onStix} disabled={empty} className={buttonClass()} title="Download STIX 2.1 bundle">
+            <Boxes size={14} />
           </button>
           {showSaved ? (
             <div className="absolute right-0 top-full z-20 mt-2 w-80 rounded-xl border border-line bg-panel2 p-2 shadow-2xl">
@@ -494,7 +500,7 @@ export function InvestigateView() {
             />
           ) : (
             <Panel title="Details">
-              <Empty title="Select a node" hint="Click anything in the graph to see its sources, attributes and connections. Drag to rearrange, scroll to zoom." />
+              <Empty title="Select a node" hint="Click anything in the graph to see its sources, attributes and connections. Drag to rearrange, scroll to zoom, double-click to pin." />
             </Panel>
           )}
         </div>

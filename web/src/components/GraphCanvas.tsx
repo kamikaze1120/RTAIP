@@ -36,6 +36,7 @@ export function GraphCanvas({ entities, edges, hiddenTypes, selectedId, seedIds,
   const hover = useRef<string | null>(null);
   const selected = useRef<string | null>(selectedId);
   const seeds = useRef(seedIds);
+  const pinned = useRef(new Set<string>());
   const raf = useRef(0);
   const interaction = useRef<{ mode: "none" | "pan" | "node"; id?: string; sx: number; sy: number; moved: boolean; vx: number; vy: number }>({ mode: "none", sx: 0, sy: 0, moved: false, vx: 0, vy: 0 });
   const [tooltip, setTooltip] = useState<{ left: number; top: number; text: string; sub: string } | null>(null);
@@ -104,6 +105,13 @@ export function GraphCanvas({ entities, edges, hiddenTypes, selectedId, seedIds,
       if (n.id === sel) {
         ctx.strokeStyle = "#ffffff";
         ctx.lineWidth = 2.5 / k;
+        ctx.stroke();
+      }
+      if (pinned.current.has(n.id)) {
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, n.r + 3.5, 0, Math.PI * 2);
+        ctx.strokeStyle = "rgba(255,206,58,0.95)";
+        ctx.lineWidth = 2 / k;
         ctx.stroke();
       }
       const showLabel = labelAll || isFocus || n.id === sel || seeds.current.has(n.id) || n.degree >= 4 || neighbors.has(n.id);
@@ -325,7 +333,7 @@ export function GraphCanvas({ entities, edges, hiddenTypes, selectedId, seedIds,
     const it = interaction.current;
     if (it.mode === "node" && it.id) {
       const n = nodes.current.get(it.id);
-      if (n) {
+      if (n && !pinned.current.has(n.id)) {
         n.fx = null;
         n.fy = null;
       }
@@ -338,6 +346,24 @@ export function GraphCanvas({ entities, edges, hiddenTypes, selectedId, seedIds,
     (e.target as Element).releasePointerCapture?.(e.pointerId);
   };
 
+  // Double-click a node to pin it in place (stays fixed through layout and data updates); double-click again to release.
+  const onDoubleClick = (e: React.MouseEvent) => {
+    const { wx, wy } = toWorld(e.clientX, e.clientY);
+    const n = hit(wx, wy);
+    if (!n) return;
+    if (pinned.current.has(n.id)) {
+      pinned.current.delete(n.id);
+      n.fx = null;
+      n.fy = null;
+      sim.current?.alpha(0.3).restart();
+    } else {
+      pinned.current.add(n.id);
+      n.fx = n.x;
+      n.fy = n.y;
+    }
+    schedule();
+  };
+
   return (
     <div ref={wrap} className="relative h-full w-full overflow-hidden">
       <canvas
@@ -347,6 +373,7 @@ export function GraphCanvas({ entities, edges, hiddenTypes, selectedId, seedIds,
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
+        onDoubleClick={onDoubleClick}
         onPointerLeave={() => {
           hover.current = null;
           setTooltip(null);
