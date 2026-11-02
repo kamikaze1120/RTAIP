@@ -1,12 +1,13 @@
 "use client";
 
 import clsx from "clsx";
-import { AlertTriangle, ArrowRight, Boxes, Check, Copy, Download, Expand, Eye, FileText, Globe2, Loader2, Maximize2, Save, Search, Sheet, Square, Trash2, X } from "lucide-react";
+import { AlertTriangle, ArrowRight, Boxes, Check, Copy, Download, Expand, Eye, FileText, Globe2, Loader2, Maximize2, Network, Route, Save, Search, Sheet, Square, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { getCase, saveCase } from "@/lib/cases";
+import { shortestPath } from "@/lib/graphPath";
 import { download, entitiesCsv, markdownReport } from "@/lib/report";
 import { toStixBundle } from "@/lib/stix";
 import { addWatch } from "@/lib/watchlist";
@@ -79,6 +80,8 @@ function NodePanel({
   onExpand,
   onClose,
   busy,
+  isPathStart,
+  onTogglePathStart,
 }: {
   entity: Entity;
   neighbors: Array<{ id: string; label: string; type: EntityType; rel: string }>;
@@ -86,6 +89,8 @@ function NodePanel({
   onExpand: (entity: Entity) => void;
   onClose: () => void;
   busy: boolean;
+  isPathStart: boolean;
+  onTogglePathStart: () => void;
 }) {
   const [copied, setCopied] = useState(false);
   const style = ENTITY_STYLE[entity.type];
@@ -134,6 +139,14 @@ function NodePanel({
           ) : null}
           <button type="button" onClick={copy} className={buttonClass()}>
             {copied ? <Check size={14} /> : <Copy size={14} />} {copied ? "Copied" : "Copy"}
+          </button>
+          <button
+            type="button"
+            onClick={onTogglePathStart}
+            className={buttonClass(isPathStart ? "primary" : undefined)}
+            title="Set this node as a path start, then select another node to highlight the shortest path between them"
+          >
+            <Route size={14} /> {isPathStart ? "Path start ✓" : "Path from here"}
           </button>
         </div>
         {attrs.length > 0 ? (
@@ -194,6 +207,8 @@ export function InvestigateView() {
   const [selected, setSelected] = useState<string | null>(null);
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const [fitToken, setFitToken] = useState(0);
+  const [pathStart, setPathStart] = useState<string | null>(null);
+  const [groupByType, setGroupByType] = useState(false);
   const saved = useSavedInvestigations();
   const [showSaved, setShowSaved] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -227,6 +242,10 @@ export function InvestigateView() {
   const byId = useMemo(() => new Map(state.entities.map((e) => [e.id, e])), [state.entities]);
   const selectedEntity = selected ? byId.get(selected) ?? null : null;
   const seedIds = useMemo(() => new Set(state.entities.filter((e) => e.provenance.some((p) => p.source === "Seed")).map((e) => e.id)), [state.entities]);
+  const path = useMemo(
+    () => (pathStart && selected && pathStart !== selected ? shortestPath(state.edges, pathStart, selected) : []),
+    [pathStart, selected, state.edges],
+  );
   const typeCounts = useMemo(() => {
     const m = new Map<EntityType, number>();
     for (const e of state.entities) m.set(e.type, (m.get(e.type) ?? 0) + 1);
@@ -452,7 +471,7 @@ export function InvestigateView() {
             </div>
           ) : (
             <>
-              <GraphCanvas entities={state.entities} edges={state.edges} hiddenTypes={hidden} selectedId={selected} seedIds={seedIds} fitToken={fitToken} onSelect={setSelected} />
+              <GraphCanvas entities={state.entities} edges={state.edges} hiddenTypes={hidden} selectedId={selected} seedIds={seedIds} fitToken={fitToken} onSelect={setSelected} path={path} groupByType={groupByType} />
               <div className="absolute left-3 top-3 flex max-w-[70%] flex-wrap gap-1.5">
                 {typeCounts.map(([t, n]) => {
                   const off = hidden.has(t);
@@ -471,15 +490,19 @@ export function InvestigateView() {
                 })}
               </div>
               <div className="absolute right-3 top-3 flex gap-2">
+                <button type="button" onClick={() => setGroupByType((g) => !g)} aria-pressed={groupByType} className={buttonClass(groupByType ? "primary" : undefined)} aria-label="Group nodes by type" title="Cluster nodes by entity type">
+                  <Network size={14} />
+                </button>
                 <button type="button" onClick={() => setFitToken((n) => n + 1)} className={buttonClass()} aria-label="Fit graph to view">
                   <Maximize2 size={14} />
                 </button>
-                <button type="button" onClick={() => { reset(); setSelected(null); setInput(""); }} className={buttonClass()} aria-label="Clear graph">
+                <button type="button" onClick={() => { reset(); setSelected(null); setInput(""); setPathStart(null); }} className={buttonClass()} aria-label="Clear graph">
                   <Trash2 size={14} />
                 </button>
               </div>
               <div className="absolute bottom-3 left-3 rounded-md border border-line bg-panel/90 px-2.5 py-1.5 text-[11px] text-dim">
                 {state.entities.length} entities · {state.edges.length} relationships {running ? "· updating live" : ""}
+                {pathStart ? (path.length > 1 ? ` · path: ${path.length - 1} hops` : selected && selected !== pathStart ? " · no path to selection" : " · select a target node") : ""}
               </div>
             </>
           )}
@@ -493,6 +516,8 @@ export function InvestigateView() {
               onSelect={setSelected}
               onClose={() => setSelected(null)}
               busy={running}
+              isPathStart={pathStart === selectedEntity.id}
+              onTogglePathStart={() => setPathStart((s) => (s === selectedEntity.id ? null : selectedEntity.id))}
               onExpand={(ent) => {
                 const t = EXPANDABLE[ent.type];
                 if (t) void run(t, ent.value, { merge: true });

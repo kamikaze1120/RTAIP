@@ -21,11 +21,17 @@ interface Props {
   seedIds: ReadonlySet<string>;
   fitToken: number;
   onSelect: (id: string | null) => void;
+  /** Ordered entity ids of a highlighted shortest path, drawn on top in amber. */
+  path?: readonly string[];
+  /** When true, nodes cluster toward a per-type anchor instead of the shared centre. */
+  groupByType?: boolean;
 }
+
+const ORIGIN = { x: 0, y: 0 } as const;
 
 const BASE_R: Record<string, number> = { domain: 10, ip: 7, asn: 8, org: 8, subdomain: 5, location: 6, nameserver: 6, mailserver: 6, email: 8, cert: 6 };
 
-export function GraphCanvas({ entities, edges, hiddenTypes, selectedId, seedIds, fitToken, onSelect }: Props) {
+export function GraphCanvas({ entities, edges, hiddenTypes, selectedId, seedIds, fitToken, onSelect, path, groupByType }: Props) {
   const wrap = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const sim = useRef<Simulation<SimNode, SimLink> | null>(null);
@@ -37,6 +43,10 @@ export function GraphCanvas({ entities, edges, hiddenTypes, selectedId, seedIds,
   const selected = useRef<string | null>(selectedId);
   const seeds = useRef(seedIds);
   const pinned = useRef(new Set<string>());
+  const pathNodes = useRef(new Set<string>());
+  const pathEdges = useRef(new Set<string>());
+  const groupBy = useRef(Boolean(groupByType));
+  const typeAnchors = useRef(new Map<string, { x: number; y: number }>());
   const raf = useRef(0);
   const interaction = useRef<{ mode: "none" | "pan" | "node"; id?: string; sx: number; sy: number; moved: boolean; vx: number; vy: number }>({ mode: "none", sx: 0, sy: 0, moved: false, vx: 0, vy: 0 });
   const [tooltip, setTooltip] = useState<{ left: number; top: number; text: string; sub: string } | null>(null);
@@ -84,6 +94,21 @@ export function GraphCanvas({ entities, edges, hiddenTypes, selectedId, seedIds,
       ctx.stroke();
     }
 
+    if (pathEdges.current.size > 0) {
+      ctx.strokeStyle = "rgba(255,176,32,0.95)";
+      ctx.lineWidth = 3 / k;
+      for (const l of links.current) {
+        const s = l.source as SimNode;
+        const t = l.target as SimNode;
+        if (s.x === undefined || s.y === undefined || t.x === undefined || t.y === undefined) continue;
+        if (!pathEdges.current.has(`${s.id}|${t.id}`)) continue;
+        ctx.beginPath();
+        ctx.moveTo(s.x, s.y);
+        ctx.lineTo(t.x, t.y);
+        ctx.stroke();
+      }
+    }
+
     const labelAll = k > 1.5;
     for (const n of nodes.current.values()) {
       if (n.x === undefined || n.y === undefined) continue;
@@ -112,6 +137,13 @@ export function GraphCanvas({ entities, edges, hiddenTypes, selectedId, seedIds,
         ctx.arc(n.x, n.y, n.r + 3.5, 0, Math.PI * 2);
         ctx.strokeStyle = "rgba(255,206,58,0.95)";
         ctx.lineWidth = 2 / k;
+        ctx.stroke();
+      }
+      if (pathNodes.current.has(n.id)) {
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, n.r + 8, 0, Math.PI * 2);
+        ctx.strokeStyle = "rgba(255,176,32,0.95)";
+        ctx.lineWidth = 2.5 / k;
         ctx.stroke();
       }
       const showLabel = labelAll || isFocus || n.id === sel || seeds.current.has(n.id) || n.degree >= 4 || neighbors.has(n.id);
@@ -158,8 +190,8 @@ export function GraphCanvas({ entities, edges, hiddenTypes, selectedId, seedIds,
       .force("link", forceLink<SimNode, SimLink>().id((d) => d.id).distance(52).strength(0.5))
       .force("charge", forceManyBody<SimNode>().strength((d) => -70 - d.r * 6).distanceMax(420))
       .force("collide", forceCollide<SimNode>().radius((d) => d.r + 6))
-      .force("x", forceX<SimNode>(0).strength(0.03))
-      .force("y", forceY<SimNode>(0).strength(0.03))
+      .force("x", forceX<SimNode>((d) => (groupBy.current ? (typeAnchors.current.get(d.entity.type) ?? ORIGIN).x : ORIGIN.x)).strength(() => (groupBy.current ? 0.2 : 0.03)))
+      .force("y", forceY<SimNode>((d) => (groupBy.current ? (typeAnchors.current.get(d.entity.type) ?? ORIGIN).y : ORIGIN.y)).strength(() => (groupBy.current ? 0.2 : 0.03)))
       .force("center", forceCenter(0, 0))
       .alphaDecay(0.03)
       .on("tick", schedule);
@@ -226,6 +258,38 @@ export function GraphCanvas({ entities, edges, hiddenTypes, selectedId, seedIds,
     seeds.current = seedIds;
     schedule();
   }, [selectedId, seedIds, schedule]);
+
+  // Cluster anchors: one ring position per entity type, recomputed as the type set changes.
+  useEffect(() => {
+    const types = [...new Set(entities.map((e) => e.type))];
+    const radius = 120 + types.length * 26;
+    const m = new Map<string, { x: number; y: number }>();
+    types.forEach((t, i) => {
+      const a = (i / Math.max(1, types.length)) * Math.PI * 2;
+      m.set(t, { x: Math.cos(a) * radius, y: Math.sin(a) * radius });
+    });
+    typeAnchors.current = m;
+    if (groupBy.current) sim.current?.alpha(0.5).restart();
+  }, [entities]);
+
+  // Toggle type clustering on or off.
+  useEffect(() => {
+    groupBy.current = Boolean(groupByType);
+    sim.current?.alpha(0.6).restart();
+  }, [groupByType]);
+
+  // Highlight a shortest path (ordered entity ids) over the current graph.
+  useEffect(() => {
+    const p = path ?? [];
+    const edgeSet = new Set<string>();
+    for (let i = 0; i + 1 < p.length; i++) {
+      edgeSet.add(`${p[i]}|${p[i + 1]}`);
+      edgeSet.add(`${p[i + 1]}|${p[i]}`);
+    }
+    pathNodes.current = new Set<string>(p);
+    pathEdges.current = edgeSet;
+    schedule();
+  }, [path, schedule]);
 
   // Size the canvas to its container.
   useEffect(() => {
