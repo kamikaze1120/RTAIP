@@ -3,6 +3,7 @@
 import "maplibre-gl/dist/maplibre-gl.css";
 import clsx from "clsx";
 import { Map as MapLibreMap, NavigationControl, setWorkerUrl, type GeoJSONSource, type MapMouseEvent } from "maplibre-gl";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FeedItem } from "@/lib/feeds";
@@ -717,7 +718,14 @@ export default function CommandCenter({ pin }: { pin: Pin | null }) {
         </div>
       ) : null}
 
-      {pin ? <div className="pointer-events-none absolute left-1/2 top-16 z-10 -translate-x-1/2 rounded-full border border-accent/50 bg-panel2/95 px-3 py-1 text-xs text-accent">Pinned: {pin.label}</div> : null}
+      {pin ? (
+        <div className="absolute left-1/2 top-16 z-10 flex -translate-x-1/2 items-center gap-2 rounded-full border border-accent/50 bg-panel2/95 px-3 py-1 text-xs text-accent">
+          <span>Pinned: {pin.label}</span>
+          <Link href={`/investigate?q=${encodeURIComponent(pin.q ?? pin.label)}`} className="rounded-full border border-accent/50 px-2 py-0.5 hover:bg-accent/10" title="Open this location in the investigation graph">
+            Investigate →
+          </Link>
+        </div>
+      ) : null}
       {drawing ? <div className="pointer-events-none absolute left-1/2 top-16 z-10 -translate-x-1/2 rounded-full border border-accent bg-panel2/95 px-3 py-1.5 text-xs text-ink">{drawStarted ? "Click the opposite corner" : "Click the first corner of the area. Esc to cancel"}</div> : null}
       {enabled.has("aircraft") && view.zoom < AIRCRAFT_MIN_ZOOM ? <div className="pointer-events-none absolute bottom-12 left-1/2 z-10 -translate-x-1/2 rounded-full border border-line bg-panel2/95 px-3 py-1.5 text-xs text-dim">Zoom in to load civil aircraft for the visible area</div> : null}
       {mapError ? <div className="absolute left-3 top-16 z-10 max-w-sm rounded-lg border border-warn/40 bg-panel2 px-3 py-2 text-xs text-warn">{mapError}</div> : null}

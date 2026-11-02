@@ -5,6 +5,8 @@ export interface Pin {
   lat: number;
   lon: number;
   label: string;
+  /** Optional investigable value (domain/IP/email/name) for the map→graph "Investigate" link. */
+  q?: string;
 }
 
 export type Selected = { kind: "feature"; id: string; layer: LayerId; center: [number, number] } | { kind: "sat"; id: number; center: [number, number] };
