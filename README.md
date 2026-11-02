@@ -54,15 +54,15 @@ reference.
 | 🌍 | **Command center globe** — 3D globe / 2D map / satellite / night-lights, place search, draw-an-area, shareable view links, keyboard shortcuts | ✅ |
 | 📡 | **Live map layers** — 15+ keyless public feeds (see below), refreshed on their own schedules | ✅ |
 | 🛰️ | **In-browser satellites** — TLEs propagated client-side (stations, GPS, Galileo, BeiDou, Starlink, weather, science) with orbit tracks | ✅ |
-| 📷 | **Public traffic cameras** — London, New York, Seattle, California, **Virginia**, Singapore, Hong Kong, New Zealand, Finland (thousands of live cameras across **9 keyless networks**, clustered) — plus optional **worldwide** coverage via Windy Webcams | ✅ |
+| 📷 | **Public traffic cameras** — **17 US states** (CA, VA, NY, WA, FL, GA, PA, AZ, NV, WI, ID, LA, CT, AK + New England) and London, Singapore, Hong Kong, New Zealand, Finland (**20,000+ live cameras**, keyless, clustered) — plus optional **worldwide** coverage via Windy Webcams | ✅ |
 | 🔎 | **Investigation engine** — pivot a domain / IP / email / **company name**: DNS, RDAP/WHOIS, Certificate Transparency, IP geolocation, streamed as transforms resolve | ✅ |
 | 🛡️ | **Sanctions & news** — every organization is auto-screened against the **US OFAC SDN** list, with recent open-source **news mentions** (GDELT) attached | ✅ |
 | 🧾 | **Provenance & risk** — every datapoint carries source, timestamp and confidence; investigations get an exposure **risk score** with a plain-language summary | ✅ |
-| 🧷 | **Entity graph** — node detail panel (provenance + confidence), expand/re-pivot, type filters, and **double-click to pin** a node in place | ✅ |
-| 📤 | **Exports** — snapshot an investigation to **Markdown, CSV, JSON, or STIX 2.1** (observables → SDOs/SCOs, edges → relationships) | ✅ |
+| 🧷 | **Entity graph** — node detail panel (provenance + confidence), expand/re-pivot, type filters, **pin** a node, **shortest-path** highlighting between two nodes, **group-by-type** clustering, and **graph⟷map** cross-linking | ✅ |
+| 📤 | **Exports** — snapshot an investigation to **Markdown, CSV, JSON, STIX 2.1, or PDF** (observables → SDOs/SCOs, edges → relationships) | ✅ |
 | 🚨 | **Geofence alerts** — draw a region, get notified on emergency squawks, quakes and events inside it | ✅ |
 | 🗂️ | **Cases & watchlists** — save entities, annotate, and track over time | ✅ |
-| 🧠 | Graph path-finding & grouping, map⟷graph cross-linking, PDF export, realtime push, AI analyst | 🚧 |
+| 🧠 | More org transforms (OpenCorporates, OpenSanctions), realtime push, AI analyst | 🚧 |
 
 ---
 
@@ -79,7 +79,7 @@ routes with per-source caching and rate limiting.
 | **Earth** | Earthquakes · Natural events · Fires · Weather alerts · Rain radar | USGS · NASA EONET/GDACS · NASA FIRMS · US NWS · RainViewer |
 | **Cyber** | Botnet C2 servers | abuse.ch Feodo Tracker |
 | **Geopolitics** | Conflict zones (curated, not a live measurement) | RTAIP editorial list |
-| **Cameras** | Traffic cameras — London · New York · Seattle · California · Virginia · Singapore · Hong Kong · New Zealand · Finland · _(optional)_ worldwide | TfL · NYC DOT · Seattle DOT · Caltrans · VDOT (511 Virginia) · LTA Singapore · HK Transport Dept · NZTA (Waka Kotahi) · Fintraffic/Digitraffic · Windy Webcams _(optional key)_ |
+| **Cameras** | Traffic cameras — 17 US states (NYC, Seattle/WSDOT, Caltrans CA, VDOT VA + FL, GA, PA, AZ, NV, WI, ID, LA, CT, AK, New England via state 511) · London · Singapore · Hong Kong · New Zealand · Finland · _(optional)_ worldwide | NYC DOT · Seattle/WSDOT · Caltrans · VDOT · Castle Rock "CARS" state 511 feeds · TfL · LTA Singapore · HK Transport Dept · NZTA (Waka Kotahi) · Fintraffic/Digitraffic · Windy Webcams _(optional key)_ |
 
 ---
 
@@ -164,11 +164,11 @@ RTAIP is tracked as a phased program (E0 – E11) on the GitHub project board.
 - [x] **E0 – Stabilize** — honest health, real error/empty states, locked-down routes
 - [x] **Command center** — full-screen globe, live layers, satellites, cameras, area tools, shareable views
 - [x] **Investigation engine** — streaming domain/IP/email/org transforms with provenance, OFAC + GDELT, exposure **risk score**
-- [x] **Graph UX (phase 1)** — node detail panel, expand/re-pivot, type filters, **pin-in-place**, graph→map "show on map"
-- [x] **Exports** — Markdown, CSV, JSON, and **STIX 2.1** bundle
-- [ ] **E3/E4 – Graph UX (phase 2)** — **path-finding**, grouping/clustering, more org transforms (OpenCorporates, OpenSanctions)
-- [ ] **E5/E6 – Fusion & alerts** — **map⟷graph** cross-linking, watchlists, realtime push
-- [ ] **E7/E8 – Cases & AI analyst** — annotations, **PDF export**, retrieval with citations
+- [x] **Graph UX** — node detail panel, expand/re-pivot, type filters, pin-in-place, **path-finding**, **group-by-type**, **graph⟷map cross-linking**
+- [x] **Exports** — Markdown, CSV, JSON, **STIX 2.1**, and **PDF** report
+- [ ] **Transforms** — more org transforms (OpenCorporates, OpenSanctions)
+- [ ] **Fusion & alerts** — watchlists, realtime push
+- [ ] **Cases & AI analyst** — annotations, retrieval with citations
 - [ ] **E9–E11 – Design system, quality, launch**
 
 📋 Track progress on the [**issues**](https://github.com/kamikaze1120/RTAIP/issues) and project board.
