@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { normalizeAurora } from "./aurora";
-import { normalizeCaltrans, normalizeFinland, normalizeHongKong, normalizeNyc, normalizeNz, normalizeSeattle, normalizeSingapore, normalizeTfl, normalizeVdot, normalizeWindy } from "./cameras";
+import { normalizeCaltrans, normalizeCars, normalizeFinland, normalizeHongKong, normalizeNyc, normalizeNz, normalizeSeattle, normalizeSingapore, normalizeTfl, normalizeVdot, normalizeWindy } from "./cameras";
 import { normalizeFeodo } from "./cyber";
 import { normalizeGdacs } from "./disasters";
 import { normalizeFires } from "./fires";
@@ -154,6 +154,24 @@ describe("cameras", () => {
     expect(out.features[0]?.properties.area).toBe("Arlington County");
     expect(out.features[0]?.properties.videoUrl).toBe("https://media-sfs1.vdotcameras.com/rtplive/abc/playlist.m3u8");
     expect(out.features[0]?.geometry).toEqual({ type: "Point", coordinates: [-77.14676, 38.868556] });
+  });
+  it("normalizes US 511 (CARS) cameras, builds the image URL and skips bad markers", () => {
+    const out = normalizeCars("fl511.com", "Florida", "fl", {
+      item2: [
+        { itemId: "1", location: [26.17325, -80.892882], title: "" },
+        { itemId: 42, location: [28.5, -81.3], title: "I-4 at SR 408" },
+        { itemId: "9", location: [999, -81] },
+        { location: [27, -82] },
+      ],
+    });
+    expect(out.features).toHaveLength(2);
+    expect(out.features[0]?.id).toBe("us511:fl-1");
+    expect(out.features[0]?.properties.title).toBe("Florida traffic camera 1");
+    expect(out.features[0]?.properties.imageUrl).toBe("https://fl511.com/map/Cctv/1");
+    expect(out.features[0]?.properties.area).toBe("Florida");
+    expect(out.features[0]?.geometry).toEqual({ type: "Point", coordinates: [-80.892882, 26.17325] });
+    expect(out.features[1]?.id).toBe("us511:fl-42");
+    expect(out.features[1]?.properties.title).toBe("I-4 at SR 408");
   });
 });
 

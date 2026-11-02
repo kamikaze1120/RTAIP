@@ -1,7 +1,7 @@
 import { fetchJson, fetchText } from "../http";
 import { collection, validLonLat, type GeoCollection, type GeoFeature } from "./geo";
 
-export const CAMERA_REGIONS = ["london", "newyork", "california", "virginia", "singapore", "newzealand", "finland", "hongkong", "seattle", "windy"] as const;
+export const CAMERA_REGIONS = ["london", "newyork", "california", "virginia", "usflorida", "usgeorgia", "us511", "singapore", "newzealand", "finland", "hongkong", "seattle", "windy"] as const;
 export type CameraRegion = (typeof CAMERA_REGIONS)[number];
 
 export function isCameraRegion(v: string): v is CameraRegion {
@@ -342,6 +342,72 @@ async function fetchCaltrans(signal?: AbortSignal): Promise<GeoCollection> {
   return collection(features);
 }
 
+/** Marker payload served by every Castle Rock / "CARS" state 511 site at
+ *  /map/mapIcons/Cameras — all cameras in one keyless GET. `location` is [lat, lon]. */
+interface CarsIcons {
+  item2?: Array<{ itemId?: string | number; location?: number[]; title?: string }>;
+}
+
+interface CarsHost {
+  host: string;
+  state: string;
+  abbr: string;
+}
+
+/** Keyless US state 511 camera feeds on the Castle Rock / "CARS" platform. Each site exposes
+ *  /map/mapIcons/Cameras (every marker in one GET) and /map/Cctv/{id} (a public JPEG snapshot).
+ *  Grouped into three region polls so each response stays near the proven-safe Caltrans size
+ *  (~1.7 MB). Verified keyless and image-serving on 2026-11-02. */
+const CARS_GROUPS: Record<"usflorida" | "usgeorgia" | "us511", CarsHost[]> = {
+  usflorida: [{ host: "fl511.com", state: "Florida", abbr: "fl" }],
+  usgeorgia: [{ host: "511ga.org", state: "Georgia", abbr: "ga" }],
+  us511: [
+    { host: "www.511pa.com", state: "Pennsylvania", abbr: "pa" },
+    { host: "az511.gov", state: "Arizona", abbr: "az" },
+    { host: "www.nvroads.com", state: "Nevada", abbr: "nv" },
+    { host: "511wi.gov", state: "Wisconsin", abbr: "wi" },
+    { host: "511.idaho.gov", state: "Idaho", abbr: "id" },
+    { host: "www.511la.org", state: "Louisiana", abbr: "la" },
+    { host: "ctroads.org", state: "Connecticut", abbr: "ct" },
+    { host: "511.alaska.gov", state: "Alaska", abbr: "ak" },
+    { host: "www.newengland511.org", state: "New England", abbr: "ne" },
+  ],
+};
+
+export function normalizeCars(host: string, state: string, abbr: string, data: CarsIcons): GeoCollection {
+  const out: GeoFeature[] = [];
+  for (const it of data.item2 ?? []) {
+    const itemId = it.itemId != null ? String(it.itemId) : "";
+    const loc = it.location;
+    if (!itemId || !loc || loc.length < 2) continue;
+    const [lat, lon] = loc as [number, number];
+    const title = it.title && it.title.trim().length > 0 ? it.title.trim() : `${state} traffic camera ${itemId}`;
+    const f = cam("us511", `${state} 511`, `${abbr}-${itemId}`, title, lat, lon, `https://${host}/map/Cctv/${itemId}`, { area: state });
+    if (f) out.push(f);
+  }
+  return collection(out);
+}
+
+async function fetchCars(hosts: CarsHost[], signal?: AbortSignal): Promise<GeoCollection> {
+  const features: GeoFeature[] = [];
+  let cursor = 0;
+  const worker = async () => {
+    while (cursor < hosts.length) {
+      const h = hosts[cursor++];
+      if (!h) break;
+      try {
+        const data = await fetchJson<CarsIcons>(`https://${h.host}/map/mapIcons/Cameras`, { signal, timeoutMs: 20_000 });
+        features.push(...normalizeCars(h.host, h.state, h.abbr, data).features);
+      } catch {
+        // One state being down should not hide the others.
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(4, hosts.length) }, worker));
+  if (features.length === 0) throw new Error("no US 511 cameras available");
+  return collection(features);
+}
+
 export async function fetchCameras(region: CameraRegion, signal?: AbortSignal): Promise<GeoCollection> {
   switch (region) {
     case "london":
@@ -354,6 +420,12 @@ export async function fetchCameras(region: CameraRegion, signal?: AbortSignal): 
       return fetchCaltrans(signal);
     case "virginia":
       return normalizeVdot(await fetchJson<{ features?: VdotFeature[] }>("https://511.vdot.virginia.gov/services/511/map/layers/map/cams", { signal, timeoutMs: 25_000 }));
+    case "usflorida":
+      return fetchCars(CARS_GROUPS.usflorida, signal);
+    case "usgeorgia":
+      return fetchCars(CARS_GROUPS.usgeorgia, signal);
+    case "us511":
+      return fetchCars(CARS_GROUPS.us511, signal);
     case "newzealand":
       return normalizeNz(await fetchText("https://trafficnz.info/service/traffic/rest/4/cameras/all", { signal, timeoutMs: 20_000 }));
     case "finland":
