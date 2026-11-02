@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { AlertTriangle, ArrowRight, Boxes, Check, Copy, Download, Expand, Eye, FileText, Globe2, Loader2, Maximize2, Network, Route, Save, Search, Sheet, Square, Trash2, X } from "lucide-react";
+import { AlertTriangle, ArrowRight, Boxes, Check, Copy, Download, Expand, Eye, FileDown, FileText, Globe2, Loader2, Maximize2, Network, Route, Save, Search, Sheet, Square, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -9,6 +9,7 @@ import { useAuth } from "@/lib/auth";
 import { getCase, saveCase } from "@/lib/cases";
 import { shortestPath } from "@/lib/graphPath";
 import { download, entitiesCsv, markdownReport } from "@/lib/report";
+import { investigationPdf } from "@/lib/pdf";
 import { toStixBundle } from "@/lib/stix";
 import { addWatch } from "@/lib/watchlist";
 import { saveInvestigation, useSavedInvestigations, writeSaved } from "@/lib/saved";
@@ -327,6 +328,7 @@ export function InvestigateView() {
   };
 
   const onStix = () => download(`rtaip-stix-${slug}.json`, JSON.stringify(toStixBundle(snapshot()), null, 2), "application/json");
+  const onPdf = () => investigationPdf(snapshot(), { score, level, summary }).save(`rtaip-report-${slug}.pdf`);
 
   const failedSteps = state.progress.filter((p) => p.status === "error");
   const empty = state.entities.length === 0;
@@ -384,6 +386,9 @@ export function InvestigateView() {
           </button>
           <button type="button" onClick={onStix} disabled={empty} className={buttonClass()} title="Download STIX 2.1 bundle">
             <Boxes size={14} />
+          </button>
+          <button type="button" onClick={onPdf} disabled={empty} className={buttonClass()} title="Download a PDF report">
+            <FileDown size={14} />
           </button>
           {showSaved ? (
             <div className="absolute right-0 top-full z-20 mt-2 w-80 rounded-xl border border-line bg-panel2 p-2 shadow-2xl">
