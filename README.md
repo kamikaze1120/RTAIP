@@ -60,7 +60,7 @@ reference.
 | 🧾 | **Provenance & risk** — every datapoint carries source, timestamp and confidence; investigations get an exposure **risk score** with a plain-language summary | ✅ |
 | 🧷 | **Entity graph** — node detail panel (provenance + confidence), expand/re-pivot, type filters, **pin** a node, **shortest-path** highlighting between two nodes, **group-by-type** clustering, and **graph⟷map** cross-linking | ✅ |
 | 📤 | **Exports** — snapshot an investigation to **Markdown, CSV, JSON, STIX 2.1, or PDF** (observables → SDOs/SCOs, edges → relationships) | ✅ |
-| 🤖 | **AI analyst** — turn an investigation into a cited, plain-language intelligence brief (confirmed facts vs. indicators vs. speculation, each citing the evidence's sources); provider-agnostic (any OpenAI-compatible endpoint), optional, off until a key is set | ✅ |
+| 🤖 | **AI analyst** — turn an investigation into a cited, plain-language intelligence brief (confirmed facts vs. indicators vs. speculation, each citing the evidence's sources); **signed-in users only**, provider-agnostic (any OpenAI-compatible endpoint), optional, off until a key is set | ✅ |
 | 🚨 | **Geofence alerts** — draw a region, get notified on emergency squawks, quakes and events inside it | ✅ |
 | 🗂️ | **Cases & watchlists** — save entities, annotate, and track over time | ✅ |
 | 🧠 | More org transforms (OpenCorporates, OpenSanctions), realtime push | 🚧 |
@@ -161,9 +161,11 @@ intelligence brief from the entities, findings and risk already on screen. It is
 provider-agnostic — point it at any **OpenAI-compatible** `/chat/completions`
 endpoint (Anthropic, OpenAI, OpenRouter, a local Ollama, …) by setting
 `LLM_BASE_URL` and `LLM_API_KEY` (and optionally `LLM_MODEL`). Without a key the
-feature is simply inactive and the rest of the app is unaffected. The analyst only
-summarizes the public-source evidence in the current investigation and cites its
-sources — it does not browse or add outside data.
+feature is simply inactive and the rest of the app is unaffected. The analyst is
+available to **signed-in users only** (the brief is a billable LLM call, enforced
+both in the UI and on the `/api/analyst` route). It only summarizes the
+public-source evidence in the current investigation and cites its sources — it
+does not browse or add outside data.
 
 ---
 

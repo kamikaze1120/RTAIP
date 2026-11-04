@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { readAnalystConfig, runAnalyst, type AnalystMeta } from "@/lib/analyst";
 import { clientKey, rateLimit } from "@/lib/ratelimit";
+import { currentUserId } from "@/lib/supabase/server";
 import type { Snapshot } from "@/lib/useInvestigation";
 
 export const runtime = "nodejs";
@@ -33,6 +34,10 @@ const Body = z.object({
 export async function POST(request: Request): Promise<Response> {
   const rate = rateLimit(`analyst:${clientKey(request)}`, 6, 60_000);
   if (!rate.ok) return Response.json({ error: "Too many analyst requests. Wait a moment." }, { status: 429, headers: { "retry-after": String(rate.retryAfterSec) } });
+
+  // The AI analyst is for signed-in users only (the brief is an LLM call).
+  const userId = await currentUserId();
+  if (!userId) return Response.json({ error: "Sign in to use the AI analyst." }, { status: 401 });
 
   const config = readAnalystConfig(process.env);
   if (!config) return Response.json({ error: "AI analyst is not configured on this deployment.", configured: false }, { status: 503 });

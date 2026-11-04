@@ -332,6 +332,10 @@ export function InvestigateView() {
   const onPdf = () => investigationPdf(snapshot(), { score, level, summary }).save(`rtaip-report-${slug}.pdf`);
 
   const onAnalyst = async () => {
+    if (!user) {
+      openSignIn();
+      return;
+    }
     setAnalyst({ open: true, loading: true, text: "", error: null });
     try {
       const res = await fetch("/api/analyst", {
@@ -437,7 +441,7 @@ export function InvestigateView() {
           <button type="button" onClick={onPdf} disabled={empty} className={buttonClass()} title="Download a PDF report">
             <FileDown size={14} />
           </button>
-          <button type="button" onClick={onAnalyst} disabled={empty || analyst.loading} className={buttonClass()} title="AI analyst brief">
+          <button type="button" onClick={onAnalyst} disabled={empty || analyst.loading} className={buttonClass()} title={user ? "AI analyst brief" : "Sign in to use the AI analyst"}>
             {analyst.loading ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
           </button>
           {showSaved ? (
