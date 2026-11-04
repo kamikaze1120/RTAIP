@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { AlertTriangle, ArrowRight, Boxes, Check, Copy, Download, Expand, Eye, FileDown, FileText, Globe2, Loader2, Maximize2, Network, Route, Save, Search, Sheet, Square, Trash2, X } from "lucide-react";
+import { AlertTriangle, ArrowRight, Boxes, Check, Copy, Download, Expand, Eye, FileDown, FileText, Globe2, Loader2, Maximize2, Network, Route, Save, Search, Sheet, Sparkles, Square, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -213,6 +213,7 @@ export function InvestigateView() {
   const saved = useSavedInvestigations();
   const [showSaved, setShowSaved] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [analyst, setAnalyst] = useState<{ open: boolean; loading: boolean; text: string; error: string | null }>({ open: false, loading: false, text: "", error: null });
   const started = useRef(false);
   const running = state.status === "running";
 
@@ -330,11 +331,57 @@ export function InvestigateView() {
   const onStix = () => download(`rtaip-stix-${slug}.json`, JSON.stringify(toStixBundle(snapshot()), null, 2), "application/json");
   const onPdf = () => investigationPdf(snapshot(), { score, level, summary }).save(`rtaip-report-${slug}.pdf`);
 
+  const onAnalyst = async () => {
+    setAnalyst({ open: true, loading: true, text: "", error: null });
+    try {
+      const res = await fetch("/api/analyst", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ snapshot: snapshot(), meta: { score, level, summary } }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { brief?: string; error?: string };
+      if (!res.ok) {
+        setAnalyst({ open: true, loading: false, text: "", error: data.error || `The analyst request failed (${res.status}).` });
+        return;
+      }
+      setAnalyst({ open: true, loading: false, text: data.brief ?? "", error: null });
+    } catch (e) {
+      setAnalyst({ open: true, loading: false, text: "", error: e instanceof Error ? e.message : "Network error reaching the analyst." });
+    }
+  };
+
   const failedSteps = state.progress.filter((p) => p.status === "error");
   const empty = state.entities.length === 0;
 
   return (
     <div className="mx-auto flex max-w-[1600px] flex-col gap-4 px-4 py-5 lg:h-[calc(100vh-3.5rem)]">
+      {analyst.open ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-label="AI analyst brief">
+          <div className="flex max-h-[85vh] w-full max-w-2xl flex-col rounded-xl border border-line bg-panel shadow-2xl">
+            <div className="flex items-center gap-2 border-b border-line px-4 py-3">
+              <Sparkles size={15} className="text-accent" />
+              <h2 className="text-sm font-semibold">AI analyst brief</h2>
+              <button type="button" onClick={() => setAnalyst((a) => ({ ...a, open: false }))} className="ml-auto text-dim hover:text-ink" aria-label="Close analyst brief">
+                <X size={15} />
+              </button>
+            </div>
+            <div className="overflow-auto px-4 py-4">
+              {analyst.loading ? (
+                <div className="flex items-center gap-2 text-sm text-dim">
+                  <Loader2 size={15} className="animate-spin" /> Writing the brief from the public-source evidence…
+                </div>
+              ) : analyst.error ? (
+                <ErrorNote message={analyst.error} />
+              ) : (
+                <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-ink">{analyst.text}</pre>
+              )}
+            </div>
+            <div className="border-t border-line px-4 py-2 text-[11px] text-faint">
+              Written by an AI model from the public-source evidence in this investigation. Verify against the cited sources before acting.
+            </div>
+          </div>
+        </div>
+      ) : null}
       <form onSubmit={submit} className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-[260px] flex-1">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-faint" />
@@ -389,6 +436,9 @@ export function InvestigateView() {
           </button>
           <button type="button" onClick={onPdf} disabled={empty} className={buttonClass()} title="Download a PDF report">
             <FileDown size={14} />
+          </button>
+          <button type="button" onClick={onAnalyst} disabled={empty || analyst.loading} className={buttonClass()} title="AI analyst brief">
+            {analyst.loading ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
           </button>
           {showSaved ? (
             <div className="absolute right-0 top-full z-20 mt-2 w-80 rounded-xl border border-line bg-panel2 p-2 shadow-2xl">

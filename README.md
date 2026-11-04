@@ -60,9 +60,10 @@ reference.
 | 🧾 | **Provenance & risk** — every datapoint carries source, timestamp and confidence; investigations get an exposure **risk score** with a plain-language summary | ✅ |
 | 🧷 | **Entity graph** — node detail panel (provenance + confidence), expand/re-pivot, type filters, **pin** a node, **shortest-path** highlighting between two nodes, **group-by-type** clustering, and **graph⟷map** cross-linking | ✅ |
 | 📤 | **Exports** — snapshot an investigation to **Markdown, CSV, JSON, STIX 2.1, or PDF** (observables → SDOs/SCOs, edges → relationships) | ✅ |
+| 🤖 | **AI analyst** — turn an investigation into a cited, plain-language intelligence brief (confirmed facts vs. indicators vs. speculation, each citing the evidence's sources); provider-agnostic (any OpenAI-compatible endpoint), optional, off until a key is set | ✅ |
 | 🚨 | **Geofence alerts** — draw a region, get notified on emergency squawks, quakes and events inside it | ✅ |
 | 🗂️ | **Cases & watchlists** — save entities, annotate, and track over time | ✅ |
-| 🧠 | More org transforms (OpenCorporates, OpenSanctions), realtime push, AI analyst | 🚧 |
+| 🧠 | More org transforms (OpenCorporates, OpenSanctions), realtime push | 🚧 |
 
 ---
 
@@ -155,6 +156,15 @@ there). Set a free `WINDY_WEBCAMS_API_KEY` (from
 [Windy Webcams](https://api.windy.com/webcams)) to add worldwide webcam coverage
 of those regions. Without the key the global source is simply inactive.
 
+**Optional AI analyst:** the investigation view can generate a cited, plain-language
+intelligence brief from the entities, findings and risk already on screen. It is
+provider-agnostic — point it at any **OpenAI-compatible** `/chat/completions`
+endpoint (Anthropic, OpenAI, OpenRouter, a local Ollama, …) by setting
+`LLM_BASE_URL` and `LLM_API_KEY` (and optionally `LLM_MODEL`). Without a key the
+feature is simply inactive and the rest of the app is unaffected. The analyst only
+summarizes the public-source evidence in the current investigation and cites its
+sources — it does not browse or add outside data.
+
 ---
 
 ## 🗺️ Roadmap
@@ -168,7 +178,8 @@ RTAIP is tracked as a phased program (E0 – E11) on the GitHub project board.
 - [x] **Exports** — Markdown, CSV, JSON, **STIX 2.1**, and **PDF** report
 - [ ] **Transforms** — more org transforms (OpenCorporates, OpenSanctions)
 - [ ] **Fusion & alerts** — watchlists, realtime push
-- [ ] **Cases & AI analyst** — annotations, retrieval with citations
+- [x] **AI analyst** — cited, plain-language intelligence brief from an investigation (bring your own OpenAI-compatible LLM)
+- [ ] **Cases** — annotations, retrieval with citations
 - [ ] **E9–E11 – Design system, quality, launch**
 
 📋 Track progress on the [**issues**](https://github.com/kamikaze1120/RTAIP/issues) and project board.
